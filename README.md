@@ -69,6 +69,8 @@ PORT=3000 bun run start
 
 Héberger ce processus Bun persistant sur un serveur ou un service supportant les WebSockets. Le point de contrôle `GET /api/health` renvoie `{ "ok": true }`. Un proxy doit transmettre les en-têtes `Host`, `Upgrade` et `Connection`, et permettre les connexions persistantes. Utiliser HTTPS pour une adresse publique. Le serveur personnalisé ne peut pas être remplacé par un simple export statique ni par des fonctions serverless éphémères.
 
+Les dépendances, scripts, tests et le développement sont gérés avec Bun. En production, `bun run start` lance toutefois le serveur TypeScript avec Node via `tsx` : Next.js 16.3.5 déclenche actuellement une erreur de chargement CommonJS lorsque son rendu de production est exécuté directement par Bun 1.3.9. Socket.IO et le reste de l’application restent inchangés.
+
 Les polices sont servies localement. Aucun service externe n’est nécessaire pour jouer.
 
 ## Vérifier

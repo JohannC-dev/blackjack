@@ -2,10 +2,11 @@
   "name": "minuit-blackjack",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "bun server/index.ts",
     "build": "next build",
-    "start": "NODE_ENV=production bun server/index.ts",
+    "start": "NODE_ENV=production node --import tsx server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test tests/engine.test.ts",
     "test:multiplayer": "bun tests/multiplayer.ts",
@@ -34,6 +35,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "prettier": "^3.9.7",
+    "tsx": "^4.23.13",
     "typescript": "^5.9.3"
   }
 }

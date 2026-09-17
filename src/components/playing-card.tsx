@@ -13,19 +13,22 @@ export function PlayingCard({
   index?: number;
   decorative?: boolean;
 }) {
+  const concealed = back || card?.hidden;
   return (
     <div
-      className={`playing-card ${back ? "card-back" : ""} ${card && isRed(card) ? "red" : ""} ${decorative ? "decorative-card" : ""}`}
+      className={`playing-card ${concealed ? "card-back" : ""} ${card && !card.hidden && isRed(card) ? "red" : ""} ${decorative ? "decorative-card" : ""}`}
       style={{ "--card-index": index } as CSSProperties}
       aria-label={
-        back
-          ? "Dos de carte"
+        concealed
+          ? card?.hidden
+            ? "Carte doublée cachée"
+            : "Dos de carte"
           : card
             ? `${rankLabel(card.rank)} ${SUITS[card.suit]}`
             : undefined
       }
     >
-      {back || !card ? (
+      {concealed || !card ? (
         <div className="back-pattern">
           <span>♠</span>
           <small>M</small>

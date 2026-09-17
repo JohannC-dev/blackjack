@@ -205,7 +205,7 @@ function SeatView({
     mine && state?.phase === "betting" && !owner?.ready && !disabled;
   return (
     <div
-      className={`seat seat-${seat.index} ${owner ? "occupied" : "empty"} ${mine ? "my-seat" : ""} ${selected && mine ? "selected-seat" : ""} ${active ? "current-seat" : ""}`}
+      className={`seat seat-${seat.index} ${owner ? "occupied" : "empty"} ${mine ? "my-seat" : ""} ${selected && mine ? "selected-seat" : ""} ${active ? "current-seat" : ""} ${hasCards ? "has-cards" : ""}`}
       style={
         { "--seat-x": `${pos.x}%`, "--seat-y": `${pos.y}%` } as CSSProperties
       }
@@ -223,65 +223,64 @@ function SeatView({
           ))}
         </div>
       )}
-      {!hasCards &&
-        (owner ? (
-          <div className="table-bet-zones">
-            {(["three", "main", "pairs"] as (keyof Bet)[]).map((type) => (
-              <button
-                key={type}
-                className={`table-bet-spot spot-${type} ${seat.bet[type] ? "has-chips" : ""}`}
-                onClick={() => onBet(type)}
-                disabled={!canBet}
-                aria-label={`Miser ${chip} crédits sur ${labels[type]}, main ${seat.index + 1}`}
-                title={
-                  canBet
-                    ? `+${chip} crédits · ${labels[type]}`
-                    : `${labels[type]} : ${seat.bet[type]} crédits`
-                }
-              >
-                <span className="spot-label">
-                  {type === "main"
-                    ? "BLACKJACK"
-                    : type === "three"
-                      ? "21 + 3"
-                      : "SUPER PAIRS"}
-                </span>
-                {seat.bet[type] > 0 ? (
-                  <span
-                    key={seat.bet[type]}
-                    className={`table-chip ${type !== "main" ? "side-chip" : ""}`}
-                  >
-                    {credits(seat.bet[type])}
-                  </span>
-                ) : (
-                  <span className="spot-placeholder">
-                    {type === "main" ? (
-                      <Plus size={19} strokeWidth={1.4} />
-                    ) : type === "three" ? (
-                      <Diamond size={13} />
-                    ) : (
-                      <Layers2 size={13} />
-                    )}
-                  </span>
-                )}
-                {canBet && <span className="spot-hover">+{chip}</span>}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-bet-zones">
-            <span className="empty-bonus-zone left">21+3</span>
+      {owner ? (
+        <div className="table-bet-zones">
+          {(["three", "main", "pairs"] as (keyof Bet)[]).map((type) => (
             <button
-              className="seat-target"
-              onClick={onSelect}
-              aria-label={`Prendre la place ${seat.index + 1}`}
+              key={type}
+              className={`table-bet-spot spot-${type} ${seat.bet[type] ? "has-chips" : ""}`}
+              onClick={() => onBet(type)}
+              disabled={!canBet}
+              aria-label={`Miser ${chip} crédits sur ${labels[type]}, main ${seat.index + 1}`}
+              title={
+                canBet
+                  ? `+${chip} crédits · ${labels[type]}`
+                  : `${labels[type]} : ${seat.bet[type]} crédits`
+              }
             >
-              <Plus size={19} strokeWidth={1.4} />
-              <span>PRENDRE PLACE</span>
+              <span className="spot-label">
+                {type === "main"
+                  ? "BLACKJACK"
+                  : type === "three"
+                    ? "21 + 3"
+                    : "SUPER PAIRS"}
+              </span>
+              {seat.bet[type] > 0 ? (
+                <span
+                  key={seat.bet[type]}
+                  className={`table-chip ${type !== "main" ? "side-chip" : ""}`}
+                >
+                  {credits(seat.bet[type])}
+                </span>
+              ) : (
+                <span className="spot-placeholder">
+                  {type === "main" ? (
+                    <Plus size={19} strokeWidth={1.4} />
+                  ) : type === "three" ? (
+                    <Diamond size={13} />
+                  ) : (
+                    <Layers2 size={13} />
+                  )}
+                </span>
+              )}
+              {canBet && <span className="spot-hover">+{chip}</span>}
             </button>
-            <span className="empty-bonus-zone right">PAIRS</span>
-          </div>
-        ))}
+          ))}
+        </div>
+      ) : !hasCards ? (
+        <div className="empty-bet-zones">
+          <span className="empty-bonus-zone left">21+3</span>
+          <button
+            className="seat-target"
+            onClick={onSelect}
+            aria-label={`Prendre la place ${seat.index + 1}`}
+          >
+            <Plus size={19} strokeWidth={1.4} />
+            <span>PRENDRE PLACE</span>
+          </button>
+          <span className="empty-bonus-zone right">PAIRS</span>
+        </div>
+      ) : null}
       <button
         className="seat-name"
         onClick={onSelect}
@@ -612,12 +611,7 @@ export function Casino() {
             MINUIT<span>●</span>
           </a>
           <span className="topbar-divider" />
-          <span className="brand-tagline">La nuit nous appartient.</span>
           <div className="topbar-right">
-            <span className="play-money">
-              <span />
-              CRÉDITS FICTIFS
-            </span>
             <div className="wallet">
               <Wallet size={17} />
               <b key={balance}>{credits(balance)}</b>
@@ -646,7 +640,6 @@ export function Casino() {
                   LIVE
                 </span>
               </h1>
-              <p>Une table, vos amis et la nuit devant vous.</p>
             </div>
             <button className="button secondary invite-button" onClick={invite}>
               <Users size={16} />
@@ -1060,12 +1053,6 @@ export function Casino() {
               </div>
             </div>
           </div>
-          <footer className="page-footer">
-            <span>
-              MINUIT <i>♠</i> LE JEU, SIMPLEMENT.
-            </span>
-            <p>Aucun argent réel. Aucun dépôt. Juste une bonne soirée.</p>
-          </footer>
         </main>
       </div>
 

@@ -72,8 +72,38 @@ export class Table {
     };
   }
   snapshot(): TableState {
+    const concealDoubleCards = this.state.phase !== "settled";
+    const seats = this.state.seats.map((seat) => ({
+      ...seat,
+      bet: { ...seat.bet },
+      sides: { ...seat.sides },
+      hands: seat.hands.map((hand) => {
+        const concealed =
+          concealDoubleCards &&
+          hand.doubleCardHidden &&
+          hand.cards.length === 3;
+        return {
+          ...hand,
+          // A bust must not reveal the value of a face-down double card.
+          status: concealed ? ("stood" as const) : hand.status,
+          cards: hand.cards.map((card, index) =>
+            concealed && index === hand.cards.length - 1
+              ? {
+                  id: card.id,
+                  rank: 0,
+                  suit: "spades" as const,
+                  hidden: true,
+                }
+              : { ...card },
+          ),
+        };
+      }),
+    }));
     return {
       ...this.state,
+      seats,
+      dealer: this.state.dealer.map((card) => ({ ...card })),
+      history: this.state.history.map((item) => ({ ...item })),
       players: [...this.players.values()].map(
         ({ id, name, balance, connected, ready }) => ({
           id,
@@ -219,6 +249,9 @@ export class Table {
         this.updateHand(hand);
       }
       if (command.type === "double") {
+        const reveal = command.reveal ?? "now";
+        if (reveal !== "now" && reveal !== "dealer")
+          throw new Error("Mode de révélation invalide.");
         if (
           hand.cards.length !== 2 ||
           hand.splitAces ||
@@ -229,6 +262,7 @@ export class Table {
         seat.committed += hand.bet;
         hand.bet *= 2;
         hand.cards.push(this.draw());
+        hand.doubleCardHidden = reveal === "dealer";
         hand.status = score(hand.cards).total > 21 ? "bust" : "stood";
       }
       if (command.type === "split") {

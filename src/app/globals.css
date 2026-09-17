@@ -4205,3 +4205,166 @@ h1 > span:not(.live-tag) {
     top: 0;
   }
 }
+
+/* Roomier table geometry: cards remain above their wagered chips. */
+.table-stage {
+  height: clamp(500px, 54vh, 600px);
+}
+.table-surface {
+  left: 3%;
+  right: 3%;
+  top: 4%;
+  height: 88%;
+}
+.seat {
+  --seat-tilt: 0deg;
+  width: 180px;
+  transform: translate(-50%, -12%) rotate(var(--seat-tilt));
+  transform-origin: 50% 58%;
+}
+.seat-0 {
+  left: 10.5%;
+  top: 39%;
+  --seat-tilt: 10deg;
+}
+.seat-1 {
+  left: 29%;
+  top: 59%;
+  --seat-tilt: 4deg;
+}
+.seat-2 {
+  left: 50%;
+  top: 69%;
+}
+.seat-3 {
+  left: 71%;
+  top: 59%;
+  --seat-tilt: -4deg;
+}
+.seat-4 {
+  left: 89.5%;
+  top: 39%;
+  --seat-tilt: -10deg;
+}
+.seat.has-cards .seat-hands {
+  position: absolute;
+  left: 50%;
+  top: -90px;
+  z-index: 4;
+  transform: translateX(-50%);
+}
+.seat.has-cards .table-bet-zones {
+  z-index: 2;
+}
+.felt-brand {
+  top: 28%;
+}
+.felt-bottom-caption {
+  bottom: 1.5%;
+}
+
+@media (min-width: 1500px) {
+  .table-stage {
+    height: clamp(540px, 57vh, 640px);
+  }
+  .seat.has-cards .seat-hands {
+    top: -102px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .table-stage {
+    height: 460px;
+  }
+  .table-surface {
+    left: 3.5%;
+    right: 3.5%;
+    top: 5%;
+    height: 86%;
+  }
+  .seat {
+    width: 142px;
+  }
+  .seat-0 {
+    left: 11.5%;
+    top: 38%;
+    --seat-tilt: 9deg;
+  }
+  .seat-1 {
+    left: 29%;
+    top: 58%;
+    --seat-tilt: 3.5deg;
+  }
+  .seat-2 {
+    top: 68%;
+  }
+  .seat-3 {
+    left: 71%;
+    top: 58%;
+    --seat-tilt: -3.5deg;
+  }
+  .seat-4 {
+    left: 88.5%;
+    top: 38%;
+    --seat-tilt: -9deg;
+  }
+  .seat.has-cards .seat-hands {
+    top: -86px;
+  }
+}
+
+@media (max-width: 700px) {
+  .table-stage {
+    height: 470px;
+  }
+  .table-surface {
+    left: 3%;
+    right: 3%;
+    top: 8%;
+    height: 82%;
+  }
+  .seat {
+    width: 108px;
+  }
+  .seat-0 {
+    left: 14%;
+    top: 32%;
+    --seat-tilt: 7deg;
+  }
+  .seat-1 {
+    left: 29%;
+    top: 56%;
+    --seat-tilt: 3deg;
+  }
+  .seat-2 {
+    top: 75%;
+  }
+  .seat-3 {
+    left: 71%;
+    top: 56%;
+    --seat-tilt: -3deg;
+  }
+  .seat-4 {
+    left: 86%;
+    top: 32%;
+    --seat-tilt: -7deg;
+  }
+  .seat.has-cards .seat-hands {
+    top: -74px;
+  }
+  .felt-brand {
+    top: 34%;
+  }
+}
+
+@media (max-width: 450px) {
+  .table-stage {
+    height: 465px;
+  }
+  .seat-0 {
+    left: 13%;
+  }
+  .seat-4 {
+    left: 87%;
+  }
+}
