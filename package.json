@@ -1,0 +1,39 @@
+{
+  "name": "minuit-blackjack",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun server/index.ts",
+    "build": "next build",
+    "start": "NODE_ENV=production bun server/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test tests/engine.test.ts",
+    "test:multiplayer": "bun tests/multiplayer.ts",
+    "test:ui": "bun tests/ui-layout.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "packageManager": "bun@1.3.9",
+  "engines": {
+    "bun": ">=1.3.9"
+  },
+  "dependencies": {
+    "@fontsource/dm-sans": "^5.2.8",
+    "@fontsource/manrope": "^5.2.8",
+    "lucide-react": "^0.577.0",
+    "next": "16.3.5",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/bun": "latest",
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "prettier": "^3.9.7",
+    "typescript": "^5.9.3"
+  }
+}
