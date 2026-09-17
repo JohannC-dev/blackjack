@@ -46,7 +46,7 @@ function begin(table: Table, players: Player[]) {
     table.tick(now);
     now += 1000;
   }
-  if (table.state.phase === "bonuses") table.tick(now + 3000);
+  if (table.state.phase === "bonuses") table.tick(now + 4000);
 }
 function settle(table: Table) {
   let now = Date.now() + 100_000;
@@ -145,7 +145,7 @@ describe("European blackjack and credit accounting", () => {
     expect(() =>
       table.command(p.id, { type: "hit", handId: ownHand(table, p).id }),
     ).toThrow("tour");
-    table.tick(now + 3000);
+    table.tick(now + 4000);
     expect(table.state.phase).toBe("playing");
     // The just-paid bonus can fund a double immediately.
     table.command(p.id, { type: "double", handId: ownHand(table, p).id });
@@ -288,6 +288,77 @@ describe("European blackjack and credit accounting", () => {
     expect(hand.cards).toHaveLength(3);
     expect(hand.result).toBe("lose");
     expect(p.balance).toBe(1950);
+  });
+  test("a concealed double card stays server-only until the dealer finishes", () => {
+    const hiddenCard = card(10, "hearts");
+    const { table, p } = tableWith([
+      card(10),
+      card(10),
+      card(6),
+      hiddenCard,
+      card(7),
+    ]);
+    begin(table, [p]);
+    const hand = ownHand(table, p);
+    table.command(p.id, {
+      type: "double",
+      handId: hand.id,
+      reveal: "dealer",
+    });
+
+    expect(hand.cards[2]).toEqual(hiddenCard);
+    expect(hand.status).toBe("bust");
+    const publicHand = table
+      .snapshot()
+      .seats.flatMap((seat) => seat.hands)
+      .find((candidate) => candidate.id === hand.id)!;
+    expect(publicHand.cards[2]).toEqual({
+      id: hiddenCard.id,
+      rank: 0,
+      suit: "spades",
+      hidden: true,
+    });
+    expect(publicHand.status).toBe("stood");
+    expect(JSON.stringify(table.snapshot())).not.toContain(
+      '"rank":10,"suit":"hearts"',
+    );
+
+    settle(table);
+    const revealedHand = table
+      .snapshot()
+      .seats.flatMap((seat) => seat.hands)
+      .find((candidate) => candidate.id === hand.id)!;
+    expect(revealedHand.cards[2]).toEqual(hiddenCard);
+    expect(revealedHand.status).toBe("bust");
+  });
+  test("an immediately revealed double remains visible during dealer play", () => {
+    const doubleCard = card(4, "diamonds");
+    const { table, p } = tableWith([
+      card(10),
+      card(10),
+      card(6),
+      doubleCard,
+      card(7),
+    ]);
+    begin(table, [p]);
+    const hand = ownHand(table, p);
+    table.command(p.id, {
+      type: "double",
+      handId: hand.id,
+      reveal: "now",
+    });
+    expect(table.snapshot().seats[2].hands[0].cards[2]).toEqual(doubleCard);
+  });
+  test("an unknown double reveal mode is rejected", () => {
+    const { table, p } = tableWith([card(10), card(10), card(6)]);
+    begin(table, [p]);
+    expect(() =>
+      table.command(p.id, {
+        type: "double",
+        handId: ownHand(table, p).id,
+        reveal: "later",
+      } as never),
+    ).toThrow("révélation");
   });
 });
 

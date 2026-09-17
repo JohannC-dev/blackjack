@@ -392,7 +392,7 @@ export class Table {
       this.state.phase = "bonuses";
       this.state.message =
         "Les paris annexes sont réglés. Les gains sont versés.";
-      this.nextStep = Date.now() + 2200;
+      this.nextStep = Date.now() + 3200;
     } else this.advance();
   }
   private advance() {

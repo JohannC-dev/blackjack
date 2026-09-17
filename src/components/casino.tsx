@@ -16,6 +16,8 @@ import {
   CircleHelp,
   Coins,
   Diamond,
+  Eye,
+  EyeOff,
   History,
   Layers2,
   LoaderCircle,
@@ -144,7 +146,8 @@ function Chip({
 }
 
 function HandView({ hand, active }: { hand: Hand; active: boolean }) {
-  const value = score(hand.cards);
+  const concealed = hand.cards.some((card) => card.hidden);
+  const value = score(hand.cards.filter((card) => !card.hidden));
   return (
     <div
       className={`hand ${active ? "active-hand" : ""} ${hand.result === "win" || hand.result === "blackjack" ? "winning-hand" : ""}`}
@@ -156,11 +159,13 @@ function HandView({ hand, active }: { hand: Hand; active: boolean }) {
       </div>
       {!!hand.cards.length && (
         <span
-          className={`hand-score ${value.total > 21 ? "busted" : ""} ${hand.status === "blackjack" ? "natural" : ""}`}
+          className={`hand-score ${concealed ? "concealed-score" : ""} ${value.total > 21 ? "busted" : ""} ${hand.status === "blackjack" ? "natural" : ""}`}
         >
-          {hand.status === "blackjack"
-            ? "BLACKJACK"
-            : `${value.soft ? "S · " : ""}${value.total}`}
+          {concealed
+            ? "DOUBLE · ?"
+            : hand.status === "blackjack"
+              ? "BLACKJACK"
+              : `${value.soft ? "S · " : ""}${value.total}`}
           {hand.result === "win" && <Check size={10} />}
         </span>
       )}
@@ -203,6 +208,8 @@ function SeatView({
   const hasCards = seat.hands.some((h) => h.cards.length);
   const canBet =
     mine && state?.phase === "betting" && !owner?.ready && !disabled;
+  const sideBetsResolved =
+    !!state && state.phase !== "betting" && state.phase !== "dealing";
   return (
     <div
       className={`seat seat-${seat.index} ${owner ? "occupied" : "empty"} ${mine ? "my-seat" : ""} ${selected && mine ? "selected-seat" : ""} ${active ? "current-seat" : ""} ${hasCards ? "has-cards" : ""}`}
@@ -225,47 +232,70 @@ function SeatView({
       )}
       {owner ? (
         <div className="table-bet-zones">
-          {(["three", "main", "pairs"] as (keyof Bet)[]).map((type) => (
-            <button
-              key={type}
-              className={`table-bet-spot spot-${type} ${seat.bet[type] ? "has-chips" : ""}`}
-              onClick={() => onBet(type)}
-              disabled={!canBet}
-              aria-label={`Miser ${chip} crédits sur ${labels[type]}, main ${seat.index + 1}`}
-              title={
-                canBet
-                  ? `+${chip} crédits · ${labels[type]}`
-                  : `${labels[type]} : ${seat.bet[type]} crédits`
-              }
-            >
-              <span className="spot-label">
-                {type === "main"
-                  ? "BLACKJACK"
-                  : type === "three"
-                    ? "21 + 3"
-                    : "SUPER PAIRS"}
-              </span>
-              {seat.bet[type] > 0 ? (
-                <span
-                  key={seat.bet[type]}
-                  className={`table-chip ${type !== "main" ? "side-chip" : ""}`}
-                >
-                  {credits(seat.bet[type])}
+          {(["three", "main", "pairs"] as (keyof Bet)[]).map((type) => {
+            const sideResult =
+              type === "three"
+                ? seat.sides.three
+                : type === "pairs"
+                  ? seat.sides.pairs
+                  : null;
+            const resolvedSideBet =
+              type !== "main" && sideBetsResolved && seat.bet[type] > 0;
+            return (
+              <button
+                key={type}
+                className={`table-bet-spot spot-${type} ${seat.bet[type] ? "has-chips" : ""} ${resolvedSideBet ? (sideResult ? "side-bet-won" : "side-bet-lost") : ""}`}
+                onClick={() => onBet(type)}
+                disabled={!canBet}
+                aria-label={`Miser ${chip} crédits sur ${labels[type]}, main ${seat.index + 1}`}
+                title={
+                  canBet
+                    ? `+${chip} crédits · ${labels[type]}`
+                    : `${labels[type]} : ${seat.bet[type]} crédits`
+                }
+              >
+                <span className="spot-label">
+                  {type === "main"
+                    ? "BLACKJACK"
+                    : type === "three"
+                      ? "21 + 3"
+                      : "SUPER PAIRS"}
                 </span>
-              ) : (
-                <span className="spot-placeholder">
-                  {type === "main" ? (
-                    <Plus size={19} strokeWidth={1.4} />
-                  ) : type === "three" ? (
-                    <Diamond size={13} />
-                  ) : (
-                    <Layers2 size={13} />
-                  )}
-                </span>
-              )}
-              {canBet && <span className="spot-hover">+{chip}</span>}
-            </button>
-          ))}
+                {seat.bet[type] > 0 ? (
+                  <span
+                    key={seat.bet[type]}
+                    className={`table-chip ${type !== "main" ? "side-chip" : ""} ${resolvedSideBet ? (sideResult ? "winning-side-chip" : "losing-side-chip") : ""}`}
+                  >
+                    {credits(seat.bet[type])}
+                  </span>
+                ) : (
+                  <span className="spot-placeholder">
+                    {type === "main" ? (
+                      <Plus size={19} strokeWidth={1.4} />
+                    ) : type === "three" ? (
+                      <Diamond size={13} />
+                    ) : (
+                      <Layers2 size={13} />
+                    )}
+                  </span>
+                )}
+                {state?.phase === "bonuses" && sideResult && (
+                  <span className="bonus-chip-flight" aria-hidden="true">
+                    <span className="bonus-chip-stack">
+                      <span className="bonus-chip-amount">
+                        {credits(sideResult.payout)}
+                      </span>
+                    </span>
+                    <span className="bonus-chip-caption">
+                      +{credits(sideResult.payout)}
+                      <small>{sideResult.label}</small>
+                    </span>
+                  </span>
+                )}
+                {canBet && <span className="spot-hover">+{chip}</span>}
+              </button>
+            );
+          })}
         </div>
       ) : !hasCards ? (
         <div className="empty-bet-zones">
@@ -318,15 +348,6 @@ function SeatView({
           <span className="empty-seat-label">Installez-vous</span>
         )}
       </button>
-      {state?.phase === "bonuses" && (seat.sides.three || seat.sides.pairs) && (
-        <div className="bonus-payment">
-          <Coins size={13} />+
-          {credits(
-            (seat.sides.three?.payout ?? 0) + (seat.sides.pairs?.payout ?? 0),
-          )}
-          <small>VERSÉS</small>
-        </div>
-      )}
       {(seat.sides.three || seat.sides.pairs) && (
         <div className="side-win">
           <Sparkles size={10} />
@@ -399,6 +420,7 @@ export function Casino() {
   const [toast, setToast] = useState("");
   const [sound, setSound] = useState(false);
   const [now, setNow] = useState(0);
+  const [doubleChoice, setDoubleChoice] = useState<string | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
   const previousCards = useRef(0);
   const me = state?.players.find((p) => p.id === playerId);
@@ -438,6 +460,9 @@ export function Casino() {
   useEffect(() => {
     setBetHistory([]);
   }, [state?.round, state?.id]);
+  useEffect(() => {
+    setDoubleChoice(null);
+  }, [state?.activeHandId]);
   useEffect(() => {
     const tick = () => setNow(Date.now());
     tick();
@@ -934,23 +959,74 @@ export function Casino() {
                           Rester<small>Garder votre main</small>
                         </span>
                       </button>
-                      <button
-                        className="button secondary"
-                        disabled={
-                          disabled ||
-                          activeHand.cards.length !== 2 ||
-                          activeHand.splitAces ||
-                          balance < activeHand.bet
-                        }
-                        onClick={() =>
-                          command({ type: "double", handId: activeHand.id })
-                        }
+                      <div
+                        className={`double-action ${doubleChoice === activeHand.id ? "choice-open" : ""}`}
                       >
-                        <span className="double-icon">×2</span>
-                        <span>
-                          Doubler<small>Une dernière carte</small>
-                        </span>
-                      </button>
+                        <button
+                          className="button secondary double-trigger"
+                          disabled={
+                            disabled ||
+                            activeHand.cards.length !== 2 ||
+                            activeHand.splitAces ||
+                            balance < activeHand.bet
+                          }
+                          aria-haspopup="menu"
+                          aria-expanded={doubleChoice === activeHand.id}
+                          onClick={() =>
+                            setDoubleChoice((current) =>
+                              current === activeHand.id ? null : activeHand.id,
+                            )
+                          }
+                        >
+                          <span className="double-icon">×2</span>
+                          <span>
+                            Doubler<small>Choisir la révélation</small>
+                          </span>
+                          <ChevronDown className="double-chevron" size={14} />
+                        </button>
+                        {doubleChoice === activeHand.id && (
+                          <div
+                            className="double-choice-menu"
+                            role="menu"
+                            aria-label="Révélation de la carte doublée"
+                          >
+                            <button
+                              role="menuitem"
+                              onClick={() => {
+                                setDoubleChoice(null);
+                                void command({
+                                  type: "double",
+                                  handId: activeHand.id,
+                                  reveal: "now",
+                                });
+                              }}
+                            >
+                              <Eye size={17} />
+                              <span>
+                                Carte visible
+                                <small>Révélée immédiatement</small>
+                              </span>
+                            </button>
+                            <button
+                              role="menuitem"
+                              onClick={() => {
+                                setDoubleChoice(null);
+                                void command({
+                                  type: "double",
+                                  handId: activeHand.id,
+                                  reveal: "dealer",
+                                });
+                              }}
+                            >
+                              <EyeOff size={17} />
+                              <span>
+                                Carte cachée
+                                <small>Après le croupier</small>
+                              </span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       <button
                         className="button secondary"
                         disabled={

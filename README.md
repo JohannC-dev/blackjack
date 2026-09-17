@@ -28,7 +28,7 @@ Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table
 - Sabot mélangé de **8 jeux** avec générateur aléatoire cryptographique ; renouvellement entre les manches lorsque le sabot devient court.
 - **Blackjack européen / ENHC** : le croupier ne reçoit initialement qu’une carte. Il reçoit sa deuxième carte après les joueurs et reste sur tous les 17, même souples.
 - Blackjack naturel payé **3:2**, victoire **1:1**, égalité remboursée. Un blackjack du croupier fait perdre les mises de double et de séparation ; seul un blackjack naturel est remboursé à égalité.
-- Double autorisé sur deux cartes, également après séparation. Séparation de cartes de même valeur, donc 10/valet/dame/roi peuvent être séparés ensemble, jusqu’à 4 mains par place. Les as séparés reçoivent une seule carte ; pas de nouvelle séparation des as. Le 21 après séparation paie 1:1.
+- Double autorisé sur deux cartes, également après séparation. Au moment de doubler, le joueur choisit de voir immédiatement sa dernière carte ou de la garder face cachée jusqu’à la fin du jeu du croupier. Dans ce second mode, sa valeur reste uniquement sur le serveur jusqu’à la révélation. Séparation de cartes de même valeur, donc 10/valet/dame/roi peuvent être séparés ensemble, jusqu’à 4 mains par place. Les as séparés reçoivent une seule carte ; pas de nouvelle séparation des as. Le 21 après séparation paie 1:1.
 - Pas d’assurance ni d’abandon. 25 secondes par décision, puis la main reste automatiquement, y compris après une déconnexion.
 - Mises par pas de 5 : **5–500** au blackjack et **0–100** sur chaque pari annexe. Recharge à 2 000 crédits disponible lorsque le solde est inférieur à 5.
 
