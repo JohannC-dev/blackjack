@@ -39,6 +39,7 @@ import type { Bet, Hand, Seat, TableState } from "@/lib/types";
 import { newToken } from "@/lib/identity";
 import { useGame } from "@/lib/use-game";
 import { PlayingCard } from "./playing-card";
+import { ShoeShuffleAnimation } from "./shoe-shuffle";
 
 const THREE_PAYOUTS = [
   ["Straight Flush", "9:1"],
@@ -75,6 +76,9 @@ const historyResultLabels = {
   blackjack: "Blackjack",
   none: "Pas de mise",
 };
+const SHOE_SIZE = 8 * 52;
+const SHOE_RESHUFFLE_THRESHOLD = 160;
+const SHOE_EDGE_COUNT = 8;
 
 function Modal({
   title,
@@ -429,8 +433,12 @@ export function Casino() {
   const [sound, setSound] = useState(false);
   const [now, setNow] = useState(0);
   const [doubleChoice, setDoubleChoice] = useState<string | null>(null);
+  const [shoeShuffling, setShoeShuffling] = useState(false);
   const audioRef = useRef<AudioContext | null>(null);
   const previousCards = useRef(0);
+  const previousShoe = useRef<{ tableId: string; remaining: number } | null>(
+    null,
+  );
   const me = state?.players.find((p) => p.id === playerId);
   const ownSeats = state?.seats.filter((s) => s.playerId === playerId) ?? [];
   const seat = ownSeats.find((s) => s.index === selectedSeat) ?? ownSeats[0];
@@ -465,6 +473,12 @@ export function Casino() {
     (state?.seats
       .flatMap((s) => s.hands)
       .reduce((n, h) => n + h.cards.length, 0) ?? 0);
+  const shoeRemaining = Math.min(
+    SHOE_SIZE,
+    Math.max(0, state?.shoeRemaining ?? SHOE_SIZE),
+  );
+  const shoePercent = Math.round((shoeRemaining / SHOE_SIZE) * 100);
+  const shoeLow = shoeRemaining <= SHOE_RESHUFFLE_THRESHOLD;
 
   useEffect(() => {
     setBetHistory([]);
@@ -488,6 +502,27 @@ export function Casino() {
     const timer = setTimeout(() => game.setError(""), 6000);
     return () => clearTimeout(timer);
   }, [game.error, game.setError]);
+  useEffect(() => {
+    if (!state) {
+      previousShoe.current = null;
+      setShoeShuffling(false);
+      return;
+    }
+    const previous = previousShoe.current;
+    previousShoe.current = {
+      tableId: state.id,
+      remaining: state.shoeRemaining,
+    };
+    if (!previous || previous.tableId !== state.id) {
+      setShoeShuffling(false);
+      return;
+    }
+    if (state.shoeRemaining <= previous.remaining + 20) return;
+
+    setShoeShuffling(true);
+    const timer = window.setTimeout(() => setShoeShuffling(false), 2600);
+    return () => window.clearTimeout(timer);
+  }, [state?.id, state?.shoeRemaining]);
   useEffect(() => {
     if (sound && cardCount > previousCards.current && audioRef.current) {
       const ctx = audioRef.current;
@@ -740,11 +775,34 @@ export function Casino() {
                       </div>
                     )}
                   </div>
-                  <div className="card-shoe">
-                    <div />
-                    <div />
-                    <PlayingCard back decorative />
-                    <span>8 JEUX</span>
+                  <div
+                    className={`card-shoe ${shoeLow ? "is-low" : ""} ${shoeShuffling ? "is-shuffling" : ""}`}
+                    role="img"
+                    aria-label={
+                      shoeShuffling ? "Mélange du sabot" : "Sabot de cartes"
+                    }
+                  >
+                    <div className="shoe-edge-visual" aria-hidden="true">
+                      <div className="shoe-edge-base" />
+                      <div
+                        className="shoe-edge-remaining"
+                        style={
+                          {
+                            "--shoe-progress": shoePercent / 100,
+                          } as CSSProperties
+                        }
+                      >
+                        <div className="shoe-edge-lines">
+                          {Array.from(
+                            { length: SHOE_EDGE_COUNT },
+                            (_, index) => (
+                              <i key={index} />
+                            ),
+                          )}
+                        </div>
+                      </div>
+                      <ShoeShuffleAnimation active={shoeShuffling} />
+                    </div>
                   </div>
                   <div className="felt-brand">
                     <span className="felt-diamond">✧</span>
