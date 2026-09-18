@@ -368,6 +368,7 @@ h1 > span:not(.live-tag) {
 .table-panel {
   border: 1px solid #3d314c75;
   border-radius: 14px;
+  margin-bottom: 14px;
   overflow: hidden;
   background: radial-gradient(ellipse at 50% 50%, #24142e 0%, #18121f 65%);
   box-shadow: 0 6px 36px #00000015;
@@ -1496,10 +1497,14 @@ h1 > span:not(.live-tag) {
   position: absolute;
   left: 50%;
   top: 66%;
+  width: 0;
+  height: 0;
   z-index: 9;
 }
 .win-burst > i {
   position: absolute;
+  left: -2.5px;
+  top: -4.5px;
   width: 5px;
   height: 9px;
   border-radius: 1px;

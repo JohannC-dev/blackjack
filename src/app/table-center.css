@@ -361,3 +361,53 @@
     font-size: 5px;
   }
 }
+
+@media (hover: hover) and (pointer: fine) {
+  .table-panel .chip-rack .chip:hover:not(:disabled) {
+    transform: translateY(-4px) scale(1.04);
+    box-shadow:
+      0 4px 0 var(--chip-shadow),
+      0 8px 14px #0006,
+      0 0 14px color-mix(in srgb, var(--chip-base) 42%, transparent);
+  }
+  .table-panel .play-actions .hit-button:hover:not(:disabled) {
+    background: #1bdf8b;
+    border-color: #a1ffd1;
+    color: #062e21;
+    box-shadow:
+      0 9px 0 #075d41,
+      0 16px 24px #16cf8140,
+      inset 0 1px #e0ffefaa;
+    transform: translateY(-4px);
+  }
+  .table-panel .play-actions .stand-button:hover:not(:disabled) {
+    background: #f04a5d;
+    border-color: #ffacb4;
+    color: #fff0f2;
+    box-shadow:
+      0 9px 0 #761e36,
+      0 16px 24px #ee3b5140,
+      inset 0 1px #ffe2e5aa;
+    transform: translateY(-4px);
+  }
+  .table-panel .play-actions .double-trigger:hover:not(:disabled) {
+    background: #f3b83b;
+    border-color: #ffe8a6;
+    color: #402511;
+    box-shadow:
+      0 9px 0 #8d5e1c,
+      0 16px 24px #e9a92d40,
+      inset 0 1px #fff4cdaa;
+    transform: translateY(-4px);
+  }
+  .table-panel .play-actions > button:last-child:hover:not(:disabled) {
+    background: #78629a;
+    border-color: #d1b8e5;
+    color: #fff8ff;
+    box-shadow:
+      0 9px 0 #3e2e57,
+      0 16px 24px #6b568840,
+      inset 0 1px #ffffff55;
+    transform: translateY(-4px);
+  }
+}

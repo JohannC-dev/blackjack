@@ -1139,30 +1139,7 @@ export function Casino() {
                   )}
                 </div>
               </section>
-              <div className="below-table">
-                <span>
-                  <ShieldCheck size={13} />
-                  100 % fictif. Vraiment convivial.
-                </span>
-                <div>
-                  <button
-                    className="text-button"
-                    onClick={toggleSound}
-                    aria-label={sound ? "Couper le son" : "Activer le son"}
-                  >
-                    {sound ? <Volume2 size={15} /> : <VolumeX size={15} />}Son{" "}
-                    {sound ? "activé" : "désactivé"}
-                  </button>
-                  <span className="footer-divider" />
-                  <button
-                    className="text-button"
-                    onClick={() => setModal("rules")}
-                  >
-                    <CircleHelp size={14} />
-                    Règles du jeu
-                  </button>
-                </div>
-              </div>
+              
             </div>
           </div>
         </main>
