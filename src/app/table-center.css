@@ -273,6 +273,47 @@
   transform: translateX(-50%);
 }
 
+/* The menus pop from their centered anchor; there is no directional travel. */
+.table-panel .betting-actions > .chip-rack,
+.table-panel .play-actions {
+  --menu-entry-scale: 0.97;
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  transform-origin: center;
+  transition:
+    opacity 200ms var(--ease),
+    transform 200ms var(--ease);
+  @starting-style {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(var(--menu-entry-scale));
+  }
+}
+
+.table-panel .betting-actions > .bet-confirm {
+  --menu-entry-scale: 0.97;
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+  transform-origin: center;
+  transition:
+    opacity 200ms var(--ease),
+    transform 200ms var(--ease);
+  @starting-style {
+    opacity: 0;
+    transform: translateX(-50%) scale(var(--menu-entry-scale));
+  }
+}
+
+.table-panel .betting-actions.is-closing > .chip-rack,
+.table-panel .play-actions.is-closing {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(var(--menu-entry-scale));
+}
+
+.table-panel .betting-actions.is-closing > .bet-confirm {
+  opacity: 0;
+  transform: translateX(-50%) scale(var(--menu-entry-scale));
+}
+
 @media (min-width: 1500px) {
   .table-panel {
     --table-stage-height: clamp(660px, 72vh, 820px);
@@ -442,5 +483,14 @@
       0 16px 24px #6b568840,
       inset 0 1px #ffffff55;
     transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .table-panel .betting-actions > .chip-rack,
+  .table-panel .betting-actions > .bet-confirm,
+  .table-panel .play-actions {
+    --menu-entry-scale: 1;
+    transition: opacity 140ms var(--ease);
   }
 }
