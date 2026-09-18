@@ -7,7 +7,7 @@
   position: relative;
   --table-stage-height: clamp(620px, 72vh, 760px);
   --table-status-height: 46px;
-  --table-action-lift: 32px;
+  --table-action-lift: 82px;
 }
 
 .table-stage {

@@ -76,9 +76,6 @@ const historyResultLabels = {
   blackjack: "Blackjack",
   none: "Pas de mise",
 };
-const SHOE_SIZE = 8 * 52;
-const SHOE_RESHUFFLE_THRESHOLD = 160;
-const SHOE_EDGE_COUNT = 8;
 
 function Modal({
   title,
@@ -473,13 +470,6 @@ export function Casino() {
     (state?.seats
       .flatMap((s) => s.hands)
       .reduce((n, h) => n + h.cards.length, 0) ?? 0);
-  const shoeRemaining = Math.min(
-    SHOE_SIZE,
-    Math.max(0, state?.shoeRemaining ?? SHOE_SIZE),
-  );
-  const shoePercent = Math.round((shoeRemaining / SHOE_SIZE) * 100);
-  const shoeLow = shoeRemaining <= SHOE_RESHUFFLE_THRESHOLD;
-
   useEffect(() => {
     setBetHistory([]);
   }, [state?.round, state?.id]);
@@ -775,34 +765,12 @@ export function Casino() {
                       </div>
                     )}
                   </div>
-                  <div
-                    className={`card-shoe ${shoeLow ? "is-low" : ""} ${shoeShuffling ? "is-shuffling" : ""}`}
-                    role="img"
-                    aria-label={
-                      shoeShuffling ? "Mélange du sabot" : "Sabot de cartes"
-                    }
-                  >
-                    <div className="shoe-edge-visual" aria-hidden="true">
-                      <div className="shoe-edge-base" />
-                      <div
-                        className="shoe-edge-remaining"
-                        style={
-                          {
-                            "--shoe-progress": shoePercent / 100,
-                          } as CSSProperties
-                        }
-                      >
-                        <div className="shoe-edge-lines">
-                          {Array.from(
-                            { length: SHOE_EDGE_COUNT },
-                            (_, index) => (
-                              <i key={index} />
-                            ),
-                          )}
-                        </div>
-                      </div>
-                      <ShoeShuffleAnimation active={shoeShuffling} />
-                    </div>
+                  <div className="card-shoe">
+                    <div />
+                    <div />
+                    <PlayingCard back decorative />
+                    <ShoeShuffleAnimation active={shoeShuffling} />
+                    <span>8 JEUX</span>
                   </div>
                   <div className="felt-brand">
                     <span className="felt-diamond">✧</span>
