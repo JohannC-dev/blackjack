@@ -30,7 +30,6 @@ const emptySides = () => ({ three: null, pairs: null });
 const BETTING_COUNTDOWN_MS = 12_000;
 const ALL_READY_COUNTDOWN_MS = 3_000;
 const SETTLED_COUNTDOWN_MS = 7_000;
-const NEXT_ROUND_AFTER_GAMBLE_MS = 1_500;
 export function makeShoe(): Card[] {
   const cards: Card[] = [];
   for (let deck = 0; deck < 8; deck++)
@@ -185,6 +184,9 @@ export class Table {
         seat.sides = emptySides();
         seat.committed = 0;
       }
+    this.state.gambles = this.state.gambles.filter(
+      (entry) => entry.playerId !== playerId,
+    );
     this.players.delete(playerId);
     this.updateCountdown(true);
     this.emit();
@@ -195,28 +197,24 @@ export class Table {
     if (!command || typeof command !== "object")
       throw new Error("Action invalide.");
     if (command.type === "gamble" || command.type === "cashout") {
-      if (this.state.phase !== "settled")
-        throw new Error("Les gains se tentent à la fin de la manche.");
-      if (this.state.deadline !== null && Date.now() >= this.state.deadline)
-        throw new Error("Le temps de tenter vos gains est écoulé.");
       const gamble = this.state.gambles.find(
-        (entry) => entry.playerId === playerId,
+        (entry) => entry.playerId === playerId && entry.status === "available",
       );
-      if (!gamble || gamble.status !== "available")
-        throw new Error("Aucun gain disponible à tenter.");
+      if (!gamble) throw new Error("Aucun gain disponible à tenter.");
       if (command.type === "cashout") {
         gamble.status = "cashed";
-        if (this.state.gambles.every((entry) => entry.status !== "available"))
-          this.state.deadline = Date.now() + NEXT_ROUND_AFTER_GAMBLE_MS;
       } else {
         if (command.color !== "red" && command.color !== "black")
           throw new Error("Choisissez rouge ou noir.");
+        if (player.balance < gamble.stake)
+          throw new Error(
+            "Ces gains ont déjà été engagés dans la partie. Encaissez cette option.",
+          );
         const stake = gamble.stake;
         const card = this.drawGambleCard();
         const won = (isRed(card) ? "red" : "black") === command.color;
         const history = this.state.history.find(
-          (item) =>
-            item.round === this.state.round && item.playerId === playerId,
+          (item) => item.round === gamble.round && item.playerId === playerId,
         );
         if (!history)
           throw new Error("Le résultat de la manche est introuvable.");
@@ -236,14 +234,9 @@ export class Table {
           player.balance += stake;
           gamble.stake *= 2;
           gamble.streak += 1;
-          // Every win buys another full inactivity window, so the number of
-          // consecutive attempts is unlimited in practice and by rule.
-          this.state.deadline = Date.now() + SETTLED_COUNTDOWN_MS;
         } else {
           player.balance -= stake;
           gamble.status = "lost";
-          if (this.state.gambles.every((entry) => entry.status !== "available"))
-            this.state.deadline = Date.now() + NEXT_ROUND_AFTER_GAMBLE_MS;
         }
       }
     } else if (
@@ -433,6 +426,9 @@ export class Table {
       this.state.deadline = null;
       return;
     }
+    this.state.gambles = this.state.gambles.filter(
+      (entry) => entry.status === "available",
+    );
     // Bets are only reserved when a round starts. Clear the bets belonging to
     // players who did not confirm in time so their unplayed chips do not
     // remain displayed on the table while the round is in progress.
@@ -584,18 +580,28 @@ export class Table {
         timestamp: Date.now(),
         bets: historyBets.get(playerId) ?? [],
       });
-    this.state.gambles = [...nets.entries()]
-      .filter(([, net]) => net > 0)
-      .map(([playerId, net]) => ({
-        playerId,
-        stake: net,
-        choice: null,
-        card: null,
-        result: null,
-        status: "available" as const,
-        streak: 0,
-      }));
-    this.state.history = this.state.history.slice(0, 100);
+    this.state.gambles = [
+      ...this.state.gambles.filter((entry) => entry.status === "available"),
+      ...[...nets.entries()]
+        .filter(([, net]) => net > 0)
+        .map(([playerId, net]) => ({
+          playerId,
+          round: this.state.round,
+          stake: net,
+          choice: null,
+          card: null,
+          result: null,
+          status: "available" as const,
+          streak: 0,
+        })),
+    ];
+    const pendingHistory = new Set(
+      this.state.gambles.map((entry) => `${entry.round}:${entry.playerId}`),
+    );
+    this.state.history = this.state.history.filter(
+      (item, index) =>
+        index < 100 || pendingHistory.has(`${item.round}:${item.playerId}`),
+    );
     this.state.phase = "settled";
     this.state.deadline = Date.now() + SETTLED_COUNTDOWN_MS;
     this.state.message = dealerBJ
@@ -653,7 +659,6 @@ export class Table {
       this.state.phase = "betting";
       this.state.deadline = null;
       this.state.dealer = [];
-      this.state.gambles = [];
       this.state.message = "À vous de jouer. Placez vos mises.";
       for (const player of this.players.values()) player.ready = false;
       for (const seat of this.state.seats) {

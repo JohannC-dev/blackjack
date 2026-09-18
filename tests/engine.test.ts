@@ -123,7 +123,7 @@ describe("Cards and requested side-bet paytables", () => {
 });
 
 describe("European blackjack and credit accounting", () => {
-  test("winnings can be gambled repeatedly without a streak cap", () => {
+  test("winnings remain optional across rounds without a streak cap", () => {
     const { table, p } = tableWith([card(10), card(7), card(8), card(10)]);
     begin(table, [p]);
     table.command(p.id, { type: "stand", handId: table.state.activeHandId! });
@@ -133,6 +133,15 @@ describe("European blackjack and credit accounting", () => {
       (entry) => entry.playerId === p.id,
     )!;
     expect(gamble.stake).toBe(25);
+    expect(table.state.deadline).not.toBeNull();
+    table.tick(table.state.deadline!);
+    expect(table.state.phase).toBe("betting");
+    expect(gamble.status).toBe("available");
+    table.command(p.id, { type: "ready", ready: true });
+    table.startRound();
+    expect(table.state.phase).toBe("dealing");
+    expect(table.state.gambles).toContain(gamble);
+    const balanceBeforeGambles = p.balance;
     for (let streak = 1; streak <= 12; streak++) {
       const nextCard = table.shoe.at(-1)!;
       table.command(p.id, {
@@ -144,7 +153,7 @@ describe("European blackjack and credit accounting", () => {
       expect(gamble.streak).toBe(streak);
       expect(gamble.stake).toBe(25 * 2 ** streak);
     }
-    expect(p.balance).toBe(2000 + 25 * 2 ** 12);
+    expect(p.balance).toBe(balanceBeforeGambles + 25 * (2 ** 12 - 1));
     expect(table.state.history[0].net).toBe(25 * 2 ** 12);
     table.command(p.id, { type: "cashout" });
     expect(gamble.status).toBe("cashed");

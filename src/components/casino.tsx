@@ -455,17 +455,16 @@ function GamblePrompt({
       aria-label={`Tenter vos gains de ${credits(stake)} crédits`}
     >
       <span className="gamble-prompt-emblem" aria-hidden="true">
-        <Diamond size={18} />
-        <Spade size={15} />
+        <Diamond size={13} />
+        <Spade size={11} />
       </span>
       <span className="gamble-prompt-copy">
-        <span className="section-kicker">OPTION DE TABLE</span>
-        <strong>Tenter vos gains</strong>
-        <small>{credits(stake)} cr. · Rouge ou noir</small>
+        <strong>Tenter {credits(stake)} cr.</strong>
+        <small>GAMBLE · ROUGE OU NOIR</small>
       </span>
       <ArrowRight
         className="gamble-prompt-arrow"
-        size={16}
+        size={14}
         aria-hidden="true"
       />
     </button>
@@ -474,16 +473,16 @@ function GamblePrompt({
 
 function GamblePanel({
   gamble,
-  seconds,
   disabled,
   onGamble,
   onCashout,
+  onClose,
 }: {
   gamble: GambleState;
-  seconds: number | null;
   disabled: boolean;
   onGamble: (color: GambleColor) => void;
   onCashout: () => void;
+  onClose: () => void;
 }) {
   const available = gamble.status === "available";
   const cardColor = gamble.card ? (isRed(gamble.card) ? "red" : "black") : null;
@@ -501,6 +500,14 @@ function GamblePanel({
       className={`gamble-panel ${available ? "gamble-active" : "gamble-closed"}`}
       aria-label="Gamble des gains"
     >
+      <button
+        type="button"
+        className="gamble-panel-close"
+        onClick={onClose}
+        aria-label="Fermer le gamble"
+      >
+        <X size={14} />
+      </button>
       <div className="gamble-copy">
         <span className="section-kicker">GAMBLE DES GAINS</span>
         <h3>
@@ -586,7 +593,7 @@ function GamblePanel({
               Encaisser {credits(gamble.stake)} cr.
             </button>
             <small className="gamble-countdown">
-              La table avance dans {seconds ?? 0} s
+              Disponible jusqu’à votre décision.
             </small>
           </>
         ) : (
@@ -600,7 +607,7 @@ function GamblePanel({
               )}
             </div>
             <small className="gamble-countdown">
-              La prochaine manche arrive.
+              Vous pouvez reprendre la partie.
             </small>
           </>
         )}
@@ -660,7 +667,11 @@ export function Casino() {
     state?.phase === "settled"
       ? myHistory.find((h) => h.round === state.round)
       : undefined;
-  const ownGamble = state?.gambles.find((entry) => entry.playerId === playerId);
+  const ownGambles =
+    state?.gambles.filter((entry) => entry.playerId === playerId) ?? [];
+  const ownGamble =
+    ownGambles.find((entry) => entry.status === "available") ??
+    ownGambles.at(-1);
   const seconds = state?.deadline
     ? Math.max(0, Math.ceil((state.deadline - now) / 1000))
     : null;
@@ -674,8 +685,8 @@ export function Casino() {
     setBetHistory([]);
   }, [state?.round, state?.id]);
   useEffect(() => {
-    if (state?.phase !== "settled" || !ownGamble) setGambleOpen(false);
-  }, [ownGamble?.playerId, state?.id, state?.phase, state?.round]);
+    setGambleOpen(false);
+  }, [ownGamble?.round, state?.id]);
   useEffect(() => {
     setDoubleChoice(null);
   }, [state?.activeHandId]);
@@ -1025,27 +1036,28 @@ export function Casino() {
                       ))}
                     </div>
                   )}
-                  {state?.phase === "settled" &&
-                    ownGamble &&
-                    (gambleOpen || ownGamble.status !== "available" ? (
+                  {ownGamble &&
+                    (gambleOpen ? (
                       <div className="table-gamble-overlay">
                         <GamblePanel
                           gamble={ownGamble}
-                          seconds={seconds}
                           disabled={disabled}
                           onGamble={gamble}
                           onCashout={cashout}
+                          onClose={() => setGambleOpen(false)}
                         />
                       </div>
-                    ) : (
-                      <div className="table-gamble-overlay table-gamble-overlay-prompt">
+                    ) : ownGamble.status === "available" ? (
+                      <div
+                        className={`table-gamble-prompt-anchor gamble-prompt-seat-${seat?.index ?? 2}`}
+                      >
                         <GamblePrompt
                           stake={ownGamble.stake}
                           disabled={disabled}
                           onOpen={() => setGambleOpen(true)}
                         />
                       </div>
-                    ))}
+                    ) : null)}
                 </div>
                 <div className="table-status" aria-live="polite">
                   <span className={`status-orb ${myTurn ? "your-turn" : ""}`} />

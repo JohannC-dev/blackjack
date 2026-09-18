@@ -12,6 +12,8 @@ export type GambleColor = "red" | "black";
 export type GambleResult = "win" | "lose";
 export type GambleState = {
   playerId: string;
+  /** Round whose positive result created this gamble opportunity. */
+  round: number;
   /** The current winnings amount at risk in the next draw. */
   stake: number;
   choice: GambleColor | null;

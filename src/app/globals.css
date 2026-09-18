@@ -1459,12 +1459,32 @@ h1 > span:not(.live-tag) {
   line-height: 1.7;
 }
 .gamble-panel {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(220px, 0.95fr);
   align-items: center;
   gap: 24px;
   min-height: 196px;
   color: #d8c9e3;
+}
+.gamble-panel-close {
+  position: absolute;
+  top: -7px;
+  right: -8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 1px solid #a78cba42;
+  border-radius: 50%;
+  background: #211728e8;
+  color: #aa98b8;
+}
+.gamble-panel-close:hover {
+  border-color: #c4a8d3;
+  color: #eee5f3;
 }
 .gamble-copy {
   min-width: 0;
@@ -1721,6 +1741,9 @@ h1 > span:not(.live-tag) {
   transform: translate(-50%, -50%);
   animation: gamble-overlay-in 0.35s var(--ease) both;
 }
+.table-stage:has(.table-gamble-overlay) {
+  z-index: 15;
+}
 .table-stage:has(.table-gamble-overlay) .felt-brand {
   opacity: 0.04;
   filter: blur(0.5px);
@@ -1729,40 +1752,60 @@ h1 > span:not(.live-tag) {
 .table-gamble-overlay .gamble-panel {
   min-height: 178px;
 }
-.table-gamble-overlay-prompt {
-  width: min(350px, calc(100% - 72px));
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
+.table-gamble-prompt-anchor {
+  position: absolute;
+  z-index: 14;
+  width: min(265px, calc(100% - 72px));
+  transform: translate(-50%, -50%);
+}
+.gamble-prompt-seat-0 {
+  left: 18%;
+  top: 62%;
+}
+.gamble-prompt-seat-1 {
+  left: 25%;
+  top: 82%;
+}
+.gamble-prompt-seat-2 {
+  left: 50%;
+  top: 88%;
+}
+.gamble-prompt-seat-3 {
+  left: 75%;
+  top: 82%;
+}
+.gamble-prompt-seat-4 {
+  left: 82%;
+  top: 62%;
 }
 .gamble-prompt {
+  position: relative;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  min-height: 76px;
-  padding: 13px 15px;
-  border: 1px solid #c79c6c52;
-  border-radius: 12px;
-  background: linear-gradient(115deg, #2f1b3eeb, #17121fee 62%);
+  min-height: 58px;
+  padding: 9px 13px;
+  border: 1px solid #d4ae6c80;
+  border-radius: 10px;
+  background: linear-gradient(110deg, #302039f5, #191320f7 68%);
   box-shadow:
-    0 16px 36px #08040e99,
-    0 0 0 1px #ffffff09 inset;
+    0 11px 28px #08040e99,
+    0 0 0 1px #e8c98c0d inset;
   color: #eee5f3;
   text-align: left;
+  animation: gamble-prompt-ready 2.8s ease-in-out infinite;
   transition:
     border-color 0.2s,
     box-shadow 0.2s,
     transform 0.2s var(--ease);
 }
 .gamble-prompt:not(:disabled):hover {
-  border-color: #dfbe82;
+  border-color: #ebcc91;
   box-shadow:
-    0 20px 42px #08040eb3,
-    0 0 0 1px #dfbe8214 inset;
+    0 15px 34px #08040eb3,
+    0 0 0 1px #dfbe8224 inset;
   transform: translateY(-2px);
 }
 .gamble-prompt:disabled {
@@ -1772,11 +1815,11 @@ h1 > span:not(.live-tag) {
 .gamble-prompt-emblem {
   position: relative;
   display: block;
-  width: 34px;
-  height: 34px;
-  border: 1px solid #cda96745;
-  border-radius: 9px;
-  background: #d7ad5e0d;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #d8b77763;
+  border-radius: 8px;
+  background: #d7ad5e14;
   color: #d9b979;
 }
 .gamble-prompt-emblem > svg {
@@ -1797,25 +1840,37 @@ h1 > span:not(.live-tag) {
   align-items: flex-start;
   flex-direction: column;
   min-width: 0;
-  gap: 4px;
-}
-.gamble-prompt-copy .section-kicker {
-  color: #a08a72;
-  font-size: 6px;
-  letter-spacing: 1.5px;
+  gap: 2px;
 }
 .gamble-prompt-copy strong {
   color: #f1e6ef;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 650;
+  white-space: nowrap;
 }
 .gamble-prompt-copy small {
-  color: #a58eaf;
+  color: #c6a66f;
   font-family: "DM Sans", sans-serif;
-  font-size: 9px;
+  font-size: 6.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
 }
 .gamble-prompt-arrow {
-  color: #d9b979;
+  color: #e1c181;
+}
+@keyframes gamble-prompt-ready {
+  0%,
+  100% {
+    box-shadow:
+      0 11px 28px #08040e99,
+      0 0 0 1px #e8c98c0d inset;
+  }
+  50% {
+    box-shadow:
+      0 13px 31px #08040ea8,
+      0 0 0 1px #e8c98c24 inset,
+      0 0 18px #cda96720;
+  }
 }
 @keyframes gamble-card-in {
   from {
@@ -1844,6 +1899,28 @@ h1 > span:not(.live-tag) {
   to {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@media (max-width: 1000px) and (min-width: 701px) {
+  .gamble-prompt-seat-0 {
+    left: 23%;
+    top: 65%;
+  }
+  .gamble-prompt-seat-1 {
+    left: 28%;
+    top: 84%;
+  }
+  .gamble-prompt-seat-2 {
+    top: 89%;
+  }
+  .gamble-prompt-seat-3 {
+    left: 72%;
+    top: 84%;
+  }
+  .gamble-prompt-seat-4 {
+    left: 77%;
+    top: 65%;
   }
 }
 .spinner {
@@ -3634,9 +3711,13 @@ h1 > span:not(.live-tag) {
     width: calc(100% - 18px);
     padding: 12px 10px;
   }
-  .table-gamble-overlay.table-gamble-overlay-prompt {
-    width: min(350px, calc(100% - 28px));
-    padding: 0;
+  .table-gamble-prompt-anchor {
+    right: auto;
+    bottom: 2%;
+    left: 50%;
+    top: auto;
+    width: min(265px, calc(100% - 28px));
+    transform: translateX(-50%);
   }
   .table-gamble-overlay .gamble-panel {
     min-height: 236px;
@@ -3676,19 +3757,19 @@ h1 > span:not(.live-tag) {
     width: calc(100% - 8px);
     padding: 10px 8px;
   }
-  .table-gamble-overlay.table-gamble-overlay-prompt {
-    width: calc(100% - 28px);
-    padding: 0;
+  .table-gamble-prompt-anchor {
+    bottom: 1.5%;
+    width: min(245px, calc(100% - 28px));
   }
   .gamble-prompt {
-    min-height: 70px;
-    padding: 11px 12px;
+    min-height: 54px;
+    padding: 8px 10px;
   }
   .gamble-prompt-copy strong {
-    font-size: 12px;
+    font-size: 11px;
   }
   .gamble-prompt-copy small {
-    font-size: 8px;
+    font-size: 6px;
   }
   .table-gamble-overlay .gamble-panel {
     grid-template-columns: minmax(0, 1fr) auto;
