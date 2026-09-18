@@ -8,6 +8,25 @@ export type Card = {
 };
 export type Bet = { main: number; three: number; pairs: number };
 export type SideResult = { label: string; odds: number; payout: number };
+export type GambleColor = "red" | "black";
+export type GambleResult = "win" | "lose";
+export type GambleState = {
+  playerId: string;
+  /** The current winnings amount at risk in the next draw. */
+  stake: number;
+  choice: GambleColor | null;
+  card: Card | null;
+  result: GambleResult | null;
+  status: "available" | "lost" | "cashed";
+  streak: number;
+};
+export type HistoryGamble = {
+  stake: number;
+  choice: GambleColor;
+  card: Card;
+  result: GambleResult;
+  net: number;
+};
 export type Hand = {
   id: string;
   cards: Card[];
@@ -58,6 +77,8 @@ export type HistoryItem = {
   timestamp: number;
   /** One line per blackjack hand and one line for each side bet. */
   bets: HistoryBet[];
+  /** Each red/black draw made with the winnings after this round. */
+  gambles?: HistoryGamble[];
 };
 export type TableState = {
   id: string;
@@ -69,6 +90,7 @@ export type TableState = {
   activeHandId: string | null;
   deadline: number | null;
   history: HistoryItem[];
+  gambles: GambleState[];
   shoeRemaining: number;
   message: string;
 };
@@ -80,6 +102,8 @@ export type Command =
   | { type: "ready"; ready: boolean }
   | { type: "hit" | "stand" | "split"; handId: string }
   | { type: "double"; handId: string; reveal?: "now" | "dealer" }
+  | { type: "gamble"; color: GambleColor }
+  | { type: "cashout" }
   | { type: "refill" };
 export type Ack =
   | { ok: true; playerId?: string; tableId?: string }

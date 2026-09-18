@@ -1458,6 +1458,394 @@ h1 > span:not(.live-tag) {
   margin-top: 7px;
   line-height: 1.7;
 }
+.gamble-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(220px, 0.95fr);
+  align-items: center;
+  gap: 24px;
+  min-height: 196px;
+  color: #d8c9e3;
+}
+.gamble-copy {
+  min-width: 0;
+}
+.gamble-copy h3 {
+  color: #eee5f3;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.5px;
+}
+.gamble-copy p {
+  max-width: 245px;
+  margin-top: 8px;
+  color: #92819f;
+  font-family: "DM Sans", sans-serif;
+  font-size: 10px;
+  line-height: 1.65;
+}
+.gamble-amount {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: end;
+  column-gap: 10px;
+  margin-top: 19px;
+}
+.gamble-amount > span {
+  grid-column: 1 / -1;
+  color: #8e789e;
+  font-size: 7px;
+  letter-spacing: 1.15px;
+  text-transform: uppercase;
+}
+.gamble-amount > strong {
+  margin-top: 4px;
+  color: #e8c78e;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.7px;
+}
+.gamble-amount > strong small {
+  color: #a68a69;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.gamble-amount > em {
+  align-self: center;
+  margin-bottom: 1px;
+  padding: 4px 6px;
+  border: 1px solid #d8b9743b;
+  border-radius: 5px;
+  color: #ddbe86;
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: #d7ad5e0d;
+}
+.gamble-card-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 83px;
+}
+.gamble-card-label,
+.gamble-choice-label {
+  color: #806d8c;
+  font-size: 6px;
+  font-weight: 700;
+  letter-spacing: 1.55px;
+  white-space: nowrap;
+}
+.gamble-card-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 91px;
+  border: 1px solid #aa82c33b;
+  border-radius: 8px;
+  background: #2a1b37;
+  box-shadow: 0 8px 20px #08040e66;
+  transform: rotate(-4deg);
+}
+.gamble-card-frame::after {
+  position: absolute;
+  inset: -6px 7px 6px -7px;
+  z-index: -1;
+  border: 1px solid #8f68a629;
+  border-radius: 8px;
+  content: "";
+  transform: rotate(8deg);
+}
+.gamble-card-frame .playing-card {
+  width: 54px;
+  min-width: 54px;
+  height: 78px;
+  animation: gamble-card-in 0.45s var(--ease) both;
+}
+.gamble-active .gamble-card-stage:not(.revealed) .playing-card {
+  animation: gamble-card-pulse 2s ease-in-out infinite;
+}
+.gamble-card-color {
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+}
+.gamble-card-color.red {
+  color: #e28b9e;
+}
+.gamble-card-color.black {
+  color: #b9afc4;
+}
+.gamble-actions {
+  display: flex;
+  align-items: stretch;
+  flex-direction: column;
+  min-width: 0;
+  gap: 9px;
+}
+.gamble-choice-label {
+  margin-bottom: 1px;
+}
+.gamble-color-choices {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+.gamble-color-button {
+  display: flex;
+  min-width: 0;
+  min-height: 53px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid;
+  border-radius: 9px;
+  text-align: left;
+}
+.gamble-color-button > span {
+  display: flex;
+  flex-direction: column;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+.gamble-color-button small {
+  margin-top: 4px;
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 1px;
+}
+.gamble-color-button.red {
+  border-color: #d2768e70;
+  background: linear-gradient(135deg, #9c3d5938, #451f3748);
+  color: #f0b4c2;
+}
+.gamble-color-button.red small {
+  color: #d9849b;
+}
+.gamble-color-button.black {
+  border-color: #a99ebd42;
+  background: linear-gradient(135deg, #3a33473d, #191621);
+  color: #d5ccdf;
+}
+.gamble-color-button.black small {
+  color: #a39aac;
+}
+.gamble-color-button:not(:disabled):hover {
+  transform: translateY(-2px);
+}
+.gamble-color-button.red:not(:disabled):hover {
+  border-color: #e18ba1;
+  background: linear-gradient(135deg, #b84b684f, #54243e);
+  box-shadow: 0 8px 22px #a7485c24;
+}
+.gamble-color-button.black:not(:disabled):hover {
+  border-color: #c5b8d2;
+  background: linear-gradient(135deg, #50455e4d, #231d2d);
+  box-shadow: 0 8px 22px #17131f;
+}
+.gamble-or {
+  color: #76677f;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+.gamble-cashout {
+  min-height: 32px;
+  border: 1px solid #cda96742;
+  border-radius: 7px;
+  background: #cda9670c;
+  color: #d9b979;
+  font-size: 9px;
+  font-weight: 700;
+}
+.gamble-cashout:not(:disabled):hover {
+  border-color: #dfc080;
+  background: #d9ad591a;
+}
+.gamble-countdown {
+  color: #76677f;
+  font-family: "DM Sans", sans-serif;
+  font-size: 8px;
+  text-align: center;
+}
+.gamble-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 53px;
+  padding: 0 12px;
+  border: 1px solid;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.gamble-result > span {
+  font-family: Georgia, serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+.gamble-result.lost {
+  border-color: #c1728738;
+  background: #a34a5b16;
+  color: #d897a7;
+}
+.gamble-result.cashed {
+  border-color: #bda05c45;
+  background: #bd995b14;
+  color: #e0be7f;
+}
+.gamble-history {
+  border-left: 2px solid #c69b5b66;
+}
+.table-gamble-overlay {
+  position: absolute;
+  left: 50%;
+  top: 51%;
+  z-index: 14;
+  width: min(940px, calc(100% - 72px));
+  padding: 16px 20px;
+  border: 1px solid #c79c6c52;
+  border-radius: 14px;
+  background: linear-gradient(115deg, #2f1b3eeb, #17121fee 62%), #17111f;
+  box-shadow:
+    0 22px 55px #08040eb8,
+    0 0 0 1px #ffffff09 inset;
+  backdrop-filter: blur(12px);
+  transform: translate(-50%, -50%);
+  animation: gamble-overlay-in 0.35s var(--ease) both;
+}
+.table-stage:has(.table-gamble-overlay) .felt-brand {
+  opacity: 0.04;
+  filter: blur(0.5px);
+  transform: translateX(-50%) scale(0.9);
+}
+.table-gamble-overlay .gamble-panel {
+  min-height: 178px;
+}
+.table-gamble-overlay-prompt {
+  width: min(350px, calc(100% - 72px));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.gamble-prompt {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 76px;
+  padding: 13px 15px;
+  border: 1px solid #c79c6c52;
+  border-radius: 12px;
+  background: linear-gradient(115deg, #2f1b3eeb, #17121fee 62%);
+  box-shadow:
+    0 16px 36px #08040e99,
+    0 0 0 1px #ffffff09 inset;
+  color: #eee5f3;
+  text-align: left;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.2s var(--ease);
+}
+.gamble-prompt:not(:disabled):hover {
+  border-color: #dfbe82;
+  box-shadow:
+    0 20px 42px #08040eb3,
+    0 0 0 1px #dfbe8214 inset;
+  transform: translateY(-2px);
+}
+.gamble-prompt:disabled {
+  cursor: default;
+  opacity: 0.64;
+}
+.gamble-prompt-emblem {
+  position: relative;
+  display: block;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #cda96745;
+  border-radius: 9px;
+  background: #d7ad5e0d;
+  color: #d9b979;
+}
+.gamble-prompt-emblem > svg {
+  position: absolute;
+}
+.gamble-prompt-emblem > svg:first-child {
+  top: 4px;
+  left: 4px;
+  color: #e28b9e;
+}
+.gamble-prompt-emblem > svg:last-child {
+  right: 4px;
+  bottom: 4px;
+  color: #c5b7d2;
+}
+.gamble-prompt-copy {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+}
+.gamble-prompt-copy .section-kicker {
+  color: #a08a72;
+  font-size: 6px;
+  letter-spacing: 1.5px;
+}
+.gamble-prompt-copy strong {
+  color: #f1e6ef;
+  font-size: 13px;
+  font-weight: 650;
+}
+.gamble-prompt-copy small {
+  color: #a58eaf;
+  font-family: "DM Sans", sans-serif;
+  font-size: 9px;
+}
+.gamble-prompt-arrow {
+  color: #d9b979;
+}
+@keyframes gamble-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) rotateY(90deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotateY(0);
+  }
+}
+@keyframes gamble-card-pulse {
+  0%,
+  100% {
+    transform: translateY(0) rotateY(0);
+  }
+  50% {
+    transform: translateY(-4px) rotateY(5deg);
+  }
+}
+@keyframes gamble-overlay-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px)) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
 .spinner {
   animation: spin 1.4s linear infinite;
 }
@@ -1870,6 +2258,64 @@ h1 > span:not(.live-tag) {
   font-size: 10px;
   display: flex;
   width: max-content;
+}
+.history-session-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 5px;
+  padding: 13px 12px;
+  border: 1px solid #b896f02b;
+  border-radius: 10px;
+  background: linear-gradient(105deg, #b896f012, transparent 68%), #9e7bb208;
+}
+.history-session-icon {
+  width: 35px;
+  height: 35px;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 9px;
+  background: #ffffff05;
+}
+.history-session-icon.positive {
+  background: #9edfc312;
+}
+.history-session-icon.negative {
+  background: #d896a712;
+}
+.history-session-icon.neutral {
+  color: #a99ab5;
+  background: #ffffff08;
+}
+.history-session-copy b,
+.history-session-copy small {
+  display: block;
+}
+.history-session-copy b {
+  color: #d9c9e6;
+  font-size: 10px;
+  font-weight: 600;
+}
+.history-session-copy small {
+  margin-top: 4px;
+  color: #806f90;
+  font-size: 8px;
+}
+.history-session-summary > strong {
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.history-session-summary > strong.neutral {
+  color: #a99ab5;
+}
+.history-session-summary > strong > small {
+  color: #806f90;
+  font-size: 8px;
+  font-weight: 500;
 }
 .history-list {
   max-height: 390px;
@@ -3156,6 +3602,122 @@ h1 > span:not(.live-tag) {
   }
   .win-burst {
     display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .gamble-panel {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
+    min-height: 250px;
+  }
+  .gamble-copy h3 {
+    font-size: 16px;
+  }
+  .gamble-copy p {
+    font-size: 9px;
+  }
+  .gamble-actions {
+    grid-column: 1 / -1;
+  }
+  .gamble-card-stage {
+    padding-right: 5px;
+  }
+  .gamble-color-button {
+    min-height: 49px;
+  }
+  .gamble-color-button > span {
+    font-size: 9px;
+  }
+  .table-gamble-overlay {
+    top: 52%;
+    width: calc(100% - 18px);
+    padding: 12px 10px;
+  }
+  .table-gamble-overlay.table-gamble-overlay-prompt {
+    width: min(350px, calc(100% - 28px));
+    padding: 0;
+  }
+  .table-gamble-overlay .gamble-panel {
+    min-height: 236px;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 450px) {
+  .gamble-panel {
+    grid-template-columns: 1fr;
+    gap: 15px;
+    min-height: 405px;
+    text-align: center;
+  }
+  .gamble-copy p {
+    max-width: 260px;
+    margin-right: auto;
+    margin-left: auto;
+  }
+  .gamble-amount {
+    justify-content: center;
+    text-align: left;
+  }
+  .gamble-card-stage {
+    grid-row: auto;
+    grid-column: 1;
+    justify-self: center;
+  }
+  .gamble-actions {
+    grid-column: 1;
+  }
+  .gamble-choice-label {
+    font-size: 5px;
+  }
+  .table-gamble-overlay {
+    top: 52%;
+    width: calc(100% - 8px);
+    padding: 10px 8px;
+  }
+  .table-gamble-overlay.table-gamble-overlay-prompt {
+    width: calc(100% - 28px);
+    padding: 0;
+  }
+  .gamble-prompt {
+    min-height: 70px;
+    padding: 11px 12px;
+  }
+  .gamble-prompt-copy strong {
+    font-size: 12px;
+  }
+  .gamble-prompt-copy small {
+    font-size: 8px;
+  }
+  .table-gamble-overlay .gamble-panel {
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 220px;
+    gap: 10px;
+    text-align: left;
+  }
+  .table-gamble-overlay .gamble-copy {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .table-gamble-overlay .gamble-card-stage {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: auto;
+    padding-right: 0;
+  }
+  .table-gamble-overlay .gamble-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .table-gamble-overlay .gamble-copy p {
+    max-width: 180px;
+    margin-right: 0;
+    margin-left: 0;
+  }
+  .table-gamble-overlay .gamble-amount {
+    justify-content: start;
+    text-align: left;
   }
 }
 /* A physical betting layout: chip rack below, all wager targets on the felt. */

@@ -8,6 +8,7 @@
   --table-stage-height: clamp(620px, 72vh, 760px);
   --table-status-height: 46px;
   --table-action-lift: 82px;
+  --table-confirm-offset: 66px;
 }
 
 .table-stage {
@@ -93,7 +94,37 @@
 }
 
 .table-panel .betting-actions {
-  justify-content: flex-end;
+  justify-content: center;
+  min-height: 57px;
+}
+
+/* Keep the confirmation on the felt, directly below the chip rack. */
+.table-panel .bet-confirm {
+  position: absolute;
+  top: calc(
+    -1 * var(--table-status-height) - var(--table-stage-height) / 2 -
+      var(--table-action-lift) + var(--table-confirm-offset)
+  );
+  left: 50%;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: min(220px, calc(100% - 32px));
+  min-width: 0;
+  padding-bottom: 0;
+  transform: translateX(-50%);
+}
+
+.table-panel .bet-confirm > span {
+  text-align: center;
+}
+
+.table-panel .bet-confirm .deal-button {
+  width: 100%;
+  max-width: 200px;
 }
 
 /* Decision: lift the existing action group and turn the controls into casino chips. */
@@ -260,6 +291,7 @@
     --table-stage-height: 520px;
     --table-status-height: 48px;
     --table-action-lift: 22px;
+    --table-confirm-offset: 58px;
   }
 
   .table-panel .chip-rack::before {
@@ -314,6 +346,7 @@
   .table-panel {
     --table-stage-height: 500px;
     --table-action-lift: 18px;
+    --table-confirm-offset: 52px;
   }
 
   .table-panel .chip-rack::before {
