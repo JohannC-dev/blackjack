@@ -7,6 +7,7 @@ import "@fontsource/manrope/800.css";
 import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
 import "./globals.css";
+import "./table-center.css";
 
 export const metadata: Metadata = {
   title: "MINUIT — Le blackjack, entre amis.",

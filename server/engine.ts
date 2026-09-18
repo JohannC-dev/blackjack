@@ -11,6 +11,7 @@ import type {
   Card,
   Command,
   Hand,
+  HistoryBet,
   PublicPlayer,
   Seat,
   Suit,
@@ -24,6 +25,8 @@ export type Player = PublicPlayer & {
 };
 const emptyBet = () => ({ main: 0, three: 0, pairs: 0 });
 const emptySides = () => ({ three: null, pairs: null });
+const BETTING_COUNTDOWN_MS = 12_000;
+const ALL_READY_COUNTDOWN_MS = 3_000;
 export function makeShoe(): Card[] {
   const cards: Card[] = [];
   for (let deck = 0; deck < 8; deck++)
@@ -103,7 +106,10 @@ export class Table {
       ...this.state,
       seats,
       dealer: this.state.dealer.map((card) => ({ ...card })),
-      history: this.state.history.map((item) => ({ ...item })),
+      history: this.state.history.map((item) => ({
+        ...item,
+        bets: item.bets.map((bet) => ({ ...bet })),
+      })),
       players: [...this.players.values()].map(
         ({ id, name, balance, connected, ready }) => ({
           id,
@@ -145,7 +151,7 @@ export class Table {
   remove(playerId: string) {
     if (
       this.state.phase !== "betting" &&
-      this.state.seats.some((s) => s.playerId === playerId && s.hands.length)
+      this.state.seats.some((s) => s.playerId === playerId)
     )
       throw new Error("Terminez la manche avant de changer de table.");
     for (const seat of this.state.seats)
@@ -157,7 +163,7 @@ export class Table {
         seat.committed = 0;
       }
     this.players.delete(playerId);
-    this.updateCountdown();
+    this.updateCountdown(true);
     this.emit();
   }
   command(playerId: string, command: Command) {
@@ -202,6 +208,13 @@ export class Table {
           if (command.type === "release") {
             seat.playerId = null;
             seat.bet = emptyBet();
+            // A released seat must not retain any round-local presentation or
+            // accounting state. In normal play these fields are empty during
+            // betting, but clearing them here keeps release idempotent and
+            // prevents stale chips/results if a table is recovered mid-cycle.
+            seat.hands = [];
+            seat.sides = emptySides();
+            seat.committed = 0;
           } else {
             const b = command.bet;
             if (
@@ -227,7 +240,7 @@ export class Table {
         }
         player.ready = false;
       }
-      this.updateCountdown();
+      this.updateCountdown(true);
     } else if (
       ["hit", "stand", "double", "split"].includes(command.type) &&
       "handId" in command
@@ -313,7 +326,7 @@ export class Table {
             ? "stood"
             : "playing";
   }
-  private updateCountdown() {
+  private updateCountdown(reset = false) {
     if (this.state.phase !== "betting") return;
     const seated = [...this.players.values()].filter(
       (p) =>
@@ -324,10 +337,11 @@ export class Table {
     if (!ready.length) this.state.deadline = null;
     else if (seated.every((p) => p.ready))
       this.state.deadline = Math.min(
-        this.state.deadline ?? Infinity,
-        Date.now() + 3000,
+        reset ? Infinity : (this.state.deadline ?? Infinity),
+        Date.now() + ALL_READY_COUNTDOWN_MS,
       );
-    else this.state.deadline ??= Date.now() + 12000;
+    else if (reset || this.state.deadline === null)
+      this.state.deadline = Date.now() + BETTING_COUNTDOWN_MS;
   }
   startRound() {
     if (this.state.phase !== "betting") return;
@@ -342,6 +356,12 @@ export class Table {
       this.state.deadline = null;
       return;
     }
+    // Bets are only reserved when a round starts. Clear the bets belonging to
+    // players who did not confirm in time so their unplayed chips do not
+    // remain displayed on the table while the round is in progress.
+    const dealtSeatIndexes = new Set(seats.map((seat) => seat.index));
+    for (const seat of this.state.seats)
+      if (!dealtSeatIndexes.has(seat.index)) seat.bet = emptyBet();
     if (this.shoe.length < 160) this.shoe = makeShoe();
     this.state.round++;
     this.state.phase = "dealing";
@@ -417,11 +437,12 @@ export class Table {
     const dealerTotal = score(this.state.dealer).total;
     const dealerBJ = isBlackjack(this.state.dealer);
     const nets = new Map<string, number>();
+    const historyBets = new Map<string, HistoryBet[]>();
     for (const seat of this.state.seats) {
       if (!seat.hands.length) continue;
-      const paidBonuses =
-        (seat.sides.three?.payout ?? 0) + (seat.sides.pairs?.payout ?? 0);
-      let payout = 0;
+      const bets = historyBets.get(seat.playerId!) ?? [];
+      const seatBetsStart = bets.length;
+      let mainPayout = 0;
       for (const hand of seat.hands) {
         const total = score(hand.cards).total;
         if (hand.status === "bust") {
@@ -443,12 +464,39 @@ export class Table {
           hand.result = "lose";
           hand.payout = 0;
         }
-        payout += hand.payout;
+        const payout = hand.payout ?? 0;
+        mainPayout += payout;
+        bets.push({
+          type: "main",
+          seat: seat.index,
+          bet: hand.bet,
+          payout,
+          net: payout - hand.bet,
+          result: hand.result,
+        });
       }
-      this.players.get(seat.playerId!)!.balance += payout;
+      for (const [type, side] of [
+        ["three", seat.sides.three] as const,
+        ["pairs", seat.sides.pairs] as const,
+      ]) {
+        const bet = seat.bet[type];
+        const payout = side?.payout ?? 0;
+        bets.push({
+          type,
+          seat: seat.index,
+          bet,
+          payout,
+          net: payout - bet,
+          result: bet === 0 ? "none" : side ? "win" : "lose",
+          ...(side?.label ? { label: side.label } : {}),
+        });
+      }
+      historyBets.set(seat.playerId!, bets);
+      this.players.get(seat.playerId!)!.balance += mainPayout;
       nets.set(
         seat.playerId!,
-        (nets.get(seat.playerId!) ?? 0) + payout + paidBonuses - seat.committed,
+        (nets.get(seat.playerId!) ?? 0) +
+          bets.slice(seatBetsStart).reduce((sum, bet) => sum + bet.net, 0),
       );
     }
     for (const [playerId, net] of nets)
@@ -457,6 +505,7 @@ export class Table {
         playerId,
         net,
         timestamp: Date.now(),
+        bets: historyBets.get(playerId) ?? [],
       });
     this.state.history = this.state.history.slice(0, 100);
     this.state.phase = "settled";

@@ -1,0 +1,136 @@
+.root {
+  position: absolute;
+  inset: -12px -5px;
+  z-index: 2;
+  isolation: isolate;
+  overflow: visible;
+  pointer-events: none;
+  user-select: none;
+  animation: appear 180ms both;
+  animation-timing-function: var(--ease, cubic-bezier(0.23, 1, 0.32, 1));
+}
+
+.deck {
+  position: absolute;
+  inset: 0;
+}
+
+.shadow {
+  position: absolute;
+  top: 60%;
+  left: 14%;
+  width: 72%;
+  height: 20%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, #0a061c70, #0a061c00 70%);
+  transform-origin: center;
+  animation: shadow-breathe 1600ms infinite both;
+  animation-timing-function: var(
+    --ease-in-out,
+    cubic-bezier(0.77, 0, 0.175, 1)
+  );
+}
+
+.edge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 27px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #80659f, #f0e2ff, #80659f);
+  box-shadow:
+    1px 0 #27183a,
+    0 2px 4px #0a061c55;
+  transform-origin: center;
+  transform: translate3d(var(--edge-x), -50%, 0);
+  animation: shuffle-edge 1500ms infinite both;
+  animation-timing-function: var(
+    --ease-in-out,
+    cubic-bezier(0.77, 0, 0.175, 1)
+  );
+  animation-delay: var(--shuffle-delay);
+}
+
+.edge::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  width: 1px;
+  height: calc(100% - 4px);
+  background: #ffffff65;
+  transform: translateX(-50%);
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* The longer loop is a complete split / weave / square sequence. */
+@keyframes shuffle-edge {
+  0%,
+  8%,
+  82%,
+  100% {
+    transform: translate3d(var(--edge-x), -50%, 0) rotate(0deg);
+  }
+  32%,
+  40% {
+    transform: translate3d(
+        calc(var(--edge-x) + var(--split-x)),
+        calc(-50% + var(--split-y)),
+        0
+      )
+      rotate(var(--split-angle));
+  }
+  63% {
+    transform: translate3d(
+        calc(var(--edge-x) + var(--weave-x)),
+        calc(-50% + var(--weave-y)),
+        0
+      )
+      rotate(var(--weave-angle));
+  }
+}
+
+@keyframes shadow-breathe {
+  0%,
+  10%,
+  90%,
+  100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  38% {
+    opacity: 0.45;
+    transform: scale(1.35, 0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge {
+    /* Keep the line still; only a restrained opacity change signals activity. */
+    animation-name: gentle-edge;
+  }
+
+  .shadow {
+    animation: none;
+    opacity: 0.65;
+  }
+}
+
+@keyframes gentle-edge {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.78;
+  }
+}

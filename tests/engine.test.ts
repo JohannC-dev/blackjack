@@ -152,6 +152,34 @@ describe("European blackjack and credit accounting", () => {
     settle(table);
     expect(p.balance).toBe(380);
     expect(table.state.history[0].net).toBe(345);
+    expect(table.state.history[0].bets).toEqual([
+      {
+        type: "main",
+        seat: 2,
+        bet: 50,
+        payout: 100,
+        net: 50,
+        result: "win",
+      },
+      {
+        type: "three",
+        seat: 2,
+        bet: 5,
+        payout: 50,
+        net: 45,
+        result: "win",
+        label: "Three of a Kind",
+      },
+      {
+        type: "pairs",
+        seat: 2,
+        bet: 5,
+        payout: 255,
+        net: 250,
+        result: "win",
+        label: "Suited Trips",
+      },
+    ]);
   });
   test("only one dealer card exists before players finish; natural pays 3:2", () => {
     const { table, p } = tableWith([card(1), card(9), card(13), card(8)]);
@@ -190,6 +218,32 @@ describe("European blackjack and credit accounting", () => {
     settle(table);
     expect(p.balance).toBe(1950);
     expect(table.state.history[0].net).toBe(-50);
+    expect(table.state.history[0].bets).toEqual([
+      {
+        type: "main",
+        seat: 2,
+        bet: 50,
+        payout: 0,
+        net: -50,
+        result: "lose",
+      },
+      {
+        type: "three",
+        seat: 2,
+        bet: 0,
+        payout: 0,
+        net: 0,
+        result: "none",
+      },
+      {
+        type: "pairs",
+        seat: 2,
+        bet: 0,
+        payout: 0,
+        net: 0,
+        result: "none",
+      },
+    ]);
     expect(ownHand(table, p).bet).toBe(50);
   });
   test("a natural pushes against a dealer natural", () => {
@@ -395,6 +449,34 @@ describe("Multiplayer authority and lifecycle", () => {
       }),
     ).toThrow();
   });
+  test("a betting action gives everyone twelve seconds to finish their setup", () => {
+    const alice = player(),
+      bob = player("Bob");
+    const { table } = tableWith([], [alice, bob]);
+    const bobSeat = table.state.seats.find((seat) => seat.playerId === bob.id)!;
+
+    table.command(alice.id, { type: "ready", ready: true });
+    expect(table.state.deadline).not.toBeNull();
+
+    // Simulate a countdown that is close to expiring. Bob's bet is a valid
+    // action while Alice remains ready, so it must move the deadline forward.
+    table.state.deadline = Date.now() + 250;
+    table.command(bob.id, {
+      type: "bet",
+      seat: bobSeat.index,
+      bet: { main: 30, three: 0, pairs: 0 },
+    });
+    expect(table.state.deadline).not.toBeNull();
+    expect(table.state.deadline!).toBeGreaterThan(Date.now() + 10_000);
+
+    // A ready player cancelling readiness is also a table action. With Bob
+    // ready, Alice's cancellation must leave a fresh twelve-second window.
+    table.command(bob.id, { type: "ready", ready: true });
+    table.state.deadline = Date.now() + 250;
+    table.command(alice.id, { type: "ready", ready: false });
+    expect(table.state.deadline).not.toBeNull();
+    expect(table.state.deadline!).toBeGreaterThan(Date.now() + 10_000);
+  });
   test("all hands play in table order, with correct ownership", () => {
     const alice = player(),
       bob = player("Bob");
@@ -445,9 +527,9 @@ describe("Multiplayer authority and lifecycle", () => {
     const { table } = tableWith([card(10), card(10), card(8)], [alice, bob]);
     begin(table, [alice]);
     expect(bob.balance).toBe(2000);
-    expect(
-      table.state.seats.find((s) => s.playerId === bob.id)!.hands,
-    ).toHaveLength(0);
+    const bobSeat = table.state.seats.find((s) => s.playerId === bob.id)!;
+    expect(bobSeat.hands).toHaveLength(0);
+    expect(bobSeat.bet).toEqual({ main: 0, three: 0, pairs: 0 });
   });
   test("a timed-out hand stands; disconnect cannot freeze the game", () => {
     const { table, p } = tableWith([card(10), card(10), card(8), card(7)]);
@@ -465,6 +547,16 @@ describe("Multiplayer authority and lifecycle", () => {
     table.add(p);
     expect(ownHand(table, p).id).toBe(handId);
     expect(p.balance).toBe(1975);
+    expect(() => table.remove(p.id)).toThrow("Terminez");
+  });
+  test("a spectator may leave an active table, but a seated player may not", () => {
+    const { table, p } = tableWith([]);
+    table.state.phase = "playing";
+    const spectator = player("Spectator");
+    table.add(spectator);
+
+    expect(() => table.remove(spectator.id)).not.toThrow();
+    expect(table.players.has(spectator.id)).toBe(false);
     expect(() => table.remove(p.id)).toThrow("Terminez");
   });
   test("snapshot never exposes session tokens or remaining shoe cards", () => {
@@ -487,6 +579,43 @@ describe("Multiplayer authority and lifecycle", () => {
         bet: { main: 500, three: 100, pairs: 100 },
       }),
     ).toThrow("appartient");
+  });
+  test("a player can release one own seat without changing balance or other bets", () => {
+    const { table, p } = tableWith([]);
+    const first = table.state.seats.find((s) => s.playerId === p.id)!;
+    table.command(p.id, {
+      type: "bet",
+      seat: first.index,
+      bet: { main: 25, three: 5, pairs: 5 },
+    });
+    table.command(p.id, { type: "claim", seat: 1 });
+    table.command(p.id, {
+      type: "bet",
+      seat: 1,
+      bet: { main: 50, three: 0, pairs: 0 },
+    });
+    table.command(p.id, { type: "ready", ready: true });
+    const balanceBeforeRelease = p.balance;
+
+    table.command(p.id, { type: "release", seat: 1 });
+
+    expect(p.balance).toBe(balanceBeforeRelease);
+    expect(p.ready).toBe(false);
+    expect(table.state.deadline).toBeNull();
+    expect(table.state.seats[1]).toMatchObject({
+      playerId: null,
+      bet: { main: 0, three: 0, pairs: 0 },
+      hands: [],
+      sides: { three: null, pairs: null },
+      committed: 0,
+    });
+    expect(table.state.seats[first.index].playerId).toBe(p.id);
+    expect(table.state.seats[first.index].bet).toEqual({
+      main: 25,
+      three: 5,
+      pairs: 5,
+    });
+    expect(() => table.command(p.id, { type: "claim", seat: 1 })).not.toThrow();
   });
   test("next round resets state and credits can only be refilled when depleted", () => {
     const { table, p } = tableWith([card(10), card(10), card(8), card(7)]);

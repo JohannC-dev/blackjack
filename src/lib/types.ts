@@ -34,11 +34,30 @@ export type PublicPlayer = {
   connected: boolean;
   ready: boolean;
 };
+export type HistoryBetType = keyof Bet;
+export type HistoryBetResult = "win" | "lose" | "push" | "blackjack" | "none";
+export type HistoryBet = {
+  /** Which of the three betting areas produced this line. */
+  type: HistoryBetType;
+  /** Seat where the wager was placed. */
+  seat: number;
+  /** Amount committed to this wager (including a double or split for main bets). */
+  bet: number;
+  /** Amount returned to the player's balance for this wager. */
+  payout: number;
+  /** Payout minus the amount committed. */
+  net: number;
+  result: HistoryBetResult;
+  /** Winning side-bet combination, when applicable. */
+  label?: string;
+};
 export type HistoryItem = {
   round: number;
   playerId: string;
   net: number;
   timestamp: number;
+  /** One line per blackjack hand and one line for each side bet. */
+  bets: HistoryBet[];
 };
 export type TableState = {
   id: string;
