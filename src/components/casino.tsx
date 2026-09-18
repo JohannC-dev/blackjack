@@ -671,16 +671,18 @@ function Paytable({
 function GamblePrompt({
   stake,
   disabled,
+  compact = false,
   onOpen,
 }: {
   stake: number;
   disabled: boolean;
+  compact?: boolean;
   onOpen: () => void;
 }) {
   return (
     <button
       type="button"
-      className="gamble-prompt"
+      className={`gamble-prompt ${compact ? "compact" : ""}`}
       disabled={disabled}
       onClick={onOpen}
       aria-label={`Tenter vos gains de ${credits(stake)} crédits`}
@@ -690,8 +692,10 @@ function GamblePrompt({
         <Spade size={11} />
       </span>
       <span className="gamble-prompt-copy">
-        <strong>Tenter {credits(stake)} cr.</strong>
-        <small>GAMBLE · ROUGE OU NOIR</small>
+        <strong>
+          {compact ? "Gamble" : "Tenter"} {credits(stake)} cr.
+        </strong>
+        {!compact && <small>GAMBLE · ROUGE OU NOIR</small>}
       </span>
       <ArrowRight
         className="gamble-prompt-arrow"
@@ -872,6 +876,7 @@ export function Casino() {
   const [doubleChoice, setDoubleChoice] = useState<string | null>(null);
   const [doubleChoiceClosing, setDoubleChoiceClosing] = useState(false);
   const [gambleOpen, setGambleOpen] = useState(false);
+  const [gamblePromptFeatured, setGamblePromptFeatured] = useState(false);
   const [shoeShuffling, setShoeShuffling] = useState(false);
   const audioRef = useRef<AudioContext | null>(null);
   const previousCards = useRef(0);
@@ -947,10 +952,16 @@ export function Casino() {
   }, [state?.round, state?.id]);
   useEffect(() => {
     setGambleOpen(false);
-  }, [ownGamble?.round, state?.id]);
+  }, [state?.id]);
   useEffect(() => {
-    if (ownGamble?.status !== "available") setGambleOpen(false);
-  }, [ownGamble?.status]);
+    if (ownGamble?.status !== "available") {
+      setGamblePromptFeatured(false);
+      return;
+    }
+    setGamblePromptFeatured(true);
+    const timer = window.setTimeout(() => setGamblePromptFeatured(false), 7000);
+    return () => window.clearTimeout(timer);
+  }, [ownGamble?.round, ownGamble?.status, state?.id]);
   useEffect(() => {
     if (doubleCloseTimer.current !== null) {
       window.clearTimeout(doubleCloseTimer.current);
@@ -1113,9 +1124,12 @@ export function Casino() {
     if (disabled) return;
     void command({ type: "gamble", color });
   };
-  const cashout = () => {
+  const cashout = async () => {
     if (disabled) return;
-    void command({ type: "cashout" });
+    const ok = await command({ type: "cashout" });
+    if (!ok) return;
+    setGambleOpen(false);
+    setGamblePromptFeatured(false);
   };
   const shareUrl = () => {
     const url = new URL(window.location.href);
@@ -1354,16 +1368,20 @@ export function Casino() {
                           disabled={disabled}
                           onGamble={gamble}
                           onCashout={cashout}
-                          onClose={() => setGambleOpen(false)}
+                          onClose={() => {
+                            setGambleOpen(false);
+                            setGamblePromptFeatured(false);
+                          }}
                         />
                       </div>
                     ) : ownGamble.status === "available" ? (
                       <div
-                        className={`table-gamble-prompt-anchor gamble-prompt-seat-${seat?.index ?? 2}`}
+                        className={`table-gamble-prompt-anchor table-gamble-prompt-edge ${gamblePromptFeatured ? "is-featured" : "is-compact"}`}
                       >
                         <GamblePrompt
                           stake={ownGamble.stake}
                           disabled={disabled}
+                          compact={!gamblePromptFeatured}
                           onOpen={() => setGambleOpen(true)}
                         />
                       </div>

@@ -1888,6 +1888,35 @@ h1 > span:not(.live-tag) {
 .gamble-prompt-arrow {
   color: #e1c181;
 }
+.gamble-prompt.compact {
+  grid-template-columns: 22px auto 12px;
+  gap: 7px;
+  width: auto;
+  min-height: 34px;
+  padding: 5px 8px;
+  border-color: #d4ae6c52;
+  border-radius: 8px;
+  box-shadow: 0 5px 14px #08040e66;
+  animation: none;
+}
+.gamble-prompt.compact .gamble-prompt-emblem {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+.gamble-prompt.compact .gamble-prompt-emblem > svg:first-child {
+  top: 2px;
+  left: 2px;
+  width: 10px;
+}
+.gamble-prompt.compact .gamble-prompt-emblem > svg:last-child {
+  right: 2px;
+  bottom: 2px;
+  width: 9px;
+}
+.gamble-prompt.compact .gamble-prompt-copy strong {
+  font-size: 9px;
+}
 @keyframes gamble-prompt-ready {
   0%,
   100% {
@@ -3851,6 +3880,33 @@ h1 > span:not(.live-tag) {
   .welcome-art > .playing-card {
     animation: welcome-card-fade 180ms var(--ease) both !important;
     animation-delay: 0ms !important;
+  }
+}
+
+/* Keep the optional gamble on the felt edge, never in the controls rectangle. */
+.table-gamble-prompt-anchor.table-gamble-prompt-edge {
+  right: 24px;
+  bottom: 18px;
+  left: auto;
+  top: auto;
+  width: min(300px, calc(100% - 48px));
+  transform: none;
+}
+.table-gamble-prompt-anchor.table-gamble-prompt-edge.is-compact {
+  width: auto;
+}
+
+@media (max-width: 700px) {
+  .table-gamble-prompt-anchor.table-gamble-prompt-edge {
+    right: 12px;
+    bottom: 12px;
+    left: auto;
+    top: auto;
+    width: min(270px, calc(100% - 24px));
+    transform: none;
+  }
+  .table-gamble-prompt-anchor.table-gamble-prompt-edge.is-compact {
+    width: auto;
   }
 }
 
