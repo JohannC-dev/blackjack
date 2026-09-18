@@ -34,6 +34,7 @@ import {
   X,
 } from "lucide-react";
 import { betTotal, canSplitCards, credits, score } from "@/lib/rules";
+import { DEFAULT_PUBLIC_TABLE_ID, PUBLIC_TABLES } from "@/lib/table-config";
 import type { Bet, Hand, Seat, TableState } from "@/lib/types";
 import { newToken } from "@/lib/identity";
 import { useGame } from "@/lib/use-game";
@@ -67,6 +68,13 @@ const POSITIONS = [
   { x: 88, y: 49 },
 ];
 const labels = { main: "Blackjack", three: "21 + 3", pairs: "Super Pairs" };
+const historyResultLabels = {
+  win: "Gagné",
+  lose: "Perdu",
+  push: "Égalité",
+  blackjack: "Blackjack",
+  none: "Pas de mise",
+};
 
 function Modal({
   title,
@@ -428,6 +436,7 @@ export function Casino() {
   const seat = ownSeats.find((s) => s.index === selectedSeat) ?? ownSeats[0];
   const balance = me?.balance ?? profile?.balance ?? 2000;
   const betting = !state || state.phase === "betting";
+  const canChangeTable = betting || ownSeats.length === 0;
   const totalBet = ownSeats.reduce((sum, s) => sum + betTotal(s.bet), 0);
   const activeSeat = state?.seats.find((s) =>
     s.hands.some((h) => h.id === state.activeHandId),
@@ -918,7 +927,8 @@ export function Casino() {
                         {seat && (
                           <button
                             className="text-button"
-                            disabled={disabled || !!me?.ready}
+                            disabled={disabled}
+                            title="Annuler votre place et retirer ses mises"
                             onClick={() => {
                               void command({
                                 type: "release",
@@ -1297,12 +1307,55 @@ export function Casino() {
           <span className="section-kicker">ENSEMBLE, C’EST MIEUX</span>
           <h2>Votre cercle. Votre table.</h2>
           <p className="modal-intro">
-            Créez votre espace et partagez le lien à vos amis, ou rejoignez-les
-            avec leur code.
+            Retrouvez une table publique, ou créez votre espace et partagez le
+            lien à vos amis.
           </p>
+          <div className="public-table-section">
+            <span className="table-list-heading">TABLES PUBLIQUES</span>
+            <div className="public-table-list">
+              {PUBLIC_TABLES.map((publicTable) => {
+                const current = state?.id === publicTable.id;
+                const playerCount = current
+                  ? state.players.filter((player) => player.connected).length
+                  : null;
+                return (
+                  <button
+                    key={publicTable.id}
+                    type="button"
+                    className={`public-table-option ${current ? "current" : ""}`}
+                    disabled={!connected || !canChangeTable || current}
+                    onClick={() => {
+                      game.changeTable(publicTable.id);
+                      setModal(null);
+                    }}
+                    aria-current={current ? "page" : undefined}
+                    aria-label={`Rejoindre la table publique ${publicTable.label}`}
+                  >
+                    <span className="public-table-status" aria-hidden="true">
+                      <i />
+                    </span>
+                    <span className="public-table-copy">
+                      <b>{publicTable.label}</b>
+                      <small>
+                        {current
+                          ? `${playerCount} / 5 joueurs`
+                          : publicTable.description}
+                      </small>
+                    </span>
+                    {current ? <Check size={15} /> : <ArrowRight size={15} />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="or-divider">
+            <span />
+            OU PRIVÉE
+            <span />
+          </div>
           <button
             className="button primary full-width"
-            disabled={!connected || !betting}
+            disabled={!connected || !canChangeTable}
             onClick={() => {
               const code = newToken()
                 .replace(/-/g, "")
@@ -1343,27 +1396,27 @@ export function Casino() {
               />
               <button
                 className="button secondary"
-                disabled={!connected || !betting}
+                disabled={!connected || !canChangeTable}
               >
                 Rejoindre
                 <ArrowRight size={16} />
               </button>
             </div>
           </form>
-          {!betting && (
+          {!canChangeTable && (
             <p className="rules-note">
               Vous pourrez changer de table à la fin de cette manche.
             </p>
           )}
           <button
             className="text-button public-table-link"
-            disabled={!connected || !betting}
+            disabled={!connected || !canChangeTable}
             onClick={() => {
-              game.changeTable("MINUIT");
+              game.changeTable(DEFAULT_PUBLIC_TABLE_ID);
               setModal(null);
             }}
           >
-            Revenir à la table publique MINUIT
+            Revenir à la table publique {DEFAULT_PUBLIC_TABLE_ID}
             <ArrowUpRight size={14} />
           </button>
         </Modal>
@@ -1380,29 +1433,74 @@ export function Casino() {
           {myHistory.length ? (
             <div className="history-list">
               {myHistory.map((item) => (
-                <div key={item.round}>
-                  <span
-                    className={`history-icon ${item.net >= 0 ? "positive" : "negative"}`}
+                <div className="history-entry" key={item.round}>
+                  <div className="history-entry-heading">
+                    <span
+                      className={`history-icon ${item.net >= 0 ? "positive" : "negative"}`}
+                    >
+                      {item.net >= 0 ? (
+                        <ArrowUpRight size={18} />
+                      ) : (
+                        <ArrowDownLeft size={18} />
+                      )}
+                    </span>
+                    <span>
+                      <b>Manche {String(item.round).padStart(3, "0")}</b>
+                      <small>
+                        {new Date(item.timestamp).toLocaleTimeString("fr-FR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </small>
+                    </span>
+                    <strong className={item.net >= 0 ? "positive" : "negative"}>
+                      {item.net > 0 ? "+" : ""}
+                      {credits(item.net)} cr.
+                    </strong>
+                  </div>
+                  <div
+                    className="history-breakdown"
+                    aria-label={`Détail des mises de la manche ${item.round}`}
                   >
-                    {item.net >= 0 ? (
-                      <ArrowUpRight size={18} />
-                    ) : (
-                      <ArrowDownLeft size={18} />
-                    )}
-                  </span>
-                  <span>
-                    <b>Manche {String(item.round).padStart(3, "0")}</b>
-                    <small>
-                      {new Date(item.timestamp).toLocaleTimeString("fr-FR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </small>
-                  </span>
-                  <strong className={item.net >= 0 ? "positive" : "negative"}>
-                    {item.net > 0 ? "+" : ""}
-                    {credits(item.net)} cr.
-                  </strong>
+                    {item.bets.map((bet, index) => {
+                      const delta = bet.net;
+                      const deltaLabel =
+                        bet.result === "none"
+                          ? "—"
+                          : `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${credits(Math.abs(delta))}`;
+                      return (
+                        <div
+                          className={`history-bet ${bet.result}`}
+                          key={`${bet.type}-${bet.seat}-${index}`}
+                        >
+                          <span className="history-bet-name">
+                            <b>{labels[bet.type]}</b>
+                            <small>
+                              Main {bet.seat + 1} ·{" "}
+                              {historyResultLabels[bet.result]}
+                              {bet.label ? ` · ${bet.label}` : ""}
+                            </small>
+                          </span>
+                          <span className="history-bet-return">
+                            {bet.bet > 0
+                              ? `Mise ${credits(bet.bet)} · Retour ${credits(bet.payout)}`
+                              : "Aucune mise"}
+                          </span>
+                          <strong
+                            className={
+                              bet.result === "none"
+                                ? "muted"
+                                : delta >= 0
+                                  ? "positive"
+                                  : "negative"
+                            }
+                          >
+                            {deltaLabel}
+                          </strong>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
             </div>
