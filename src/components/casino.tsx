@@ -949,6 +949,9 @@ export function Casino() {
     setGambleOpen(false);
   }, [ownGamble?.round, state?.id]);
   useEffect(() => {
+    if (ownGamble?.status !== "available") setGambleOpen(false);
+  }, [ownGamble?.status]);
+  useEffect(() => {
     if (doubleCloseTimer.current !== null) {
       window.clearTimeout(doubleCloseTimer.current);
       doubleCloseTimer.current = null;

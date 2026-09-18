@@ -1755,8 +1755,9 @@ h1 > span:not(.live-tag) {
 }
 .table-gamble-overlay {
   position: absolute;
+  bottom: 16px;
   left: 50%;
-  top: 51%;
+  top: auto;
   z-index: 14;
   width: min(940px, calc(100% - 72px));
   padding: 16px 20px;
@@ -1767,7 +1768,7 @@ h1 > span:not(.live-tag) {
     0 22px 55px #08040eb8,
     0 0 0 1px #ffffff09 inset;
   backdrop-filter: blur(12px);
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   animation: gamble-overlay-in 0.35s var(--ease) both;
 }
 .table-stage:has(.table-gamble-overlay) {
@@ -1923,11 +1924,11 @@ h1 > span:not(.live-tag) {
 @keyframes gamble-overlay-in {
   from {
     opacity: 0;
-    transform: translate(-50%, calc(-50% + 10px)) scale(0.98);
+    transform: translate(-50%, 10px) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: translateX(-50%) scale(1);
   }
 }
 
@@ -3878,7 +3879,8 @@ h1 > span:not(.live-tag) {
     font-size: 9px;
   }
   .table-gamble-overlay {
-    top: 52%;
+    bottom: 8px;
+    top: auto;
     width: calc(100% - 18px);
     padding: 12px 10px;
   }
@@ -3924,7 +3926,8 @@ h1 > span:not(.live-tag) {
     font-size: 5px;
   }
   .table-gamble-overlay {
-    top: 52%;
+    bottom: 4px;
+    top: auto;
     width: calc(100% - 8px);
     padding: 10px 8px;
   }
