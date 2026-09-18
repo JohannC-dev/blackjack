@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { makeShoe, Table, type Player } from "../server/engine";
-import { evaluate21Plus3, evaluateSuperPairs, score } from "../src/lib/rules";
+import {
+  evaluate21Plus3,
+  evaluateSuperPairs,
+  isRed,
+  score,
+} from "../src/lib/rules";
 import type { Card, Suit } from "../src/lib/types";
 
 const card = (rank: number, suit: Suit = "spades"): Card => ({
@@ -118,6 +123,69 @@ describe("Cards and requested side-bet paytables", () => {
 });
 
 describe("European blackjack and credit accounting", () => {
+  test("winnings remain optional across rounds without a streak cap", () => {
+    const { table, p } = tableWith([card(10), card(7), card(8), card(10)]);
+    begin(table, [p]);
+    table.command(p.id, { type: "stand", handId: table.state.activeHandId! });
+    settle(table);
+
+    const gamble = table.state.gambles.find(
+      (entry) => entry.playerId === p.id,
+    )!;
+    expect(gamble.stake).toBe(25);
+    expect(table.state.deadline).not.toBeNull();
+    table.tick(table.state.deadline!);
+    expect(table.state.phase).toBe("betting");
+    expect(gamble.status).toBe("available");
+    table.command(p.id, { type: "ready", ready: true });
+    table.startRound();
+    expect(table.state.phase).toBe("dealing");
+    expect(table.state.gambles).toContain(gamble);
+    const balanceBeforeGambles = p.balance;
+    for (let streak = 1; streak <= 12; streak++) {
+      const nextCard = table.shoe.at(-1)!;
+      table.command(p.id, {
+        type: "gamble",
+        color: isRed(nextCard) ? "red" : "black",
+      });
+      expect(gamble.status).toBe("available");
+      expect(gamble.result).toBe("win");
+      expect(gamble.streak).toBe(streak);
+      expect(gamble.stake).toBe(25 * 2 ** streak);
+    }
+    expect(p.balance).toBe(balanceBeforeGambles + 25 * (2 ** 12 - 1));
+    expect(table.state.history[0].net).toBe(25 * 2 ** 12);
+    table.command(p.id, { type: "cashout" });
+    expect(gamble.status).toBe("cashed");
+    expect(() => table.command(p.id, { type: "gamble", color: "red" })).toThrow(
+      "Aucun gain",
+    );
+  });
+
+  test("a wrong color ends the gamble and removes only the current winnings", () => {
+    const { table, p } = tableWith([card(10), card(7), card(8), card(10)]);
+    begin(table, [p]);
+    table.command(p.id, { type: "stand", handId: table.state.activeHandId! });
+    settle(table);
+
+    const gamble = table.state.gambles.find(
+      (entry) => entry.playerId === p.id,
+    )!;
+    const before = p.balance;
+    const nextCard = table.shoe.at(-1)!;
+    table.command(p.id, {
+      type: "gamble",
+      color: isRed(nextCard) ? "black" : "red",
+    });
+    expect(gamble.status).toBe("lost");
+    expect(gamble.result).toBe("lose");
+    expect(p.balance).toBe(before - 25);
+    expect(table.state.history[0].net).toBe(0);
+    expect(() => table.command(p.id, { type: "cashout" })).toThrow(
+      "Aucun gain",
+    );
+  });
+
   test("side bets enter a paid phase before any player action is allowed", () => {
     const { table, p } = tableWith([
       card(7),

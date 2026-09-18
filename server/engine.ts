@@ -4,6 +4,7 @@ import {
   canSplitCards,
   evaluate21Plus3,
   evaluateSuperPairs,
+  isRed,
   isBlackjack,
   score,
 } from "../src/lib/rules";
@@ -12,6 +13,7 @@ import type {
   Command,
   Hand,
   HistoryBet,
+  HistoryGamble,
   PublicPlayer,
   Seat,
   Suit,
@@ -27,6 +29,7 @@ const emptyBet = () => ({ main: 0, three: 0, pairs: 0 });
 const emptySides = () => ({ three: null, pairs: null });
 const BETTING_COUNTDOWN_MS = 12_000;
 const ALL_READY_COUNTDOWN_MS = 3_000;
+const SETTLED_COUNTDOWN_MS = 7_000;
 export function makeShoe(): Card[] {
   const cards: Card[] = [];
   for (let deck = 0; deck < 8; deck++)
@@ -71,6 +74,7 @@ export class Table {
       activeHandId: null,
       deadline: null,
       history: [],
+      gambles: [],
       message: "La soirée commence. Faites vos jeux.",
     };
   }
@@ -109,6 +113,18 @@ export class Table {
       history: this.state.history.map((item) => ({
         ...item,
         bets: item.bets.map((bet) => ({ ...bet })),
+        ...(item.gambles
+          ? {
+              gambles: item.gambles.map((gamble) => ({
+                ...gamble,
+                card: { ...gamble.card },
+              })),
+            }
+          : {}),
+      })),
+      gambles: this.state.gambles.map((gamble) => ({
+        ...gamble,
+        card: gamble.card ? { ...gamble.card } : null,
       })),
       players: [...this.players.values()].map(
         ({ id, name, balance, connected, ready }) => ({
@@ -131,6 +147,12 @@ export class Table {
     const card = this.shoe.pop();
     if (!card) throw new Error("Le sabot est vide.");
     return card;
+  }
+  private drawGambleCard() {
+    // Gamble draws use the same cards as the table, but an exhausted shoe is
+    // refreshed here as well so a long winning streak can never hit a hard cap.
+    if (!this.shoe.length) this.shoe = makeShoe();
+    return this.draw();
   }
   add(player: Player) {
     this.players.set(player.id, player);
@@ -162,6 +184,9 @@ export class Table {
         seat.sides = emptySides();
         seat.committed = 0;
       }
+    this.state.gambles = this.state.gambles.filter(
+      (entry) => entry.playerId !== playerId,
+    );
     this.players.delete(playerId);
     this.updateCountdown(true);
     this.emit();
@@ -171,7 +196,52 @@ export class Table {
     if (!player) throw new Error("Rejoignez une table pour jouer.");
     if (!command || typeof command !== "object")
       throw new Error("Action invalide.");
-    if (["claim", "release", "bet", "ready", "refill"].includes(command.type)) {
+    if (command.type === "gamble" || command.type === "cashout") {
+      const gamble = this.state.gambles.find(
+        (entry) => entry.playerId === playerId && entry.status === "available",
+      );
+      if (!gamble) throw new Error("Aucun gain disponible à tenter.");
+      if (command.type === "cashout") {
+        gamble.status = "cashed";
+      } else {
+        if (command.color !== "red" && command.color !== "black")
+          throw new Error("Choisissez rouge ou noir.");
+        if (player.balance < gamble.stake)
+          throw new Error(
+            "Ces gains ont déjà été engagés dans la partie. Encaissez cette option.",
+          );
+        const stake = gamble.stake;
+        const card = this.drawGambleCard();
+        const won = (isRed(card) ? "red" : "black") === command.color;
+        const history = this.state.history.find(
+          (item) => item.round === gamble.round && item.playerId === playerId,
+        );
+        if (!history)
+          throw new Error("Le résultat de la manche est introuvable.");
+        const historyGamble: HistoryGamble = {
+          stake,
+          choice: command.color,
+          card: { ...card },
+          result: won ? "win" : "lose",
+          net: won ? stake : -stake,
+        };
+        history.gambles = [...(history.gambles ?? []), historyGamble];
+        history.net += historyGamble.net;
+        gamble.choice = command.color;
+        gamble.card = card;
+        gamble.result = won ? "win" : "lose";
+        if (won) {
+          player.balance += stake;
+          gamble.stake *= 2;
+          gamble.streak += 1;
+        } else {
+          player.balance -= stake;
+          gamble.status = "lost";
+        }
+      }
+    } else if (
+      ["claim", "release", "bet", "ready", "refill"].includes(command.type)
+    ) {
       if (this.state.phase !== "betting")
         throw new Error("Attendez la prochaine manche.");
       if (command.type === "refill") {
@@ -356,6 +426,9 @@ export class Table {
       this.state.deadline = null;
       return;
     }
+    this.state.gambles = this.state.gambles.filter(
+      (entry) => entry.status === "available",
+    );
     // Bets are only reserved when a round starts. Clear the bets belonging to
     // players who did not confirm in time so their unplayed chips do not
     // remain displayed on the table while the round is in progress.
@@ -507,9 +580,30 @@ export class Table {
         timestamp: Date.now(),
         bets: historyBets.get(playerId) ?? [],
       });
-    this.state.history = this.state.history.slice(0, 100);
+    this.state.gambles = [
+      ...this.state.gambles.filter((entry) => entry.status === "available"),
+      ...[...nets.entries()]
+        .filter(([, net]) => net > 0)
+        .map(([playerId, net]) => ({
+          playerId,
+          round: this.state.round,
+          stake: net,
+          choice: null,
+          card: null,
+          result: null,
+          status: "available" as const,
+          streak: 0,
+        })),
+    ];
+    const pendingHistory = new Set(
+      this.state.gambles.map((entry) => `${entry.round}:${entry.playerId}`),
+    );
+    this.state.history = this.state.history.filter(
+      (item, index) =>
+        index < 100 || pendingHistory.has(`${item.round}:${item.playerId}`),
+    );
     this.state.phase = "settled";
-    this.state.deadline = Date.now() + 7000;
+    this.state.deadline = Date.now() + SETTLED_COUNTDOWN_MS;
     this.state.message = dealerBJ
       ? "Blackjack du croupier."
       : dealerTotal > 21

@@ -6,8 +6,7 @@
   overflow: visible;
   pointer-events: none;
   user-select: none;
-  animation: appear 180ms both;
-  animation-timing-function: var(--ease, cubic-bezier(0.23, 1, 0.32, 1));
+  animation: appear 180ms var(--ease, cubic-bezier(0.23, 1, 0.32, 1)) both;
 }
 
 .deck {
@@ -24,35 +23,84 @@
   border-radius: 50%;
   background: radial-gradient(ellipse, #0a061c70, #0a061c00 70%);
   transform-origin: center;
-  animation: shadow-breathe 1600ms infinite both;
-  animation-timing-function: var(
-    --ease-in-out,
-    cubic-bezier(0.77, 0, 0.175, 1)
-  );
+  animation: shadow-sweep 2200ms
+    var(--ease-in-out, cubic-bezier(0.77, 0, 0.175, 1)) both;
 }
 
-.edge {
+.packet {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 2px;
-  height: 27px;
+  width: 17px;
+  height: 40px;
+  border: 1px solid #b197cd70;
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      #b098c72b 0,
+      #b098c72b 1px,
+      transparent 1px,
+      transparent 4px
+    ),
+    linear-gradient(90deg, #241639, #60477b, #241639);
+  box-shadow:
+    1px 2px #2c1f3e,
+    2px 4px #d9c9e050,
+    0 5px 8px #0a061c55;
+  opacity: 0;
+  transform: translate3d(-50%, -50%, 0);
+  transform-origin: center;
+  animation: shuffle-packet 2350ms
+    var(--ease-in-out, cubic-bezier(0.77, 0, 0.175, 1)) both;
+}
+
+.packet::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border: 1px solid #f0e2ff30;
+  border-radius: 2px;
+}
+
+.packetLeft {
+  --packet-split-x: -22px;
+  --packet-split-y: -5px;
+  --packet-split-angle: -8deg;
+  --packet-weave-x: -4px;
+  --packet-weave-y: -1px;
+  --packet-weave-angle: -2deg;
+}
+
+.packetRight {
+  --packet-split-x: 22px;
+  --packet-split-y: -5px;
+  --packet-split-angle: 8deg;
+  --packet-weave-x: 4px;
+  --packet-weave-y: 1px;
+  --packet-weave-angle: 2deg;
+}
+
+.card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 36px;
   border-radius: 2px;
   background: linear-gradient(90deg, #80659f, #f0e2ff, #80659f);
   box-shadow:
     1px 0 #27183a,
     0 2px 4px #0a061c55;
+  opacity: 0;
+  transform: translate3d(-50%, -50%, 0);
   transform-origin: center;
-  transform: translate3d(var(--edge-x), -50%, 0);
-  animation: shuffle-edge 1500ms infinite both;
-  animation-timing-function: var(
-    --ease-in-out,
-    cubic-bezier(0.77, 0, 0.175, 1)
-  );
-  animation-delay: var(--shuffle-delay);
+  animation: shuffle-card 2350ms
+    var(--ease-in-out, cubic-bezier(0.77, 0, 0.175, 1)) var(--shuffle-delay)
+    both;
 }
 
-.edge::after {
+.card::after {
   content: "";
   position: absolute;
   top: 2px;
@@ -72,65 +120,119 @@
   }
 }
 
-/* The longer loop is a complete split / weave / square sequence. */
-@keyframes shuffle-edge {
+@keyframes shuffle-packet {
   0%,
-  8%,
-  82%,
+  10% {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) rotate(0deg);
+  }
+  18%,
+  72% {
+    opacity: 1;
+  }
+  34%,
+  45% {
+    opacity: 1;
+    transform: translate3d(
+        calc(-50% + var(--packet-split-x)),
+        calc(-50% + var(--packet-split-y)),
+        0
+      )
+      rotate(var(--packet-split-angle));
+  }
+  62% {
+    opacity: 1;
+    transform: translate3d(
+        calc(-50% + var(--packet-weave-x)),
+        calc(-50% + var(--packet-weave-y)),
+        0
+      )
+      rotate(var(--packet-weave-angle));
+  }
+  84%,
   100% {
-    transform: translate3d(var(--edge-x), -50%, 0) rotate(0deg);
-  }
-  32%,
-  40% {
-    transform: translate3d(
-        calc(var(--edge-x) + var(--split-x)),
-        calc(-50% + var(--split-y)),
-        0
-      )
-      rotate(var(--split-angle));
-  }
-  63% {
-    transform: translate3d(
-        calc(var(--edge-x) + var(--weave-x)),
-        calc(-50% + var(--weave-y)),
-        0
-      )
-      rotate(var(--weave-angle));
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) rotate(0deg);
   }
 }
 
-@keyframes shadow-breathe {
+@keyframes shuffle-card {
   0%,
-  10%,
-  90%,
-  100% {
-    opacity: 0.8;
-    transform: scale(1);
+  10% {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) rotate(0deg);
   }
-  38% {
-    opacity: 0.45;
-    transform: scale(1.35, 0.85);
+  18%,
+  72% {
+    opacity: 0.95;
+  }
+  34%,
+  45% {
+    opacity: 1;
+    transform: translate3d(
+        calc(-50% + var(--card-split-x)),
+        calc(-50% + var(--card-split-y)),
+        0
+      )
+      rotate(var(--card-split-angle));
+  }
+  62% {
+    opacity: 0.9;
+    transform: translate3d(
+        calc(-50% + var(--card-weave-x)),
+        calc(-50% + var(--card-weave-y)),
+        0
+      )
+      rotate(var(--card-weave-angle));
+  }
+  84%,
+  100% {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) rotate(0deg);
+  }
+}
+
+@keyframes shadow-sweep {
+  0%,
+  12% {
+    opacity: 0;
+    transform: scale(0.82, 0.65);
+  }
+  26%,
+  70% {
+    opacity: 0.72;
+    transform: scale(1, 1);
+  }
+  50% {
+    opacity: 0.42;
+    transform: scale(1.28, 0.78);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.05, 0.85);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .edge {
-    /* Keep the line still; only a restrained opacity change signals activity. */
-    animation-name: gentle-edge;
+  .packet,
+  .card {
+    /* Keep a quiet activity cue without splitting or moving the cards. */
+    animation-name: gentle-card;
   }
 
   .shadow {
     animation: none;
-    opacity: 0.65;
+    opacity: 0.4;
+    transform: none;
   }
 }
 
-@keyframes gentle-edge {
+@keyframes gentle-card {
   0%,
   100% {
-    opacity: 1;
+    opacity: 0.75;
   }
   50% {
-    opacity: 0.78;
+    opacity: 0.45;
   }
 }
