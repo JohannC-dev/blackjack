@@ -1,0 +1,8 @@
+Casino Audio 1.1
+Copyright: Kenney Vleugels (Kenney.nl)
+
+License: Creative Commons Zero (CC0)
+https://creativecommons.org/publicdomain/zero/1.0/
+
+These assets may be used in personal and commercial projects.
+Source: https://kenney.nl/assets/casino-audio

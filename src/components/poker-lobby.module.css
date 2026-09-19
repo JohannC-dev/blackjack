@@ -1,0 +1,1052 @@
+.lobby:global(.poker-lobby) {
+  --lobby-accent: #c4e3cf;
+  --lobby-muted: #a09baa;
+  width: 100%;
+  min-width: 0;
+  max-width: 1180px;
+  min-height: auto;
+  margin: 0 auto;
+  padding: 20px 44px 26px;
+}
+.lobby button:focus-visible,
+.cashDialog button:focus-visible,
+.customBuyIn summary:focus-visible,
+.customBuyIn input:focus-visible {
+  outline: 2px solid #c4e3cf;
+  outline-offset: 4px;
+}
+.breadcrumb,
+.connection,
+.breadcrumb button,
+.sectionHeading,
+.sectionHeading > span,
+.roomTopline,
+.roomTopline > span,
+.roomFooter,
+.roomFooter > span,
+.gameDetail,
+.footer,
+.footer > span {
+  display: flex;
+  align-items: center;
+}
+.breadcrumb {
+  justify-content: space-between;
+  gap: 16px;
+}
+.breadcrumb button {
+  gap: 8px;
+  min-height: 32px;
+  padding: 0;
+  background: none;
+  color: var(--lobby-muted);
+  font-size: 11px;
+}
+.breadcrumb button:hover {
+  color: #fff;
+}
+.connection {
+  gap: 7px;
+  color: var(--lobby-muted);
+  font-size: 10px;
+}
+.connection i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #aba2bc;
+}
+.online i {
+  background: #9ed9b5;
+  box-shadow: 0 0 9px #9ed9b54a;
+}
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20px 0 28px;
+}
+.eyebrow {
+  color: #a09baa;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+.eyebrow > span {
+  margin: 0 9px;
+  opacity: 0.5;
+}
+.heading h1 {
+  display: flex;
+  align-items: center;
+  gap: 21px;
+  margin: 9px 0 7px;
+  color: #f5f1f7;
+  font-size: clamp(34px, 4.2vw, 54px);
+  font-weight: 500;
+  letter-spacing: -0.065em;
+  line-height: 1.12;
+}
+.heading p {
+  color: var(--lobby-muted);
+  font-size: 12px;
+}
+.heading .titleSuit {
+  color: var(--lobby-accent);
+  font-family: Georgia, serif;
+  font-size: 40px;
+  transform: rotate(-14deg);
+}
+.headingNote {
+  display: grid;
+  gap: 5px;
+  text-align: right;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: #777080;
+}
+.sectionHeading {
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid #ffffff0d;
+  padding: 17px 0;
+}
+.sectionHeading h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e4dfe9;
+}
+.sectionHeading > span {
+  gap: 6px;
+  font-size: 10px;
+  color: #8d859a;
+}
+.games {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.velvet {
+  --room-light: #a7dcbf;
+  --room-felt: #335f53;
+  --room-dark: #19382f;
+  --room-glow: #699f7830;
+  --room-chip: #b58d55;
+}
+.salon {
+  --room-light: #b6b9ee;
+  --room-felt: #444270;
+  --room-dark: #282442;
+  --room-glow: #8073bb30;
+  --room-chip: #a79cc9;
+}
+.midnight {
+  --room-light: #e2bf85;
+  --room-felt: #695142;
+  --room-dark: #372c2a;
+  --room-glow: #b58a4429;
+  --room-chip: #b89759;
+}
+.rose {
+  --room-light: #dcb1cb;
+  --room-felt: #684155;
+  --room-dark: #392837;
+  --room-glow: #af698d30;
+  --room-chip: #d1a5b9;
+}
+.ocean {
+  --room-light: #98c6d7;
+  --room-felt: #315569;
+  --room-dark: #1d303c;
+  --room-glow: #5696b330;
+  --room-chip: #b9c5d1;
+}
+.gameCard {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid #ffffff13;
+  border-radius: 13px;
+  background: #18151f;
+  text-align: left;
+  color: #eeebf2;
+  transition:
+    border-color 180ms,
+    background 180ms,
+    transform 220ms var(--ease),
+    box-shadow 180ms;
+  animation: room-enter 400ms var(--ease) both;
+}
+.gameCard:hover:not(:disabled) {
+  transform: translateY(-4px);
+  border-color: var(--room-light);
+  background: #201c27;
+  box-shadow: 0 12px 26px #0003;
+}
+.gameCard:hover:not(:disabled) .roomFooter {
+  color: #fff;
+}
+.gameCard:active:not(:disabled) {
+  transform: translateY(-1px);
+}
+.gameCard:disabled {
+  opacity: 1;
+}
+.cashCard {
+  background: linear-gradient(155deg, #203129, #171d1d 75%);
+  border-color: #a7dcbf45;
+}
+.roomTopline {
+  position: absolute;
+  z-index: 4;
+  left: 18px;
+  right: 18px;
+  top: 15px;
+  justify-content: space-between;
+  gap: 7px;
+  color: var(--room-light);
+}
+.roomTopline > span {
+  gap: 5px;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.roomTopline > span:last-child {
+  font-size: 8px;
+  color: #aba0b5;
+  font-weight: 400;
+}
+.roomArt {
+  position: relative;
+  height: 175px;
+  overflow: hidden;
+  background: radial-gradient(
+    ellipse at 50% 70%,
+    var(--room-glow),
+    transparent 70%
+  );
+}
+.lightBeam {
+  position: absolute;
+  inset: 0 14%;
+  opacity: 0.45;
+  clip-path: polygon(36% 0, 64% 0, 100% 100%, 0 100%);
+  background: linear-gradient(180deg, transparent, var(--room-glow));
+}
+.miniTable {
+  position: absolute;
+  z-index: 2;
+  width: 74%;
+  height: 102px;
+  left: 13%;
+  bottom: 13px;
+  border: 8px solid #211e25;
+  border-radius: 50%;
+  transform: rotate(-9deg);
+  background: radial-gradient(
+    ellipse at 50% 25%,
+    var(--room-felt),
+    var(--room-dark)
+  );
+  box-shadow:
+    0 2px 0 1px #63565a,
+    0 8px 0 #131217,
+    0 11px 0 #28242c,
+    0 21px 22px #0009,
+    inset 0 0 18px #0005;
+}
+.miniTable::before {
+  content: "";
+  position: absolute;
+  inset: 7px 10px;
+  border: 1px solid #f3d7a32e;
+  border-radius: 50%;
+}
+.tableInscription {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  color: var(--room-light);
+  opacity: 0.38;
+  font-size: 6px;
+  letter-spacing: 0.12em;
+}
+.miniCards {
+  position: absolute;
+  left: 43%;
+  top: 40px;
+  display: flex;
+  transform: rotate(2deg);
+}
+.miniCards > i {
+  width: 25px;
+  height: 34px;
+  padding: 2px 4px;
+  display: flex;
+  flex-direction: column;
+  background: #eeece1;
+  box-shadow: 1px 2px 2px #0005;
+  border-radius: 2px;
+  font:
+    bold 11px/1 Georgia,
+    serif;
+  color: #29332e;
+  transform: rotate(-14deg);
+}
+.miniCards > i + i {
+  margin-left: -7px;
+  transform: rotate(12deg);
+}
+.miniCards > i > span {
+  align-self: center;
+  font-size: 18px;
+}
+.chipPile {
+  position: absolute;
+  width: 22px;
+  height: 21px;
+}
+.pileOne {
+  left: 25%;
+  top: 37px;
+}
+.pileTwo {
+  right: 19%;
+  top: 36px;
+}
+.chipPile i {
+  position: absolute;
+  width: 19px;
+  height: 9px;
+  border: 1px dashed #e4dbc2;
+  border-radius: 50%;
+  background: var(--room-chip);
+  box-shadow: 0 2px #57463c;
+  bottom: 0;
+}
+.chipPile i:nth-child(2) {
+  bottom: 3px;
+}
+.chipPile i:nth-child(3) {
+  bottom: 6px;
+}
+.chipPile i:nth-child(4) {
+  bottom: 9px;
+}
+.miniDealer {
+  position: absolute;
+  right: 25%;
+  bottom: 13px;
+  width: 14px;
+  height: 9px;
+  display: grid;
+  place-items: center;
+  color: #332f2b;
+  background: #ddd8c6;
+  border-radius: 50%;
+  font-size: 6px;
+  font-weight: 800;
+}
+.tableSeat {
+  position: absolute;
+  width: 35px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(#49404a, #29212c);
+  box-shadow:
+    0 2px 0 #16121a,
+    inset 0 1px #ffffff10;
+}
+.seatOne {
+  top: 57px;
+  left: 20%;
+  transform: rotate(-20deg);
+}
+.seatTwo {
+  top: 43px;
+  right: 24%;
+  transform: rotate(9deg);
+}
+.seatThree {
+  bottom: -8px;
+  left: 49%;
+  width: 43px;
+}
+
+.roomArt {
+  height: 146px;
+}
+.miniTable {
+  height: 85px;
+  bottom: 8px;
+}
+.miniCards {
+  top: 30px;
+}
+.seatOne {
+  top: 46px;
+}
+.seatTwo {
+  top: 33px;
+}
+.gameCopy {
+  padding: 5px 20px 0;
+}
+.gameCopy h3 {
+  color: #f2edf3;
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  line-height: 1.25;
+}
+.cashCard .gameCopy h3 {
+  font:
+    400 29px/1.04 Georgia,
+    serif;
+}
+.gameCopy h3 small {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: #b3a8be;
+}
+.gameCopy > p {
+  margin-top: 5px;
+  color: #a69caf;
+  font-size: 10px;
+}
+.gameDetail {
+  justify-content: space-between;
+  gap: 6px;
+  margin: 16px 0 12px;
+  color: #92879e;
+  font-size: 9px;
+}
+.gameDetail strong {
+  color: #bcafc6;
+  font-weight: 500;
+}
+.roomFooter {
+  justify-content: space-between;
+  min-height: 40px;
+  border-top: 1px solid #ffffff0d;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--room-light);
+}
+.roomFooter > span {
+  gap: 5px;
+}
+.locked .roomArt {
+  opacity: 0.6;
+}
+.locked .roomFooter {
+  color: #9a8fa5;
+}
+.locked .gameCopy h3 {
+  color: #c9c0d2;
+}
+.footer {
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 20px 2px 0;
+  color: #837b8e;
+  font-size: 9px;
+}
+.footer > span {
+  gap: 6px;
+}
+.footer > i {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #837b8e;
+}
+.footerBrand {
+  margin-left: auto;
+  font-size: 7px;
+  letter-spacing: 0.16em;
+}
+.cashDialog {
+  position: fixed;
+  inset: 0;
+  width: min(870px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  overflow: auto;
+  padding: 28px;
+  border: 1px solid #c4e3cf30;
+  border-radius: 18px;
+  background: #191620;
+  color: #f4edf6;
+  box-shadow: 0 30px 90px #0009;
+}
+.cashDialog[open] {
+  animation: room-enter 180ms var(--ease) both;
+}
+.cashDialog::backdrop {
+  background: #08070dc9;
+  backdrop-filter: blur(7px);
+}
+.dialogHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.dialogHeader > button {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid #ffffff18;
+  background: #ffffff05;
+  color: #c7bccc;
+}
+.dialogHeader > button:hover {
+  background: #ffffff10;
+  color: white;
+}
+.cashDialog h2 {
+  margin: 12px 0 6px;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.05em;
+}
+.dialogIntro {
+  color: #aaa0b6;
+  font-size: 12px;
+}
+.limits {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 25px 0 20px;
+}
+.limitCard {
+  min-width: 0;
+  padding: 19px 18px 0;
+  border: 1px solid #ffffff18;
+  border-radius: 11px;
+  background: linear-gradient(150deg, var(--room-glow), #1c1924 80%);
+  color: #eee5f4;
+  text-align: left;
+}
+.limitCard:hover:not(:disabled) {
+  border-color: var(--room-light);
+  transform: translateY(-3px);
+}
+.limitCard:disabled {
+  opacity: 0.5;
+}
+.limitName {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  color: var(--room-light);
+  font:
+    400 22px Georgia,
+    serif;
+}
+.limitCard > strong {
+  display: block;
+  margin-top: 25px;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+.limitCard > strong > small {
+  font-size: 11px;
+  color: #a697b3;
+  font-weight: 400;
+}
+.limitCaption {
+  display: block;
+  margin-top: 4px;
+  font-size: 7px;
+  color: #9b8da6;
+  letter-spacing: 0.07em;
+}
+.limitBlinds {
+  display: flex;
+  justify-content: space-between;
+  margin: 23px 0 13px;
+  font-size: 10px;
+  color: #a99cb5;
+}
+.limitBlinds b {
+  color: #e0d4e9;
+  font-weight: 500;
+}
+.limitCard .roomFooter {
+  min-height: 44px;
+  font-size: 9px;
+}
+.customBuyIn {
+  border: 1px solid #ffffff10;
+  border-radius: 9px;
+  padding: 0 15px;
+}
+.customBuyIn summary {
+  cursor: pointer;
+  padding: 14px 0;
+  color: #c6bacf;
+  font-size: 11px;
+}
+.customBuyIn summary > span {
+  float: right;
+  color: #a7dcbf;
+  font-size: 10px;
+}
+.customBuyIn > div {
+  border-top: 1px solid #ffffff0b;
+  padding: 14px 0;
+}
+.customBuyIn label {
+  color: #b3a6bc;
+  font-size: 10px;
+  font-weight: 400;
+  margin: 0;
+}
+.customBuyIn input {
+  width: 100%;
+  accent-color: #a7dcbf;
+  margin: 14px 0 7px;
+  padding: 0;
+  min-height: 24px;
+  background: transparent;
+  border: 0;
+}
+.rangeLabels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #93859e;
+}
+.dialogFootnote {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  color: #918599;
+  font-size: 9px;
+  margin-top: 17px;
+  line-height: 1.6;
+}
+.dialogFootnote svg {
+  flex-shrink: 0;
+}
+.dialogError {
+  color: #f0aba9;
+  padding-top: 12px;
+  font-size: 12px;
+}
+.spinner {
+  animation: lobby-spin 1s linear infinite;
+}
+@keyframes lobby-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes room-enter {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (min-width: 761px) and (max-height: 900px) {
+  .lobby:global(.poker-lobby) {
+    padding-top: 12px;
+  }
+  .heading {
+    margin: 10px 0 14px;
+  }
+  .heading h1 {
+    font-size: 43px;
+    margin: 5px 0;
+  }
+  .sectionHeading {
+    padding: 13px 0;
+  }
+  .roomArt {
+    height: 113px;
+  }
+  .miniTable {
+    height: 64px;
+    bottom: 2px;
+    width: 61%;
+    left: 19.5%;
+    border-width: 6px;
+  }
+  .miniCards {
+    top: 19px;
+    transform: scale(0.85);
+    transform-origin: center;
+  }
+  .tableInscription {
+    top: 9px;
+    font-size: 5px;
+  }
+  .pileOne,
+  .pileTwo {
+    top: 20px;
+  }
+  .seatOne {
+    top: 36px;
+    left: 26%;
+  }
+  .seatTwo {
+    top: 24px;
+    right: 30%;
+  }
+  .gameCopy {
+    padding-top: 4px;
+  }
+  .gameCopy h3 {
+    font-size: 22px;
+  }
+  .cashCard .gameCopy h3 {
+    font-size: 26px;
+  }
+  .gameDetail {
+    margin: 10px 0 8px;
+  }
+  .roomFooter {
+    min-height: 35px;
+  }
+  .footer {
+    padding-top: 14px;
+  }
+}
+@media (max-width: 1050px) {
+  .lobby:global(.poker-lobby) {
+    padding-left: 25px;
+    padding-right: 25px;
+  }
+  .games {
+    gap: 11px;
+  }
+  .roomTopline {
+    left: 12px;
+    right: 12px;
+  }
+  .roomTopline > span {
+    font-size: 7px;
+  }
+  .roomTopline > span:last-child {
+    font-size: 7px;
+  }
+  .gameCopy {
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+  .gameDetail {
+    font-size: 8px;
+  }
+}
+@media (max-width: 760px) {
+  .lobby:global(.poker-lobby) {
+    padding: 14px 20px 23px;
+  }
+  .heading {
+    margin: 19px 0 23px;
+  }
+  .headingNote,
+  .footerBrand {
+    display: none;
+  }
+  .games {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .roomArt {
+    height: 137px;
+  }
+  .miniTable {
+    height: 78px;
+    border-width: 6px;
+  }
+  .miniCards {
+    top: 25px;
+  }
+  .tableInscription {
+    top: 11px;
+  }
+  .pileOne,
+  .pileTwo {
+    top: 26px;
+  }
+  .roomTopline > span:last-child {
+    font-size: 7px;
+  }
+  .gameDetail {
+    gap: 5px;
+  }
+  .gameCopy h3 {
+    font-size: 22px;
+  }
+  .gameCopy h3 small {
+    font-size: 10px;
+  }
+  .cashCard .gameCopy h3 {
+    font-size: 26px;
+  }
+  .cashDialog {
+    padding: 22px;
+  }
+  .limits {
+    gap: 9px;
+  }
+  .limitCard {
+    padding: 16px 13px 0;
+  }
+  .limitCard > strong {
+    font-size: 22px;
+  }
+}
+@media (max-width: 540px) {
+  .lobby:global(.poker-lobby) {
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+  .breadcrumb button,
+  .connection {
+    font-size: 9px;
+  }
+  .heading h1 {
+    font-size: 35px;
+    gap: 12px;
+  }
+  .heading .titleSuit {
+    font-size: 29px;
+  }
+  .heading p {
+    font-size: 10px;
+  }
+  .eyebrow {
+    font-size: 8px;
+  }
+  .sectionHeading > span {
+    font-size: 8px;
+  }
+  .games {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .gameCard {
+    display: grid;
+    grid-template-columns: 40% 1fr;
+    min-height: 161px;
+  }
+  .roomTopline {
+    left: 13px;
+    right: 14px;
+    top: 12px;
+  }
+  .roomTopline > span {
+    font-size: 8px;
+  }
+  .roomArt {
+    height: 158px;
+  }
+  .lightBeam {
+    inset: 0;
+  }
+  .miniTable {
+    width: 92%;
+    left: 4%;
+    bottom: 30px;
+    height: 72px;
+    transform: rotate(-16deg);
+  }
+  .miniCards {
+    top: 23px;
+  }
+  .tableInscription {
+    font-size: 5px;
+    top: 9px;
+  }
+  .pileOne {
+    left: 17%;
+    top: 25px;
+  }
+  .pileTwo {
+    right: 15%;
+    top: 23px;
+  }
+  .seatOne {
+    top: 58px;
+    left: 13%;
+  }
+  .seatTwo {
+    top: 45px;
+    right: 13%;
+  }
+  .seatThree {
+    bottom: 16px;
+    left: 49%;
+  }
+  .gameCopy {
+    padding: 38px 14px 0 11px;
+  }
+  .gameCopy > p {
+    font-size: 9px;
+    margin-top: 4px;
+  }
+  .gameDetail {
+    font-size: 8px;
+    margin: 11px 0 7px;
+  }
+  .roomFooter {
+    min-height: 32px;
+    font-size: 9px;
+  }
+  .footer {
+    font-size: 8px;
+    line-height: 1.8;
+    gap: 6px;
+  }
+  .cashDialog {
+    padding: 19px;
+  }
+  .cashDialog h2 {
+    font-size: 25px;
+  }
+  .dialogIntro {
+    font-size: 10px;
+  }
+  .limits {
+    grid-template-columns: 1fr;
+    margin-top: 20px;
+  }
+  .limitCard {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 15px;
+    padding: 15px 14px 0;
+  }
+  .limitName {
+    grid-column: 1;
+    font-size: 22px;
+  }
+  .limitName svg {
+    display: none;
+  }
+  .limitCard > strong {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0;
+    text-align: right;
+    font-size: 23px;
+  }
+  .limitCaption {
+    grid-column: 2;
+    text-align: right;
+    font-size: 6px;
+  }
+  .limitBlinds {
+    grid-column: 1;
+    grid-row: 2;
+    justify-content: flex-start;
+    gap: 6px;
+    margin: 6px 0 11px;
+    font-size: 9px;
+  }
+  .limitCard .roomFooter {
+    grid-column: 1 / -1;
+    min-height: 36px;
+  }
+  .dialogFootnote {
+    font-size: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lobby *,
+  .cashDialog[open],
+  .cashDialog * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 540px) {
+  :global(.poker-shell):has(.lobby) :global(.topbar) {
+    padding: 0 15px;
+    gap: 12px;
+  }
+  :global(.poker-shell):has(.lobby) :global(.wordmark) {
+    font-size: 18px;
+    letter-spacing: 4px;
+  }
+  :global(.poker-shell):has(.lobby) :global(.topbar-right) {
+    min-width: 0;
+    gap: 0;
+  }
+  :global(.poker-shell):has(.lobby) :global(.wallet) {
+    min-width: 0;
+    gap: 6px;
+    padding: 8px 9px;
+  }
+  :global(.poker-shell):has(.lobby) :global(.wallet-coin),
+  :global(.poker-shell):has(.lobby) :global(.profile-avatar),
+  :global(.poker-shell):has(.lobby) :global(.topbar-divider) {
+    display: none;
+  }
+}
+@media (max-width: 360px) {
+  :global(.poker-shell):has(.lobby) :global(.wallet) > span {
+    display: none;
+  }
+}
+
+/* The home poster uses the same table illustration at a larger scale. */
+.posterArt.roomArt {
+  width: 100%;
+  height: 220px;
+}
+.posterArt .miniTable {
+  width: 86%;
+  height: 100px;
+  left: 7%;
+  bottom: 38px;
+  border-width: 8px;
+  transform: rotate(-9deg);
+}
+.posterArt .tableInscription {
+  top: 16px;
+  font-size: 6px;
+}
+.posterArt .miniCards {
+  top: 37px;
+  transform: rotate(2deg) scale(1.15);
+}
+.posterArt .pileOne,
+.posterArt .pileTwo {
+  top: 36px;
+}
+.posterArt .seatOne {
+  top: 77px;
+  left: 15%;
+}
+.posterArt .seatTwo {
+  top: 60px;
+  right: 18%;
+}
+.posterArt .seatThree {
+  bottom: 17px;
+}
