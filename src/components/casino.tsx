@@ -45,6 +45,10 @@ import {
   score,
   SUITS,
 } from "@/lib/rules";
+import {
+  CASINO_CHIP_DENOMINATIONS,
+  chipDenominationForAmount,
+} from "@/lib/chips";
 import { DEFAULT_PUBLIC_TABLE_ID, PUBLIC_TABLES } from "@/lib/table-config";
 import type {
   Bet,
@@ -322,7 +326,7 @@ function AnimatedTableChip({
   return (
     <span
       key={renderedAmount}
-      className={`table-chip ${className} ${exiting ? "is-exiting" : ""}`}
+      className={`table-chip chip-${chipDenominationForAmount(renderedAmount)} ${className} ${exiting ? "is-exiting" : ""}`}
     >
       {credits(renderedAmount)}
     </span>
@@ -1563,7 +1567,7 @@ function BlackjackCasino({
                       <>
                         <div className="chip-rack">
                           <div className="chip-picker">
-                            {[5, 25, 50, 100].map((amount) => (
+                            {CASINO_CHIP_DENOMINATIONS.map((amount) => (
                               <Chip
                                 key={amount}
                                 amount={amount}

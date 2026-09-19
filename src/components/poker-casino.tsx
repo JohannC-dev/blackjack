@@ -33,6 +33,7 @@ import {
   evaluateBestPokerHand,
   getPokerCombinationCards,
 } from "@/lib/rules";
+import { chipDenominationForAmount } from "@/lib/chips";
 import type { PokerAction, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import type { CasinoView } from "./casino";
@@ -591,6 +592,11 @@ function PokerTable({ game }: { game: Game }) {
   const seatSlots = Array.from({ length: totalSeats }, (_, seat) =>
     table.seats.find((entry) => entry.seat === seat),
   );
+  const collectingBets =
+    table.seats.some((seat) => seat.bet > 0) &&
+    (table.phase === "showdown" ||
+      (!table.activePlayerId &&
+        ["preflop", "flop", "turn", "river"].includes(table.phase)));
   const handResult = table.history.find((item) => item.hand === table.hand);
   const showdownCards = useMemo(() => {
     const winning = new Set<string>();
@@ -726,8 +732,28 @@ function PokerTable({ game }: { game: Game }) {
                 winningCardIds={showdownCards.winning}
                 winnerPlayerIds={showdownCards.winnerPlayerIds}
                 showdown={showdownCards.hasCombination}
+                collectingBet={collectingBets && !!seat?.bet}
               />
             ))}
+            {collectingBets &&
+              seatSlots.map((seat, index) =>
+                seat?.bet ? (
+                  <div
+                    aria-hidden="true"
+                    className="poker-chip-flight"
+                    key={`${table.hand}-${table.phase}-${seat.id}-${seat.bet}`}
+                    style={
+                      {
+                        "--chip-from-x": `${positions[index].x}%`,
+                        "--chip-from-y": `${positions[index].y}%`,
+                        "--chip-collect-delay": `${index * 35}ms`,
+                      } as CSSProperties
+                    }
+                  >
+                    <PokerChipStack amount={seat.bet} />
+                  </div>
+                ) : null,
+              )}
             {table.wheelSpinning && (
               <div className="spin-wheel-overlay">
                 <div className="spin-wheel">
@@ -805,215 +831,221 @@ function PokerTable({ game }: { game: Game }) {
               </div>
             )}
           </div>
-          <div className="poker-hand-summary">
-            <div>
-              <span>YOUR HAND</span>
-              <b>{handLabel ?? "En attente des cartes"}</b>
-            </div>
-            <div>
-              <span>YOUR STACK</span>
-              <b>{credits(me?.stack ?? 0)} cr.</b>
-            </div>
-            {!!me?.bet && (
+          <div className="poker-control-bar">
+            <div className="poker-hand-summary">
               <div>
-                <span>STREET BET</span>
-                <b>{credits(me.bet)} cr.</b>
+                <span>YOUR HAND</span>
+                <b>{handLabel ?? "En attente des cartes"}</b>
               </div>
-            )}
-          </div>
-          <div
-            className={`poker-action-zone ${myTurn || canChooseReveal ? "enabled" : ""}`}
-          >
-            {canChooseReveal ? (
-              <div
-                className="hand-visibility-actions"
-                role="group"
-                aria-label="Visibilité de votre main"
-              >
-                <button
-                  type="button"
-                  className="show-hand"
-                  disabled={game.pending}
-                  onClick={() => game.pokerCommand({ type: "show" })}
+              <div>
+                <span>YOUR STACK</span>
+                <b>{credits(me?.stack ?? 0)} cr.</b>
+              </div>
+              {!!me?.bet && (
+                <div>
+                  <span>STREET BET</span>
+                  <b>{credits(me.bet)} cr.</b>
+                </div>
+              )}
+            </div>
+            <div
+              className={`poker-action-zone ${myTurn || canChooseReveal ? "enabled" : ""}`}
+            >
+              {canChooseReveal ? (
+                <div
+                  className="hand-visibility-actions"
+                  role="group"
+                  aria-label="Visibilité de votre main"
                 >
-                  <span>Montrer</span>
-                  <small>{revealSeconds}s pour décider</small>
-                </button>
-                <button
-                  type="button"
-                  className="hide-hand"
-                  disabled={game.pending}
-                  onClick={() => game.pokerCommand({ type: "muck" })}
-                >
-                  <span>
-                    <EyeOff size={13} /> Cacher
-                  </span>
-                  <small>Garder la main privée</small>
-                </button>
-              </div>
-            ) : uncontestedWin && table.phase === "showdown" ? (
-              <div className="hand-visibility-resolved" role="status">
-                <EyeOff size={14} />
-                <span>
-                  <small>VISIBILITÉ DE LA MAIN</small>
-                  <b>{me?.mucked ? "Main cachée" : "Main montrée"}</b>
-                </span>
-              </div>
-            ) : allInRunout ? (
-              <div className="poker-runout" role="status">
-                <span>ALL-IN</span>
-                <b>Les cartes se révèlent…</b>
-              </div>
-            ) : (
-              <>
-                <div className="poker-actions">
                   <button
-                    disabled={!myTurn || game.pending}
-                    onClick={() => sendAction("fold")}
-                    className="fold"
+                    type="button"
+                    className="show-hand"
+                    disabled={game.pending}
+                    onClick={() => game.pokerCommand({ type: "show" })}
                   >
-                    Fold
-                  </button>
-                  <button
-                    disabled={!myTurn || game.pending}
-                    onClick={() => sendAction(toCall ? "call" : "check")}
-                  >
-                    <span>{toCall ? "Call" : "Check"}</span>
-                    {!!toCall && (
-                      <small>
-                        {credits(Math.min(toCall, me?.stack ?? 0))} cr.
-                      </small>
-                    )}
+                    <span>Montrer</span>
+                    <b>{revealSeconds}s</b>
                   </button>
                   <button
                     type="button"
-                    disabled={
-                      !myTurn || game.pending || maximum <= table.currentBet
-                    }
-                    onClick={() => setRaiseOpen(!raiseOpen)}
-                    className="raise"
-                    aria-expanded={raiseOpen}
+                    className="hide-hand"
+                    disabled={game.pending}
+                    onClick={() => game.pokerCommand({ type: "muck" })}
                   >
-                    {table.currentBet ? "Raise" : "Bet"}
+                    <span>
+                      <EyeOff size={13} /> Cacher
+                    </span>
                   </button>
                 </div>
-                {raiseOpen && (
-                  <div className="raise-drawer">
-                    <div className="raise-presets">
-                      <button
-                        type="button"
-                        onClick={() => selectRaiseTarget(table.pot / 2)}
-                      >
-                        ½ pot
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => selectRaiseTarget((table.pot * 3) / 4)}
-                      >
-                        ¾ pot
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => selectRaiseTarget(table.pot)}
-                      >
-                        Pot
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => selectRaiseTarget(maximum)}
-                      >
-                        All-in
-                      </button>
-                    </div>
-                    <div className="raise-slider">
-                      <div className="raise-slider-heading">
-                        <span>TOTAL BET</span>
-                        <b>{credits(raiseTo)} cr.</b>
-                      </div>
-                      <div
-                        className="raise-range-shell"
-                        style={
-                          {
-                            "--raise-progress": `${raiseSteps.length > 1 ? (Math.max(0, raiseSteps.indexOf(raiseTo)) / (raiseSteps.length - 1)) * 100 : 0}%`,
-                          } as CSSProperties
-                        }
-                      >
-                        <button
-                          type="button"
-                          aria-label="Palier précédent"
-                          disabled={raiseSteps.indexOf(raiseTo) <= 0}
-                          onClick={() =>
-                            setRaiseTo(
-                              raiseSteps[
-                                Math.max(0, raiseSteps.indexOf(raiseTo) - 1)
-                              ],
-                            )
-                          }
-                        >
-                          −
-                        </button>
-                        <div className="raise-track">
-                          <input
-                            aria-label="Total raise amount"
-                            aria-valuetext={`${credits(raiseTo)} crédits`}
-                            type="range"
-                            min={0}
-                            max={Math.max(0, raiseSteps.length - 1)}
-                            step={1}
-                            value={Math.max(0, raiseSteps.indexOf(raiseTo))}
-                            onChange={(event) =>
-                              setRaiseTo(raiseSteps[Number(event.target.value)])
-                            }
-                          />
-                          <div className="raise-ticks" aria-hidden="true">
-                            {raiseSteps.map((value, index) => (
-                              <i
-                                key={value}
-                                className={value <= raiseTo ? "reached" : ""}
-                                style={{
-                                  left: `${raiseSteps.length > 1 ? (index / (raiseSteps.length - 1)) * 100 : 0}%`,
-                                }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          aria-label="Palier suivant"
-                          disabled={
-                            raiseSteps.indexOf(raiseTo) >= raiseSteps.length - 1
-                          }
-                          onClick={() =>
-                            setRaiseTo(
-                              raiseSteps[
-                                Math.min(
-                                  raiseSteps.length - 1,
-                                  raiseSteps.indexOf(raiseTo) + 1,
-                                )
-                              ],
-                            )
-                          }
-                        >
-                          +
-                        </button>
-                      </div>
-                      <small>{raiseSteps.length} paliers</small>
-                    </div>
+              ) : uncontestedWin && table.phase === "showdown" ? (
+                <div className="hand-visibility-resolved" role="status">
+                  <EyeOff size={14} />
+                  <span>
+                    <small>VISIBILITÉ DE LA MAIN</small>
+                    <b>{me?.mucked ? "Main cachée" : "Main montrée"}</b>
+                  </span>
+                </div>
+              ) : allInRunout ? (
+                <div className="poker-runout" role="status">
+                  <span>ALL-IN</span>
+                  <b>Les cartes se révèlent…</b>
+                </div>
+              ) : (
+                <>
+                  <div className="poker-actions">
+                    <button
+                      disabled={!myTurn || game.pending}
+                      onClick={() => sendAction("fold")}
+                      className="fold"
+                    >
+                      Fold
+                    </button>
+                    <button
+                      disabled={!myTurn || game.pending}
+                      onClick={() => sendAction(toCall ? "call" : "check")}
+                    >
+                      <span>{toCall ? "Call" : "Check"}</span>
+                      {!!toCall && (
+                        <small>
+                          {credits(Math.min(toCall, me?.stack ?? 0))} cr.
+                        </small>
+                      )}
+                    </button>
                     <button
                       type="button"
-                      className="raise-confirm"
-                      onClick={() =>
-                        raiseTo >= maximum
-                          ? sendAction("all-in")
-                          : sendAction("raise", raiseTo)
+                      disabled={
+                        !myTurn || game.pending || maximum <= table.currentBet
                       }
+                      onClick={() => setRaiseOpen(!raiseOpen)}
+                      className="raise"
+                      aria-expanded={raiseOpen}
                     >
-                      {raiseTo >= maximum ? "Confirm all-in" : "Confirm raise"}
+                      {table.currentBet ? "Raise" : "Bet"}
                     </button>
                   </div>
-                )}
-              </>
-            )}
+                  {raiseOpen && (
+                    <div className="raise-drawer">
+                      <div className="raise-presets">
+                        <button
+                          type="button"
+                          onClick={() => selectRaiseTarget(table.pot / 2)}
+                        >
+                          ½ pot
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => selectRaiseTarget((table.pot * 3) / 4)}
+                        >
+                          ¾ pot
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => selectRaiseTarget(table.pot)}
+                        >
+                          Pot
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => selectRaiseTarget(maximum)}
+                        >
+                          All-in
+                        </button>
+                      </div>
+                      <div className="raise-slider">
+                        <div className="raise-slider-heading">
+                          <span>TOTAL BET</span>
+                          <b>{credits(raiseTo)} cr.</b>
+                        </div>
+                        <div
+                          className="raise-range-shell"
+                          style={
+                            {
+                              "--raise-progress": `${raiseSteps.length > 1 ? (Math.max(0, raiseSteps.indexOf(raiseTo)) / (raiseSteps.length - 1)) * 100 : 0}%`,
+                            } as CSSProperties
+                          }
+                        >
+                          <button
+                            type="button"
+                            aria-label="Palier précédent"
+                            disabled={raiseSteps.indexOf(raiseTo) <= 0}
+                            onClick={() =>
+                              setRaiseTo(
+                                raiseSteps[
+                                  Math.max(0, raiseSteps.indexOf(raiseTo) - 1)
+                                ],
+                              )
+                            }
+                          >
+                            −
+                          </button>
+                          <div className="raise-track">
+                            <input
+                              aria-label="Total raise amount"
+                              aria-valuetext={`${credits(raiseTo)} crédits`}
+                              type="range"
+                              min={0}
+                              max={Math.max(0, raiseSteps.length - 1)}
+                              step={1}
+                              value={Math.max(0, raiseSteps.indexOf(raiseTo))}
+                              onChange={(event) =>
+                                setRaiseTo(
+                                  raiseSteps[Number(event.target.value)],
+                                )
+                              }
+                            />
+                            <div className="raise-ticks" aria-hidden="true">
+                              {raiseSteps.map((value, index) => (
+                                <i
+                                  key={value}
+                                  className={value <= raiseTo ? "reached" : ""}
+                                  style={{
+                                    left: `${raiseSteps.length > 1 ? (index / (raiseSteps.length - 1)) * 100 : 0}%`,
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            aria-label="Palier suivant"
+                            disabled={
+                              raiseSteps.indexOf(raiseTo) >=
+                              raiseSteps.length - 1
+                            }
+                            onClick={() =>
+                              setRaiseTo(
+                                raiseSteps[
+                                  Math.min(
+                                    raiseSteps.length - 1,
+                                    raiseSteps.indexOf(raiseTo) + 1,
+                                  )
+                                ],
+                              )
+                            }
+                          >
+                            +
+                          </button>
+                        </div>
+                        <small>{raiseSteps.length} paliers</small>
+                      </div>
+                      <button
+                        type="button"
+                        className="raise-confirm"
+                        onClick={() =>
+                          raiseTo >= maximum
+                            ? sendAction("all-in")
+                            : sendAction("raise", raiseTo)
+                        }
+                      >
+                        {raiseTo >= maximum
+                          ? "Confirm all-in"
+                          : "Confirm raise"}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </section>
       </div>
@@ -1124,10 +1156,10 @@ function PokerChipStack({
     3,
     Math.min(6, Math.ceil(Math.log10(Math.max(1, amount))) + 1),
   );
-  const tone = amount >= 500 ? "gold" : amount >= 100 ? "teal" : "violet";
+  const denomination = chipDenominationForAmount(amount);
   return (
     <div
-      className={`poker-chip-stack chip-tone-${tone} ${pot ? "pot-chips" : "bet-chips"}`}
+      className={`poker-chip-stack chip-${denomination} ${pot ? "pot-chips" : "bet-chips"}`}
       role="img"
       aria-label={`${credits(amount)} crédits en jetons`}
       data-chip-layers={layers}
@@ -1157,6 +1189,7 @@ function PokerSeatView({
   winningCardIds,
   winnerPlayerIds,
   showdown,
+  collectingBet,
 }: {
   seat?: PokerSeat;
   position: { x: number; y: number };
@@ -1168,6 +1201,7 @@ function PokerSeatView({
   winningCardIds: ReadonlySet<string>;
   winnerPlayerIds: ReadonlySet<string>;
   showdown: boolean;
+  collectingBet: boolean;
 }) {
   if (!seat)
     return (
@@ -1213,7 +1247,7 @@ function PokerSeatView({
         ))}
       </div>
       {!!seat.bet && (
-        <div className="seat-bet">
+        <div className={`seat-bet ${collectingBet ? "is-collecting" : ""}`}>
           <PokerChipStack amount={seat.bet} />
         </div>
       )}

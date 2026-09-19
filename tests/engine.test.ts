@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { makeShoe, Table, type Player } from "../server/engine";
+import { chipDenominationForAmount } from "../src/lib/chips";
 import {
   evaluate21Plus3,
   evaluateSuperPairs,
@@ -64,6 +65,19 @@ function settle(table: Table) {
 function ownHand(table: Table, p: Player) {
   return table.state.seats.find((s) => s.playerId === p.id)!.hands[0];
 }
+
+describe("Casino chip denominations", () => {
+  test("uses the blackjack chip tiers for every wager amount", () => {
+    expect(chipDenominationForAmount(5)).toBe(5);
+    expect(chipDenominationForAmount(24)).toBe(5);
+    expect(chipDenominationForAmount(25)).toBe(25);
+    expect(chipDenominationForAmount(49)).toBe(25);
+    expect(chipDenominationForAmount(50)).toBe(50);
+    expect(chipDenominationForAmount(99)).toBe(50);
+    expect(chipDenominationForAmount(100)).toBe(100);
+    expect(chipDenominationForAmount(25_000)).toBe(100);
+  });
+});
 
 describe("Cards and requested side-bet paytables", () => {
   test("8 complete decks with unique identities", () => {
