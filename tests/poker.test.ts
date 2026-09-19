@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { evaluatePokerHand, makePokerDeck, PokerTable } from "../server/poker";
-import { describePokerHolding } from "../src/lib/rules";
+import { describePokerHolding, evaluateBestPokerHand } from "../src/lib/rules";
 import type { Player } from "../server/engine";
 import type { Card, Suit } from "../src/lib/types";
 
@@ -52,6 +52,23 @@ describe("Poker hand evaluator", () => {
     ]);
     expect(evaluatePokerHand(cards(1, 1, 13, 12, 9, 4, 2)).score).toEqual([
       1, 14, 13, 12, 9,
+    ]);
+  });
+
+  test("returns the exact five cards used by the winning combination", () => {
+    const board = sameSuit(9, 10, 11, 12, 2);
+    const holeCards: Card[] = [
+      { id: "king-spades", rank: 13, suit: "spades" },
+      { id: "ace-hearts", rank: 1, suit: "hearts" },
+    ];
+    const best = evaluateBestPokerHand([...board, ...holeCards]);
+    expect(best.score).toEqual([8, 13]);
+    expect(best.cards.map((card) => card.id)).toEqual([
+      "9-0",
+      "10-1",
+      "11-2",
+      "12-3",
+      "king-spades",
     ]);
   });
 

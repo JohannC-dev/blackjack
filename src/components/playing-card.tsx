@@ -8,17 +8,21 @@ export function PlayingCard({
   index = 0,
   dealDelay,
   decorative = false,
+  highlighted = false,
+  dimmed = false,
 }: {
   card?: Card;
   back?: boolean;
   index?: number;
   dealDelay?: number;
   decorative?: boolean;
+  highlighted?: boolean;
+  dimmed?: boolean;
 }) {
   const concealed = back || card?.hidden;
   return (
     <div
-      className={`playing-card ${concealed ? "card-back" : ""} ${card && !card.hidden && isRed(card) ? "red" : ""} ${decorative ? "decorative-card" : ""}`}
+      className={`playing-card ${concealed ? "card-back" : ""} ${card && !card.hidden && isRed(card) ? "red" : ""} ${decorative ? "decorative-card" : ""} ${highlighted ? "winning-card" : ""} ${dimmed ? "dimmed-card" : ""}`}
       style={
         {
           "--card-index": index,
@@ -32,7 +36,7 @@ export function PlayingCard({
             ? "Carte doublée cachée"
             : "Dos de carte"
           : card
-            ? `${rankLabel(card.rank)} ${SUITS[card.suit]}`
+            ? `${rankLabel(card.rank)} ${SUITS[card.suit]}${highlighted ? ", carte de la combinaison gagnante" : ""}`
             : undefined
       }
     >

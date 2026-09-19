@@ -60,7 +60,7 @@ try {
     "La table cash ne démarre pas",
   );
   await page
-    .locator(".poker-actions.enabled")
+    .locator(".poker-action-zone.enabled")
     .waitFor({ timeout: 15_000 })
     .catch(() => {});
   await page.screenshot({
@@ -82,6 +82,7 @@ try {
       .querySelector(".poker-seat.acting .poker-player-card")
       ?.getAttribute("data-turn-seconds"),
     duplicateStatusTimer: !!document.querySelector(".poker-status > strong"),
+    chipStacks: document.querySelectorAll(".poker-chip-stack").length,
     overflow: document.documentElement.scrollWidth > window.innerWidth,
   }));
   if (result.seats !== 2)
@@ -102,10 +103,59 @@ try {
     throw new Error(
       "Le temps de parole ne doit plus être dupliqué sous la table",
     );
+  if (result.chipStacks < 3)
+    throw new Error(
+      `Le pot et les deux blinds doivent afficher des jetons, reçu ${result.chipStacks}`,
+    );
   await page.getByRole("button", { name: "Ouvrir la discussion" }).click();
   await page.getByRole("dialog", { name: "Discussion" }).waitFor();
+  await page.getByRole("button", { name: "Fermer la discussion" }).click();
   if (result.overflow)
     throw new Error("La table Poker déborde horizontalement sur desktop");
+
+  let guard = 0;
+  while (botState?.table?.phase !== "showdown" && guard++ < 30) {
+    const table = botState?.table;
+    if (!table?.activePlayerId) {
+      await Bun.sleep(250);
+      continue;
+    }
+    const active = table.seats.find(
+      (seat) => seat.id === table.activePlayerId,
+    )!;
+    const action = table.currentBet > active.bet ? "call" : "check";
+    if (active.name === "Oscar") {
+      const ack: Ack = await bot
+        .timeout(5_000)
+        .emitWithAck("poker:command", { type: "action", action });
+      if (!ack.ok) throw new Error(ack.error);
+    } else {
+      await page
+        .getByRole("button", { name: new RegExp(`^${action}`, "i") })
+        .click({ timeout: 5_000 });
+    }
+    await Bun.sleep(120);
+  }
+  await page.locator(".hand-result-banner").waitFor({ timeout: 5_000 });
+  const showdown = await page.evaluate(() => ({
+    winningCards: document.querySelectorAll(".playing-card.winning-card")
+      .length,
+    winners: document.querySelectorAll(".poker-seat.winner").length,
+    centralPotChips: document.querySelectorAll(".pot-display .poker-chip-stack")
+      .length,
+  }));
+  if (showdown.winningCards < 5)
+    throw new Error(
+      `La combinaison gagnante doit mettre au moins cinq cartes en évidence, reçu ${showdown.winningCards}`,
+    );
+  if (showdown.winners < 1)
+    throw new Error("Le siège gagnant doit être mis en évidence");
+  if (showdown.centralPotChips !== 1)
+    throw new Error("Les jetons du pot doivent rester visibles au showdown");
+  await page.screenshot({
+    path: "/tmp/minuit-poker-showdown.png",
+    fullPage: true,
+  });
   console.log(JSON.stringify(result));
 } finally {
   bot.disconnect();

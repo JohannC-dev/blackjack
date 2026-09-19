@@ -7799,3 +7799,155 @@ h1 > span:not(.live-tag) {
   z-index: 3;
   transform: translateY(-50%);
 }
+
+/* Showdown: the five cards that actually make the hand read as one unit. */
+.poker-felt .playing-card.dimmed-card {
+  opacity: 0.32;
+  filter: grayscale(0.72) brightness(0.72);
+}
+.poker-felt .playing-card.winning-card {
+  z-index: 8;
+  opacity: 1;
+  filter: none;
+  box-shadow:
+    0 0 0 2px #ead39a,
+    0 0 0 5px #b79afa70,
+    0 0 24px 7px #d7bdf55c,
+    1px 5px 8px #0a061c99;
+  animation:
+    deal-in 0.4s var(--ease) both,
+    winning-card-glow 1.7s ease-in-out 0.4s infinite alternate;
+}
+.poker-felt .playing-card.winning-card::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 1px solid #f1dda780;
+  border-radius: 8px;
+  pointer-events: none;
+}
+.poker-seat.winner .poker-player-card {
+  border-color: #e4ca8a;
+  box-shadow:
+    0 0 0 2px #b79afa7a,
+    0 8px 28px #07040c99;
+}
+.poker-seat.winner .poker-player-card::after {
+  content: "GAGNANT";
+  position: absolute;
+  top: -17px;
+  right: 5px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  padding: 0 7px;
+  color: #291b39;
+  background: #ead39a;
+  border-radius: 6px 6px 0 0;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+}
+
+/* Physical chips keep every live wager and the central pot visible on felt. */
+.poker-chip-stack {
+  position: relative;
+  width: 34px;
+  height: 27px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 5px 5px #09050d99);
+}
+.poker-chip-stack > span {
+  position: absolute;
+  left: 2px;
+  bottom: calc(var(--chip-level, 0) * 4px);
+  width: 29px;
+  height: 11px;
+  border: 1px solid #e7d6f0aa;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 50% 44%, #5d3977 0 35%, transparent 37%),
+    repeating-conic-gradient(from 8deg, #e7d9ef 0 10deg, #7d4e9b 10deg 42deg);
+  box-shadow:
+    inset 0 -3px #422753,
+    0 2px 0 #2b1837;
+}
+.poker-chip-stack > span:nth-child(1) {
+  --chip-level: 0;
+}
+.poker-chip-stack > span:nth-child(2) {
+  --chip-level: 1;
+  left: 3px;
+}
+.poker-chip-stack > span:nth-child(3) {
+  --chip-level: 2;
+  left: 1px;
+  background:
+    radial-gradient(ellipse at 50% 44%, #835f2f 0 35%, transparent 37%),
+    repeating-conic-gradient(from 8deg, #f0dfb0 0 10deg, #b88a43 10deg 42deg);
+  box-shadow:
+    inset 0 -3px #6b4a25,
+    0 2px 0 #3f2c1c;
+}
+.poker-chip-stack > span:nth-child(4) {
+  --chip-level: 3;
+  left: 2px;
+}
+.pot-display {
+  top: -59px;
+  align-items: center;
+  gap: 9px;
+  min-height: 45px;
+  padding: 6px 11px 6px 8px;
+  backdrop-filter: blur(7px);
+}
+.pot-display > div:last-child {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+.pot-display .pot-chips {
+  transform: scale(1.08);
+}
+.seat-bet {
+  top: -31px;
+  z-index: 9;
+  min-width: 64px;
+  min-height: 31px;
+  justify-content: center;
+  gap: 1px;
+  padding: 2px 6px 2px 3px;
+  background: #150f1ce8;
+  border: 1px solid #b79afa33;
+  box-shadow: 0 7px 14px #08050c70;
+}
+.seat-bet b {
+  min-width: 23px;
+  color: #ead39a;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes winning-card-glow {
+  from {
+    box-shadow:
+      0 0 0 2px #ead39a,
+      0 0 0 5px #b79afa55,
+      0 0 17px 4px #d7bdf53d,
+      1px 5px 8px #0a061c99;
+  }
+  to {
+    box-shadow:
+      0 0 0 2px #f5e5b9,
+      0 0 0 5px #b79afa8c,
+      0 0 29px 9px #d7bdf575,
+      1px 5px 8px #0a061c99;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poker-felt .playing-card.winning-card {
+    animation: none !important;
+  }
+}

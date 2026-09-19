@@ -30,7 +30,11 @@ import {
   type CSSProperties,
   type FormEvent,
 } from "react";
-import { credits, describePokerHolding } from "@/lib/rules";
+import {
+  credits,
+  describePokerHolding,
+  evaluateBestPokerHand,
+} from "@/lib/rules";
 import type { PokerAction, PokerMode, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import type { CasinoView } from "./casino";
@@ -754,6 +758,23 @@ function PokerTable({ game }: { game: Game }) {
     table.seats.find((entry) => entry.seat === seat),
   );
   const handResult = table.history.find((item) => item.hand === table.hand);
+  const showdownCards = useMemo(() => {
+    const winning = new Set<string>();
+    const winners = new Set<string>();
+    if (table.phase !== "showdown" || !handResult)
+      return { winning, winners, hasCombination: false };
+    for (const winner of handResult.winners) {
+      for (const card of winner.cards) winners.add(card.id);
+      if (winner.cards.length + handResult.community.length < 5) continue;
+      // Community cards come first so a board that plays is represented as such.
+      const best = evaluateBestPokerHand([
+        ...handResult.community,
+        ...winner.cards,
+      ]);
+      for (const card of best.cards) winning.add(card.id);
+    }
+    return { winning, winners, hasCombination: winning.size > 0 };
+  }, [handResult, table.phase]);
   const handLabel = me
     ? (describePokerHolding(me.cards, table.community) ?? me.handLabel)
     : undefined;
@@ -825,6 +846,13 @@ function PokerTable({ game }: { game: Game }) {
                     card={table.community[index]}
                     index={index}
                     dealDelay={index < 3 ? index * POKER_DEAL_INTERVAL : 0}
+                    highlighted={showdownCards.winning.has(
+                      table.community[index].id,
+                    )}
+                    dimmed={
+                      showdownCards.hasCombination &&
+                      !showdownCards.winning.has(table.community[index].id)
+                    }
                   />
                 ) : (
                   <div className="community-placeholder" key={index}>
@@ -833,8 +861,11 @@ function PokerTable({ game }: { game: Game }) {
                 ),
               )}
               <div className="pot-display">
-                <span>POT TOTAL</span>
-                <b>{credits(table.pot)} cr.</b>
+                <PokerChipStack amount={table.pot} pot />
+                <div>
+                  <span>POT TOTAL</span>
+                  <b>{credits(table.pot)} cr.</b>
+                </div>
               </div>
             </div>
             {seatSlots.map((seat, index) => (
@@ -846,6 +877,9 @@ function PokerTable({ game }: { game: Game }) {
                 playerId={game.playerId}
                 turnSeconds={seconds}
                 dealDelays={dealDelays}
+                winningCardIds={showdownCards.winning}
+                winnerHoleCardIds={showdownCards.winners}
+                showdown={showdownCards.hasCombination}
               />
             ))}
             {table.wheelSpinning && (
@@ -1119,6 +1153,27 @@ function PokerTable({ game }: { game: Game }) {
   );
 }
 
+function PokerChipStack({
+  amount,
+  pot = false,
+}: {
+  amount: number;
+  pot?: boolean;
+}) {
+  return (
+    <div
+      className={`poker-chip-stack ${pot ? "pot-chips" : "bet-chips"}`}
+      role="img"
+      aria-label={`${credits(amount)} crédits en jetons`}
+    >
+      <span />
+      <span />
+      <span />
+      <span />
+    </div>
+  );
+}
+
 function PokerSeatView({
   seat,
   position,
@@ -1126,6 +1181,9 @@ function PokerSeatView({
   playerId,
   turnSeconds,
   dealDelays,
+  winningCardIds,
+  winnerHoleCardIds,
+  showdown,
 }: {
   seat?: PokerSeat;
   position: { x: number; y: number };
@@ -1133,6 +1191,9 @@ function PokerSeatView({
   playerId: string;
   turnSeconds: number;
   dealDelays: ReadonlyMap<string, number>;
+  winningCardIds: ReadonlySet<string>;
+  winnerHoleCardIds: ReadonlySet<string>;
+  showdown: boolean;
 }) {
   if (!seat)
     return (
@@ -1153,10 +1214,11 @@ function PokerSeatView({
     );
   const mine = seat.id === playerId;
   const active = table.activePlayerId === seat.id;
+  const winner = seat.cards.some((card) => winnerHoleCardIds.has(card.id));
   const turnDuration = table.mode === "spin" ? 15 : 25;
   return (
     <div
-      className={`poker-seat occupied ${mine ? "mine" : ""} ${active ? "acting" : ""} ${seat.status}`}
+      className={`poker-seat occupied ${mine ? "mine" : ""} ${active ? "acting" : ""} ${winner ? "winner" : ""} ${seat.status}`}
       style={
         {
           "--seat-x": `${position.x}%`,
@@ -1173,12 +1235,14 @@ function PokerSeatView({
             back={!!card.hidden}
             index={index}
             dealDelay={dealDelays.get(card.id)}
+            highlighted={winningCardIds.has(card.id)}
+            dimmed={showdown && !winningCardIds.has(card.id)}
           />
         ))}
       </div>
       {!!seat.bet && (
         <div className="seat-bet">
-          <i />
+          <PokerChipStack amount={seat.bet} />
           <b>{credits(seat.bet)}</b>
         </div>
       )}

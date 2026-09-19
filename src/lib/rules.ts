@@ -60,6 +60,7 @@ export const credits = (value: number) =>
   new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(value);
 
 export type PokerHandValue = { score: number[]; label: string };
+export type BestPokerHand = PokerHandValue & { cards: Card[] };
 
 const POKER_RANKS: Record<number, string> = {
   14: "As",
@@ -146,25 +147,25 @@ function fiveCardPokerValue(cards: Card[]): PokerHandValue {
   return { score: [0, ...ranks.sort((a, b) => b - a)], label: "Carte haute" };
 }
 
-export function evaluatePokerHand(cards: Card[]): PokerHandValue {
+export function evaluateBestPokerHand(cards: Card[]): BestPokerHand {
   if (cards.length < 5) throw new Error("Cinq cartes sont nécessaires.");
-  let best: PokerHandValue | null = null;
+  let best: BestPokerHand | null = null;
   for (let a = 0; a < cards.length - 4; a++)
     for (let b = a + 1; b < cards.length - 3; b++)
       for (let c = b + 1; c < cards.length - 2; c++)
         for (let d = c + 1; d < cards.length - 1; d++)
           for (let e = d + 1; e < cards.length; e++) {
-            const candidate = fiveCardPokerValue([
-              cards[a],
-              cards[b],
-              cards[c],
-              cards[d],
-              cards[e],
-            ]);
+            const hand = [cards[a], cards[b], cards[c], cards[d], cards[e]];
+            const candidate = { ...fiveCardPokerValue(hand), cards: hand };
             if (!best || comparePokerScore(candidate.score, best.score) > 0)
               best = candidate;
           }
   return best!;
+}
+
+export function evaluatePokerHand(cards: Card[]): PokerHandValue {
+  const { cards: _cards, ...value } = evaluateBestPokerHand(cards);
+  return value;
 }
 
 export function describePokerHand(value: PokerHandValue) {
