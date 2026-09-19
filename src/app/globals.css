@@ -1427,13 +1427,7 @@
   stroke-dashoffset: 0;
   stroke-linecap: round;
   filter: drop-shadow(0 0 5px #b79afa70);
-  animation: poker-turn-countdown var(--turn-duration) linear forwards;
-}
-
-@keyframes poker-turn-countdown {
-  to {
-    stroke-dashoffset: 100;
-  }
+  transition: stroke-dashoffset 250ms linear;
 }
 .poker-seat.acting .poker-player-card::after {
   content: attr(data-turn-seconds);
@@ -3967,6 +3961,23 @@ h1 > span:not(.live-tag) {
   display: grid;
   place-items: center;
   margin-bottom: 28px;
+}
+.leave-poker-modal {
+  width: 520px;
+}
+.leave-poker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.leave-poker-actions .blackjack-icon {
+  width: 25px;
+  height: 22px;
+  transform: scale(0.68);
+}
+.leave-poker-actions .spinner {
+  flex: 0 0 auto;
 }
 .welcome-modal {
   padding: 0;
@@ -7614,6 +7625,7 @@ h1 > span:not(.live-tag) {
   font-size: 11px;
 }
 .poker-action-zone {
+  position: relative;
   margin-top: 8px;
   opacity: 0.55;
 }
@@ -7656,13 +7668,17 @@ h1 > span:not(.live-tag) {
   border-radius: 8px;
 }
 .raise-drawer {
-  width: min(100%, 520px);
-  min-height: 76px;
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 9px);
+  z-index: 18;
+  width: min(100%, 650px);
+  min-height: 92px;
   display: grid;
-  grid-template-columns: 145px minmax(190px, 1fr) 145px;
+  grid-template-columns: 150px minmax(260px, 1fr) 130px;
   align-items: stretch;
   gap: 10px;
-  margin: 7px 0 0 auto;
+  margin: 0;
   padding: 10px;
   color: var(--text);
   background: var(--panel);
@@ -7674,7 +7690,7 @@ h1 > span:not(.live-tag) {
 }
 .raise-presets {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 4px;
 }
 .raise-presets button,
@@ -7691,24 +7707,142 @@ h1 > span:not(.live-tag) {
   color: var(--text);
 }
 .raise-slider {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 4px 8px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
 }
-.raise-slider span {
+.raise-slider-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.raise-slider-heading span {
   color: var(--muted);
   font-size: 7px;
   letter-spacing: 0.12em;
 }
-.raise-slider b {
+.raise-slider-heading b {
   color: #d5c3ed;
   font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
-.raise-slider input {
-  grid-column: 1 / -1;
+.raise-range-shell {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 8px;
+}
+.raise-range-shell > button {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: #d5c3ed;
+  border: 1px solid #b79afa38;
+  border-radius: 50%;
+  background: #b79afa0c;
+  font-size: 14px;
+  line-height: 1;
+}
+.raise-range-shell > button:hover:not(:disabled) {
+  color: #241a34;
+  border-color: var(--purple);
+  background: var(--purple);
+}
+.raise-range-shell > button:disabled {
+  opacity: 0.24;
+}
+.raise-track {
+  position: relative;
+  height: 24px;
+  display: grid;
+  align-items: center;
+}
+.raise-track input {
+  position: relative;
+  z-index: 2;
   width: 100%;
-  accent-color: var(--purple);
+  height: 18px;
+  margin: 0;
+  appearance: none;
+  cursor: grab;
+  background: transparent;
+}
+.raise-track input:active {
+  cursor: grabbing;
+}
+.raise-track input::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--purple) 0 var(--raise-progress),
+    #3a3345 var(--raise-progress) 100%
+  );
+  box-shadow: inset 0 1px 2px #0008;
+}
+.raise-track input::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--purple) 0 var(--raise-progress),
+    #3a3345 var(--raise-progress) 100%
+  );
+  box-shadow: inset 0 1px 2px #0008;
+}
+.raise-track input::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  appearance: none;
+  border: 3px solid #251931;
+  border-radius: 50%;
+  background: #e1d2f4;
+  box-shadow:
+    0 0 0 1px var(--purple),
+    0 3px 10px #0009;
+}
+.raise-track input::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: 3px solid #251931;
+  border-radius: 50%;
+  background: #e1d2f4;
+  box-shadow:
+    0 0 0 1px var(--purple),
+    0 3px 10px #0009;
+}
+.raise-ticks {
+  position: absolute;
+  inset: 50% 7px auto;
+  z-index: 1;
+  height: 1px;
+  pointer-events: none;
+}
+.raise-ticks i {
+  position: absolute;
+  top: -2px;
+  width: 4px;
+  height: 4px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: #645b6e;
+}
+.raise-ticks i.reached {
+  background: #e1d2f4;
+  box-shadow: 0 0 5px #b79afa;
+}
+.raise-slider > small {
+  align-self: flex-end;
+  margin-top: -5px;
+  color: #706778;
+  font-size: 7px;
+  letter-spacing: 0.05em;
 }
 .raise-confirm {
   color: #251931;
@@ -7828,6 +7962,73 @@ h1 > span:not(.live-tag) {
 .muck-hand:disabled {
   cursor: default;
   opacity: 0.55;
+}
+.hand-visibility-actions {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 225px));
+  justify-content: end;
+  gap: 7px;
+}
+.hand-visibility-actions button {
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 16px;
+  color: #d9cde2;
+  border: 1px solid #b79afa55;
+  border-radius: 8px;
+  background: var(--panel-soft);
+  font-size: 11px;
+  font-weight: 750;
+}
+.hand-visibility-actions button > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.hand-visibility-actions button small {
+  color: #8c8198;
+  font-size: 8px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.hand-visibility-actions .show-hand {
+  color: #251931;
+  border-color: #d1b9ff;
+  background: var(--purple);
+}
+.hand-visibility-actions .show-hand small {
+  color: #4f3768;
+}
+.hand-visibility-actions button:hover:not(:disabled) {
+  border-color: #ead39a;
+  filter: brightness(1.08);
+}
+.hand-visibility-resolved {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  color: #8c8198;
+}
+.hand-visibility-resolved > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hand-visibility-resolved small {
+  color: #706778;
+  font-size: 7px;
+  letter-spacing: 0.12em;
+}
+.hand-visibility-resolved b {
+  color: #cdbedf;
+  font-size: 10px;
 }
 .poker-chat-backdrop {
   position: fixed;
@@ -7981,40 +8182,85 @@ h1 > span:not(.live-tag) {
 
 /* Bets sit directly on the felt, using the exact blackjack chip language. */
 .poker-chip-stack {
+  --chip-size: 36px;
+  --chip-face: #8151ab;
+  --chip-deep: #43265f;
+  --chip-edge: #d7b6ff;
   position: relative;
   isolation: isolate;
-  width: 42px;
-  height: 42px;
+  width: 54px;
+  height: 51px;
   flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  color: #f0ddff;
-  border-radius: 50%;
-  background: repeating-conic-gradient(#d4b0ff 0deg 12deg, #7547a0 12deg 45deg);
-  box-shadow:
-    0 3px 0 #422760,
-    0 6px 8px #0006;
+  color: #f2e8fb;
 }
-.poker-chip-stack::before {
-  content: "";
+.poker-chip-pile {
   position: absolute;
-  inset: 4px;
-  z-index: -1;
-  border: 1px solid #dcc0f680;
-  border-radius: 50%;
-  background: radial-gradient(circle, #8151ab, #543372);
+  inset: 0 0 7px;
+  display: block;
 }
-.poker-chip-stack > span {
-  position: relative;
-  z-index: 1;
-  max-width: 30px;
-  overflow: hidden;
+.poker-chip-disc {
+  --chip-shift: -1px;
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--chip-layer) * 4px);
+  z-index: var(--chip-layer);
+  width: var(--chip-size);
+  height: var(--chip-size);
+  transform: translateX(calc(-50% + var(--chip-shift)))
+    rotate(calc(var(--chip-layer) * 7deg));
+  border: 1px solid color-mix(in srgb, var(--chip-edge) 72%, white 8%);
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle,
+      var(--chip-face) 0 48%,
+      var(--chip-edge) 49% 54%,
+      transparent 55%
+    ),
+    repeating-conic-gradient(
+      var(--chip-edge) 0deg 12deg,
+      var(--chip-face) 12deg 45deg
+    );
+  box-shadow:
+    0 2px 0 var(--chip-deep),
+    0 5px 8px #0005;
+}
+.poker-chip-disc:nth-child(even) {
+  --chip-shift: 1px;
+}
+.poker-chip-disc:last-child {
+  box-shadow:
+    0 2px 0 var(--chip-deep),
+    0 7px 12px #0007,
+    inset 0 0 0 2px #ffffff0d;
+}
+.poker-chip-amount {
+  position: absolute;
+  right: -1px;
+  bottom: 0;
+  z-index: 9;
+  min-width: 27px;
+  padding: 3px 5px;
   color: inherit;
-  font-size: 10px;
-  font-weight: 750;
+  border: 1px solid #ffffff18;
+  border-radius: 8px;
+  background: #160f1fd9;
+  box-shadow: 0 3px 8px #0008;
+  font-size: 8px;
+  font-weight: 800;
   line-height: 1;
-  letter-spacing: -0.03em;
-  text-overflow: ellipsis;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.chip-tone-teal {
+  --chip-face: #397d7f;
+  --chip-deep: #1f494c;
+  --chip-edge: #a7d9d5;
+}
+.chip-tone-gold {
+  --chip-face: #9f7440;
+  --chip-deep: #5e3e22;
+  --chip-edge: #ead39a;
 }
 .pot-display {
   top: -70px;
@@ -8029,8 +8275,9 @@ h1 > span:not(.live-tag) {
   backdrop-filter: none;
 }
 .pot-display .pot-chips {
-  width: 46px;
-  height: 46px;
+  --chip-size: 42px;
+  width: 62px;
+  height: 58px;
 }
 .seat-bet {
   top: -39px;
@@ -8044,10 +8291,11 @@ h1 > span:not(.live-tag) {
   box-shadow: none;
 }
 .seat-bet .bet-chips {
-  width: 36px;
-  height: 36px;
+  --chip-size: 30px;
+  width: 45px;
+  height: 43px;
 }
-.seat-bet .bet-chips > span {
+.seat-bet .bet-chips > .poker-chip-amount {
   font-size: 9px;
 }
 

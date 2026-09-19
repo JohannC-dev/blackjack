@@ -91,16 +91,20 @@ try {
       return outline
         ? {
             pathLength: outline.getAttribute("pathLength"),
-            timing: getComputedStyle(outline).animationTimingFunction,
+            timing: getComputedStyle(outline).transitionTimingFunction,
+            offset: Number.parseFloat(
+              getComputedStyle(outline).strokeDashoffset,
+            ),
           }
         : null;
     })(),
-    duplicateStatusTimer: !!document.querySelector(".poker-status > strong"),
+    redundantStatusCard: !!document.querySelector(".poker-status"),
     redundantBlindActions: Array.from(
       document.querySelectorAll(".last-action"),
     ).filter((element) => /^(Small|Big) blind$/.test(element.textContent ?? ""))
       .length,
     chipStacks: document.querySelectorAll(".poker-chip-stack").length,
+    chipDiscs: document.querySelectorAll(".poker-chip-disc").length,
     overflow: document.documentElement.scrollWidth > window.innerWidth,
   }));
   if (result.seats !== 2)
@@ -117,23 +121,28 @@ try {
     throw new Error("Le stack du joueur doit être clairement visible");
   if (!result.seatTimer?.endsWith("s"))
     throw new Error("Le temps de parole doit apparaître sur le siège actif");
+  const displayedSeconds = Number.parseInt(result.seatTimer);
+  const minimumOffset = 100 * (1 - displayedSeconds / 25);
+  const maximumOffset = 100 * (1 - (displayedSeconds - 1) / 25);
   if (
     result.turnOutline?.pathLength !== "100" ||
-    result.turnOutline.timing !== "linear"
+    result.turnOutline.timing !== "linear" ||
+    result.turnOutline.offset < minimumOffset - 1 ||
+    result.turnOutline.offset > maximumOffset + 1
   )
     throw new Error(
       "Le contour du temps de parole doit progresser uniformément",
     );
-  if (result.duplicateStatusTimer)
-    throw new Error(
-      "Le temps de parole ne doit plus être dupliqué sous la table",
-    );
+  if (result.redundantStatusCard)
+    throw new Error("La carte de statut redondante doit être supprimée");
   if (result.redundantBlindActions)
     throw new Error("Les pastilles SB/BB ne doivent pas être dupliquées");
   if (result.chipStacks < 3)
     throw new Error(
       `Le pot et les deux blinds doivent afficher des jetons, reçu ${result.chipStacks}`,
     );
+  if (result.chipDiscs <= result.chipStacks)
+    throw new Error("Chaque mise doit être représentée par une pile de jetons");
   await page.getByRole("button", { name: "Ouvrir la discussion" }).click();
   const chatDialog = page.getByRole("dialog", { name: "Table chat" });
   await chatDialog.waitFor();

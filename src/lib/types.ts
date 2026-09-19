@@ -180,6 +180,8 @@ export type PokerTableState = {
   bigBlindSeat: number;
   activePlayerId: string | null;
   deadline: number | null;
+  /** End of the short window where an uncontested winner may show their cards. */
+  revealDeadline: number | null;
   wheelMultiplier: number | null;
   wheelSpinning: boolean;
   history: PokerHistoryItem[];
@@ -199,4 +201,5 @@ export type PokerCommand =
   | { type: "leave" }
   | { type: "action"; action: PokerAction; amount?: number }
   | { type: "muck" }
+  | { type: "show" }
   | { type: "chat"; text: string };

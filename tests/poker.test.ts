@@ -198,6 +198,46 @@ describe("Poker table authority", () => {
     expect(table.history[0].winners[0].amount).toBe(30);
   });
 
+  test("gives an uncontested winner three seconds to show or hide", () => {
+    const table = new PokerTable("cash", 20, 10, 20, () => {});
+    const one = player("1");
+    const two = player("2");
+    table.add(one, 2_000);
+    table.add(two, 2_000);
+    table.tick(Date.now() + 2_000);
+
+    const foldingId = table.activePlayerId!;
+    const winnerId = table.participants.find(
+      (entry) => entry.player.id !== foldingId,
+    )!.player.id;
+    table.action(foldingId, "fold");
+
+    expect(table.revealDeadline).not.toBeNull();
+    expect(table.nextStepAt).toBe(table.revealDeadline!);
+    expect(
+      table
+        .snapshot(winnerId)
+        .seats.find((seat) => seat.id === winnerId)!
+        .cards.every((card) => !card.hidden),
+    ).toBe(true);
+    expect(
+      table
+        .snapshot(foldingId)
+        .seats.find((seat) => seat.id === winnerId)!
+        .cards.every((card) => card.hidden),
+    ).toBe(true);
+
+    table.show(winnerId);
+
+    expect(table.revealDeadline).toBeNull();
+    expect(
+      table
+        .snapshot(foldingId)
+        .seats.find((seat) => seat.id === winnerId)!
+        .cards.every((card) => !card.hidden),
+    ).toBe(true);
+  });
+
   test("waits briefly after the final check before dealing the next street", () => {
     const table = new PokerTable("cash", 20, 10, 20, () => {});
     table.add(player("1"), 2_000);
