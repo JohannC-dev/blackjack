@@ -102,6 +102,7 @@ TEST_URL=http://localhost:3001 bun run test:multiplayer
 # Avec Chromium Playwright installé :
 PLAYWRIGHT_BROWSERS_PATH=/tmp/minuit-browsers TEST_URL=http://localhost:3001 bun run test:ui
 PLAYWRIGHT_BROWSERS_PATH=/tmp/minuit-browsers TEST_URL=http://localhost:3001 bun run test:poker-ui
+PLAYWRIGHT_BROWSERS_PATH=/tmp/minuit-browsers TEST_URL=http://localhost:3001 bun run test:poker-lobby
 ```
 
 Les tests couvrent les deux moteurs, toutes les catégories de mains Poker, la confidentialité des cartes, les side pots, les règles d’enchères, les crédits, les délais et les contrôles de propriété. Les intégrations jouent une manche Blackjack, une main Cash Game et un Spin & Play complet avec de vrais clients WebSocket.
@@ -115,6 +116,7 @@ Les tests couvrent les deux moteurs, toutes les catégories de mains Poker, la c
 - `src/lib/use-game.ts` : connexion, reconnexion et sauvegarde du profil.
 - `src/components/casino.tsx` : shell du casino et table Blackjack.
 - `src/components/poker-casino.tsx` : accueil, lobby, table, chat et commandes Poker.
+- `src/components/poker-lobby.tsx` : cartes d’entrée Cash Game et Spin & Play, choix du plafond et du tapis.
 - `src/app/globals.css` : styles, animations et adaptation mobile.
 
 `bun run format` formate le projet ; `bun run format:check` vérifie son formatage.

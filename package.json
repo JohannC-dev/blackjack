@@ -14,6 +14,7 @@
     "test:spin-multiplayer": "bun tests/spin-multiplayer.ts",
     "test:ui": "bun tests/ui-layout.ts",
     "test:poker-ui": "bun tests/poker-ui.ts",
+    "test:poker-lobby": "bun tests/poker-lobby.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

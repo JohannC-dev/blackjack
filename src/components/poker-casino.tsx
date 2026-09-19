@@ -4,18 +4,14 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  ChevronRight,
-  CircleDollarSign,
   Coins,
   House,
-  Layers2,
   LoaderCircle,
   MessageCircle,
   Send,
   Settings2,
   ShieldCheck,
   Spade,
-  Sparkles,
   Trophy,
   Users,
   Volume2,
@@ -35,26 +31,17 @@ import {
   describePokerHolding,
   evaluateBestPokerHand,
 } from "@/lib/rules";
-import type { PokerAction, PokerMode, PokerSeat } from "@/lib/types";
+import type { PokerAction, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import type { CasinoView } from "./casino";
+import { BlackjackIcon } from "./blackjack-icon";
 import { PlayingCard } from "./playing-card";
+import { PokerLobby } from "./poker-lobby";
+import { RoomArt } from "./room-art";
 
 type Game = ReturnType<typeof useGame>;
 type Navigate = (view: CasinoView) => void;
 
-const CASH_GAMES = [
-  { stake: 20, label: "Velours", blinds: "10 / 20", min: 800, max: 2_000 },
-  { stake: 100, label: "Salon", blinds: "50 / 100", min: 4_000, max: 10_000 },
-  {
-    stake: 500,
-    label: "Minuit",
-    blinds: "250 / 500",
-    min: 20_000,
-    max: 50_000,
-  },
-];
-const SPIN_BUY_INS = [200, 500, 1_000, 5_000, 25_000];
 const FIVE_POSITIONS = [
   { x: 11, y: 52 },
   { x: 29, y: 72 },
@@ -237,9 +224,10 @@ function CasinoRail({
         <button
           className={`rail-button ${active === "blackjack" ? "active" : ""}`}
           title="Blackjack"
+          aria-label="Blackjack"
           onClick={() => onNavigate("blackjack")}
         >
-          <Layers2 size={22} />
+          <BlackjackIcon />
         </button>
         <button
           className={`rail-button ${active === "poker" ? "active" : ""}`}
@@ -358,12 +346,7 @@ export function CasinoHome({
             >
               <div className="poster-index">02</div>
               <div className="poster-art poker-art">
-                <span>♠</span>
-                <div className="chip-orbit">
-                  <i />
-                  <i />
-                  <i />
-                </div>
+                <RoomArt theme="salon" poster />
               </div>
               <div className="poster-copy">
                 <span>NOUVEAU · MULTIJOUEUR</span>
@@ -416,192 +399,6 @@ export function PokerCasino({
         </div>
       )}
     </div>
-  );
-}
-
-function PokerLobby({
-  game,
-  onNavigate,
-}: {
-  game: Game;
-  onNavigate: Navigate;
-}) {
-  const [mode, setMode] = useState<PokerMode>("cash");
-  const [cashStake, setCashStake] = useState(20);
-  const selected = CASH_GAMES.find((game) => game.stake === cashStake)!;
-  const [buyIn, setBuyIn] = useState(selected.max);
-  const balance = game.pokerState?.balance ?? game.profile?.balance ?? 0;
-  useEffect(
-    () => setBuyIn(CASH_GAMES.find((item) => item.stake === cashStake)!.max),
-    [cashStake],
-  );
-  return (
-    <main className="poker-lobby">
-      <button className="lobby-back" onClick={() => onNavigate("home")}>
-        <ArrowLeft size={15} /> Tous les jeux
-      </button>
-      <div className="poker-lobby-heading">
-        <div>
-          <span className="eyebrow">MINUIT / POKER ROOM</span>
-          <h1>
-            Texas Hold’em <span>Live</span>
-          </h1>
-          <p>
-            Choisissez votre rythme. Votre place est attribuée automatiquement.
-          </p>
-        </div>
-        <div className="lobby-status">
-          <i />
-          <span>
-            <b>Tables ouvertes</b>
-            <small>Matchmaking instantané</small>
-          </span>
-        </div>
-      </div>
-      <div className="mode-switch" role="tablist">
-        <button
-          className={mode === "cash" ? "active" : ""}
-          onClick={() => setMode("cash")}
-        >
-          <CircleDollarSign size={19} />
-          <span>
-            <b>Cash Game</b>
-            <small>2–5 joueurs · blinds fixes</small>
-          </span>
-        </button>
-        <button
-          className={mode === "spin" ? "active" : ""}
-          onClick={() => setMode("spin")}
-        >
-          <Sparkles size={19} />
-          <span>
-            <b>Spin & Play</b>
-            <small>3 joueurs · un seul vainqueur</small>
-          </span>
-        </button>
-      </div>
-      {mode === "cash" ? (
-        <section className="stake-section">
-          <div className="section-title">
-            <span>01</span>
-            <div>
-              <h2>Choisissez les limites</h2>
-              <p>
-                Votre tapis reste séparé de votre portefeuille pendant la
-                partie.
-              </p>
-            </div>
-          </div>
-          <div className="cash-stakes">
-            {CASH_GAMES.map((item) => {
-              const locked = balance < item.min;
-              return (
-                <button
-                  key={item.stake}
-                  className={`${cashStake === item.stake ? "selected" : ""} ${locked ? "locked" : ""}`}
-                  disabled={locked}
-                  onClick={() => setCashStake(item.stake)}
-                >
-                  <span className="stake-name">{item.label}</span>
-                  <strong>{item.blinds}</strong>
-                  <small>BLINDS</small>
-                  <i />
-                  <p>
-                    {locked
-                      ? `${credits(item.min - balance)} cr. manquants`
-                      : `${credits(item.min)}–${credits(item.max)} cr.`}
-                  </p>
-                  {cashStake === item.stake && !locked && <Check size={16} />}
-                </button>
-              );
-            })}
-          </div>
-          <div className="buyin-panel">
-            <div>
-              <span>VOTRE BUY-IN</span>
-              <strong>
-                {credits(buyIn)} <small>cr.</small>
-              </strong>
-            </div>
-            <input
-              type="range"
-              min={selected.min}
-              max={selected.max}
-              step={selected.stake}
-              value={buyIn}
-              onChange={(event) => setBuyIn(Number(event.target.value))}
-            />
-            <div className="buyin-range">
-              <span>40 BB · {credits(selected.min)}</span>
-              <span>100 BB · {credits(selected.max)}</span>
-            </div>
-            <button
-              className="button primary poker-play"
-              disabled={!game.connected || game.pending || balance < buyIn}
-              onClick={() =>
-                game.pokerCommand({
-                  type: "match",
-                  mode: "cash",
-                  stake: cashStake,
-                  buyIn,
-                })
-              }
-            >
-              Trouver une table <ArrowRight size={18} />
-            </button>
-          </div>
-        </section>
-      ) : (
-        <section className="stake-section">
-          <div className="section-title">
-            <span>01</span>
-            <div>
-              <h2>Choisissez votre entrée</h2>
-              <p>La roue fixe le prix. Le dernier joueur remporte tout.</p>
-            </div>
-          </div>
-          <div className="spin-stakes">
-            {SPIN_BUY_INS.map((stake, index) => {
-              const locked = balance < stake;
-              return (
-                <button
-                  key={stake}
-                  disabled={locked || game.pending}
-                  className={locked ? "locked" : ""}
-                  onClick={() =>
-                    game.pokerCommand({ type: "match", mode: "spin", stake })
-                  }
-                >
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <Sparkles size={17} />
-                  <strong>{credits(stake)}</strong>
-                  <small>CRÉDITS</small>
-                  {locked ? (
-                    <p>{credits(stake - balance)} manquants</p>
-                  ) : (
-                    <p>
-                      Jouer <ChevronRight size={13} />
-                    </p>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          <div className="spin-odds">
-            <Trophy size={18} />
-            <span>
-              <b>Jusqu’à ×1 000</b>
-              <small>Multiplicateur tiré avant la première main</small>
-            </span>
-            <div>
-              {[2, 3, 5, 10, 25, 100, 1000].map((value) => (
-                <i key={value}>×{value}</i>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-    </main>
   );
 }
 

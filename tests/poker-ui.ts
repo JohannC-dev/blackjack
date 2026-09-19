@@ -36,7 +36,10 @@ try {
     path: "/tmp/minuit-poker-lobby.png",
     fullPage: true,
   });
-  await page.getByRole("button", { name: /Trouver une table/ }).click();
+  await page
+    .getByRole("button", { name: "Cash Game, choisir le plafond" })
+    .click();
+  await page.getByRole("button", { name: /^Velours, plafond/ }).click();
   await page.locator(".poker-felt").waitFor();
 
   let botState: PokerClientState | undefined;

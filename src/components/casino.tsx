@@ -56,6 +56,7 @@ import type {
 } from "@/lib/types";
 import { newToken } from "@/lib/identity";
 import { useGame } from "@/lib/use-game";
+import { BlackjackIcon } from "./blackjack-icon";
 import { PlayingCard } from "./playing-card";
 import { CasinoHome, PokerCasino } from "./poker-casino";
 import { ShoeShuffleAnimation } from "./shoe-shuffle";
@@ -1216,7 +1217,7 @@ function BlackjackCasino({
             aria-label="Table de blackjack"
             onClick={() => setModal(null)}
           >
-            <Layers2 size={22} />
+            <BlackjackIcon />
           </button>
           <button
             className="rail-button"
