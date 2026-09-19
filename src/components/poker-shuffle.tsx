@@ -3,13 +3,25 @@ import styles from "./poker-shuffle.module.css";
 
 const SHUFFLE_CARDS = Array.from({ length: 8 }, (_, index) => index);
 
-export function PokerShuffleAnimation({ hand }: { hand: number }) {
+type PokerShuffleAnimationProps = {
+  hand: number;
+  eyebrow?: string;
+  title?: string;
+  ariaLabel?: string;
+};
+
+export function PokerShuffleAnimation({
+  hand,
+  eyebrow = `MAIN ${String(hand + 1).padStart(3, "0")}`,
+  title = "Mélange du jeu",
+  ariaLabel = `Mélange des cartes avant la main ${hand + 1}`,
+}: PokerShuffleAnimationProps) {
   return (
     <div
       className={styles.overlay}
       role="status"
       aria-live="polite"
-      aria-label={`Mélange des cartes avant la main ${hand + 1}`}
+      aria-label={ariaLabel}
     >
       <div className={styles.animation} aria-hidden="true">
         <div className={styles.deckShadow} />
@@ -45,8 +57,8 @@ export function PokerShuffleAnimation({ hand }: { hand: number }) {
         })}
       </div>
       <div className={styles.copy}>
-        <span>MAIN {String(hand + 1).padStart(3, "0")}</span>
-        <b>Mélange du jeu</b>
+        <span>{eyebrow}</span>
+        <b>{title}</b>
       </div>
     </div>
   );

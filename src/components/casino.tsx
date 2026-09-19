@@ -34,7 +34,6 @@ import {
   Spade,
   Users,
   Volume2,
-  VolumeX,
   Wallet,
   X,
 } from "lucide-react";
@@ -51,6 +50,7 @@ import {
   CASINO_CHIP_DENOMINATIONS,
   casinoChipStackForAmount,
 } from "@/lib/chips";
+import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
 import { DEFAULT_PUBLIC_TABLE_ID, PUBLIC_TABLES } from "@/lib/table-config";
 import type {
   Bet,
@@ -65,7 +65,7 @@ import { useGame } from "@/lib/use-game";
 import { BlackjackIcon } from "./blackjack-icon";
 import { PlayingCard } from "./playing-card";
 import { CasinoHome, PokerCasino } from "./poker-casino";
-import { ShoeShuffleAnimation } from "./shoe-shuffle";
+import { PokerShuffleAnimation } from "./poker-shuffle";
 
 const THREE_PAYOUTS = [
   ["Straight Flush", "9:1"],
@@ -1120,12 +1120,8 @@ function BlackjackCasino({
   const [doubleChoiceClosing, setDoubleChoiceClosing] = useState(false);
   const [gambleOpen, setGambleOpen] = useState(false);
   const [gamblePromptFeatured, setGamblePromptFeatured] = useState(false);
-  const [shoeShuffling, setShoeShuffling] = useState(false);
   const audioRef = useRef<AudioContext | null>(null);
   const previousCards = useRef(0);
-  const previousShoe = useRef<{ tableId: string; remaining: number } | null>(
-    null,
-  );
   const doubleCloseTimer = useRef<number | null>(null);
   const noticeCloseTimer = useRef<number | null>(null);
   const me = state?.players.find((p) => p.id === playerId);
@@ -1166,7 +1162,7 @@ function BlackjackCasino({
   const seconds = state?.deadline
     ? Math.max(0, Math.ceil((state.deadline - now) / 1000))
     : null;
-  const disabled = !connected || pending;
+  const disabled = !connected || pending || state?.phase === "shuffling";
   const cardCount =
     (state?.dealer.length ?? 0) +
     (state?.seats
@@ -1200,6 +1196,9 @@ function BlackjackCasino({
   useEffect(() => {
     setGambleOpen(false);
   }, [state?.id]);
+  useEffect(() => {
+    if (state?.phase === "shuffling") setGambleOpen(false);
+  }, [state?.phase]);
   useEffect(() => {
     if (ownGamble?.status !== "available") {
       setGamblePromptFeatured(false);
@@ -1275,43 +1274,18 @@ function BlackjackCasino({
     };
   }, [game.error, notification]);
   useEffect(() => {
-    if (!state) {
-      previousShoe.current = null;
-      setShoeShuffling(false);
-      return;
-    }
-    const previous = previousShoe.current;
-    previousShoe.current = {
-      tableId: state.id,
-      remaining: state.shoeRemaining,
-    };
-    if (!previous || previous.tableId !== state.id) {
-      setShoeShuffling(false);
-      return;
-    }
-    if (state.shoeRemaining <= previous.remaining + 20) return;
-
-    setShoeShuffling(true);
-    const timer = window.setTimeout(() => setShoeShuffling(false), 2600);
-    return () => window.clearTimeout(timer);
-  }, [state?.id, state?.shoeRemaining]);
-  useEffect(() => {
-    if (sound && cardCount > previousCards.current && audioRef.current) {
-      const ctx = audioRef.current;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(680, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.055);
-      gain.gain.setValueAtTime(0.045, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.1);
-    }
+    if (sound && cardCount > previousCards.current && audioRef.current)
+      playCasinoSound(
+        audioRef.current,
+        "card",
+        cardCount - previousCards.current,
+      );
     previousCards.current = cardCount;
   }, [cardCount, sound]);
+  useEffect(() => {
+    if (sound && state?.phase === "shuffling" && audioRef.current)
+      playCasinoSound(audioRef.current, "shuffle");
+  }, [state?.phase, sound]);
 
   const selectSeat = (s: Seat) => {
     if (!profile) return;
@@ -1402,28 +1376,31 @@ function BlackjackCasino({
   };
   const toggleSound = () => {
     if (!sound) {
-      audioRef.current ??= new AudioContext();
-      void audioRef.current.resume();
+      const context = (audioRef.current ??= new AudioContext());
+      void context.resume();
+      preloadCasinoSounds(context);
     }
     setSound(!sound);
   };
   const subtitle = myTurn
     ? "C’est à vous de jouer"
-    : state?.phase === "dealing"
-      ? "Distribution en cours"
-      : state?.phase === "bonuses"
-        ? "Les paris annexes sont réglés"
-        : state?.phase === "dealer"
-          ? "Au tour du croupier"
-          : state?.phase === "settled"
-            ? ownGamble?.status === "available" && gambleOpen
-              ? "Double ou rien"
-              : ownGamble?.status === "available"
-                ? "Tentez vos gains"
-                : "Les jeux sont faits"
-            : me?.ready
-              ? "Vous êtes prêt"
-              : "Faites vos jeux";
+    : state?.phase === "shuffling"
+      ? "Mélange du sabot"
+      : state?.phase === "dealing"
+        ? "Distribution en cours"
+        : state?.phase === "bonuses"
+          ? "Les paris annexes sont réglés"
+          : state?.phase === "dealer"
+            ? "Au tour du croupier"
+            : state?.phase === "settled"
+              ? ownGamble?.status === "available" && gambleOpen
+                ? "Double ou rien"
+                : ownGamble?.status === "available"
+                  ? "Tentez vos gains"
+                  : "Les jeux sont faits"
+              : me?.ready
+                ? "Vous êtes prêt"
+                : "Faites vos jeux";
 
   return (
     <div className="casino-shell">
@@ -1546,15 +1523,30 @@ function BlackjackCasino({
                     <span className="table-separator">/</span>
                     <span>5 – 500 crédits</span>
                   </div>
-                  <button
-                    className="text-button"
-                    onClick={() => setModal("tables")}
-                  >
-                    <Users size={14} />
-                    {state?.players.filter((p) => p.connected).length ?? 0}
-                    <span>/ 5 places</span>
-                    <ChevronDown size={13} />
-                  </button>
+                  <div className="table-toolbar-actions">
+                    <button
+                      type="button"
+                      className={`poker-sound ${sound ? "active" : ""}`}
+                      aria-label={
+                        sound
+                          ? "Couper les sons Blackjack"
+                          : "Activer les sons Blackjack"
+                      }
+                      aria-pressed={sound}
+                      onClick={toggleSound}
+                    >
+                      <Volume2 size={15} />
+                    </button>
+                    <button
+                      className="text-button"
+                      onClick={() => setModal("tables")}
+                    >
+                      <Users size={14} />
+                      {state?.players.filter((p) => p.connected).length ?? 0}
+                      <span>/ 5 places</span>
+                      <ChevronDown size={13} />
+                    </button>
+                  </div>
                 </div>
                 <div className="table-stage">
                   <div className="ambient-glow" />
@@ -1596,9 +1588,16 @@ function BlackjackCasino({
                     <div />
                     <div />
                     <PlayingCard back decorative />
-                    <ShoeShuffleAnimation active={shoeShuffling} />
                     <span>8 JEUX</span>
                   </div>
+                  {state?.phase === "shuffling" && (
+                    <PokerShuffleAnimation
+                      hand={state.round}
+                      eyebrow={`MANCHE ${String(state.round + 1).padStart(3, "0")} · 8 JEUX`}
+                      title="Mélange du sabot"
+                      ariaLabel={`Mélange du sabot avant la manche ${state.round + 1}`}
+                    />
+                  )}
                   <div className="felt-brand">
                     <span className="felt-diamond">✧</span>
                     <h2>MINUIT</h2>
@@ -1637,7 +1636,8 @@ function BlackjackCasino({
                       ))}
                     </div>
                   )}
-                  {ownGamble &&
+                  {state?.phase !== "shuffling" &&
+                    ownGamble &&
                     (gambleOpen ? (
                       <div className="table-gamble-overlay">
                         <GamblePanel
@@ -1687,9 +1687,11 @@ function BlackjackCasino({
                       <span className="section-kicker">
                         {betting
                           ? "À VOUS DE MISER"
-                          : myTurn
-                            ? `MAIN ${(activeSeat?.index ?? 0) + 1} · ${activeHand ? score(activeHand.cards).total : ""} POINTS`
-                            : "LA PARTIE CONTINUE"}
+                          : state?.phase === "shuffling"
+                            ? "MÉLANGE EN COURS"
+                            : myTurn
+                              ? `MAIN ${(activeSeat?.index ?? 0) + 1} · ${activeHand ? score(activeHand.cards).total : ""} POINTS`
+                              : "LA PARTIE CONTINUE"}
                       </span>
                       <h2>
                         {subtitle}
@@ -2008,20 +2010,24 @@ function BlackjackCasino({
                             <b>
                               {state?.phase === "playing"
                                 ? `${state.players.find((p) => p.id === activeSeat?.playerId)?.name ?? "Un joueur"} prend sa décision.`
-                                : state?.phase === "bonuses"
-                                  ? myBonus > 0
-                                    ? `+${credits(myBonus)} crédits versés sur votre solde.`
-                                    : "Pas de combinaison gagnante cette fois-ci."
-                                  : state?.phase === "dealer"
-                                    ? "Le croupier révèle sa main."
-                                    : "Un peu de suspense…"}
+                                : state?.phase === "shuffling"
+                                  ? "Le croupier mélange le sabot."
+                                  : state?.phase === "bonuses"
+                                    ? myBonus > 0
+                                      ? `+${credits(myBonus)} crédits versés sur votre solde.`
+                                      : "Pas de combinaison gagnante cette fois-ci."
+                                    : state?.phase === "dealer"
+                                      ? "Le croupier révèle sa main."
+                                      : "Un peu de suspense…"}
                             </b>
                             <p>
-                              {state?.phase === "bonuses"
-                                ? "Les gains annexes sont payés avant de jouer vos mains."
-                                : ownSeats.length
-                                  ? "Toutes vos mains se jouent l’une après l’autre."
-                                  : "Vous pourrez prendre une place à la prochaine manche."}
+                              {state?.phase === "shuffling"
+                                ? "Les mises et les actions reprennent une fois le mélange terminé."
+                                : state?.phase === "bonuses"
+                                  ? "Les gains annexes sont payés avant de jouer vos mains."
+                                  : ownSeats.length
+                                    ? "Toutes vos mains se jouent l’une après l’autre."
+                                    : "Vous pourrez prendre une place à la prochaine manche."}
                             </p>
                           </div>
                         </>

@@ -86,7 +86,14 @@ export type HistoryItem = {
 };
 export type TableState = {
   id: string;
-  phase: "betting" | "dealing" | "bonuses" | "playing" | "dealer" | "settled";
+  phase:
+    | "shuffling"
+    | "betting"
+    | "dealing"
+    | "bonuses"
+    | "playing"
+    | "dealer"
+    | "settled";
   round: number;
   players: PublicPlayer[];
   seats: Seat[];

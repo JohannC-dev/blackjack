@@ -29,7 +29,6 @@ import { SettlementChipAnimation } from "./casino";
 import { PlayingCard } from "./playing-card";
 import { PokerChipStack } from "./poker-casino";
 import { PokerShuffleAnimation } from "./poker-shuffle";
-import { ShoeShuffleAnimation } from "./shoe-shuffle";
 import styles from "./animation-lab.module.css";
 
 type Section = "blackjack" | "poker" | "interface";
@@ -561,7 +560,12 @@ function BlackjackDemos() {
       >
         {() => (
           <div className={styles.shuffleStage}>
-            <ShoeShuffleAnimation active />
+            <PokerShuffleAnimation
+              hand={11}
+              eyebrow="MANCHE 012 · 8 JEUX"
+              title="Mélange du sabot"
+              ariaLabel="Démonstration du mélange du sabot"
+            />
           </div>
         )}
       </Demo>

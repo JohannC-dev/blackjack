@@ -34,6 +34,11 @@ import {
   getPokerCombinationCards,
 } from "@/lib/rules";
 import { casinoChipStackForAmount } from "@/lib/chips";
+import {
+  CASINO_DEAL_INTERVAL,
+  playCasinoSound,
+  preloadCasinoSounds,
+} from "@/lib/casino-audio";
 import type { PokerAction, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import type { CasinoView } from "./casino";
@@ -58,151 +63,6 @@ const THREE_POSITIONS = [
   { x: 50, y: 77 },
   { x: 85, y: 61 },
 ];
-const POKER_DEAL_INTERVAL = 320;
-
-type PokerSoundEffect = "card" | "chips" | "fold" | "knock" | "shuffle";
-
-const POKER_SOUND_FILES: Record<
-  Exclude<PokerSoundEffect, "knock">,
-  string[]
-> = {
-  card: [
-    "/audio/poker/deal-1.mp3",
-    "/audio/poker/deal-2.mp3",
-    "/audio/poker/deal-3.mp3",
-    "/audio/poker/deal-4.mp3",
-  ],
-  chips: [
-    "/audio/poker/chips-1.mp3",
-    "/audio/poker/chips-2.mp3",
-    "/audio/poker/chips-3.mp3",
-  ],
-  fold: ["/audio/poker/fold-1.mp3", "/audio/poker/fold-2.mp3"],
-  shuffle: ["/audio/poker/card-fan-1.mp3", "/audio/poker/card-fan-2.mp3"],
-};
-const pokerSampleCaches = new WeakMap<
-  AudioContext,
-  Map<string, Promise<AudioBuffer>>
->();
-
-function loadPokerSample(context: AudioContext, path: string) {
-  let cache = pokerSampleCaches.get(context);
-  if (!cache) {
-    cache = new Map();
-    pokerSampleCaches.set(context, cache);
-  }
-  let sample = cache.get(path);
-  if (!sample) {
-    sample = fetch(path)
-      .then((response) => {
-        if (!response.ok) throw new Error(`Son Poker indisponible : ${path}`);
-        return response.arrayBuffer();
-      })
-      .then((data) => context.decodeAudioData(data));
-    cache.set(path, sample);
-  }
-  return sample;
-}
-
-function preloadPokerSounds(context: AudioContext) {
-  for (const path of Object.values(POKER_SOUND_FILES).flat())
-    void loadPokerSample(context, path).catch(() => undefined);
-}
-
-function playPokerSound(
-  context: AudioContext,
-  effect: PokerSoundEffect,
-  count = 1,
-) {
-  const noise = (
-    delay: number,
-    duration: number,
-    frequency: number,
-    volume: number,
-    filterType: BiquadFilterType,
-  ) => {
-    const sampleRate = context.sampleRate;
-    const buffer = context.createBuffer(
-      1,
-      Math.ceil(sampleRate * duration),
-      sampleRate,
-    );
-    const data = buffer.getChannelData(0);
-    for (let index = 0; index < data.length; index++) {
-      const envelope = 1 - index / data.length;
-      data[index] = (Math.random() * 2 - 1) * envelope;
-    }
-    const source = context.createBufferSource();
-    const filter = context.createBiquadFilter();
-    const gain = context.createGain();
-    const startsAt = context.currentTime + delay;
-    source.buffer = buffer;
-    filter.type = filterType;
-    filter.frequency.setValueAtTime(frequency, startsAt);
-    filter.Q.setValueAtTime(filterType === "bandpass" ? 5 : 0.7, startsAt);
-    gain.gain.setValueAtTime(volume, startsAt);
-    gain.gain.exponentialRampToValueAtTime(0.001, startsAt + duration);
-    source.connect(filter);
-    filter.connect(gain);
-    gain.connect(context.destination);
-    source.start(startsAt);
-    source.stop(startsAt + duration);
-  };
-
-  const tone = (
-    delay: number,
-    duration: number,
-    frequency: number,
-    volume: number,
-  ) => {
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    const startsAt = context.currentTime + delay;
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(frequency, startsAt);
-    oscillator.frequency.exponentialRampToValueAtTime(
-      frequency * 0.65,
-      startsAt + duration,
-    );
-    gain.gain.setValueAtTime(volume, startsAt);
-    gain.gain.exponentialRampToValueAtTime(0.001, startsAt + duration);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(startsAt);
-    oscillator.stop(startsAt + duration);
-  };
-
-  if (effect === "knock") {
-    for (const delay of [0, 0.14]) {
-      noise(delay, 0.07, 720, 0.13, "lowpass");
-      tone(delay, 0.085, 165, 0.075);
-    }
-    return;
-  }
-  const files = POKER_SOUND_FILES[effect];
-  const startedAt = context.currentTime;
-  const variant =
-    effect === "card" ? 0 : Math.floor(Math.random() * files.length);
-  for (let index = 0; index < count; index++) {
-    const path = files[(variant + index) % files.length];
-    const scheduledAt =
-      startedAt + (effect === "card" ? index * POKER_DEAL_INTERVAL : 0) / 1000;
-    void loadPokerSample(context, path)
-      .then((buffer) => {
-        if (context.state === "closed") return;
-        const source = context.createBufferSource();
-        const gain = context.createGain();
-        source.buffer = buffer;
-        gain.gain.value =
-          effect === "chips" ? 0.48 : effect === "shuffle" ? 0.52 : 0.58;
-        source.connect(gain);
-        gain.connect(context.destination);
-        source.start(Math.max(context.currentTime, scheduledAt));
-      })
-      .catch(() => undefined);
-  }
-}
-
 function CasinoRail({
   active,
   onNavigate,
@@ -525,12 +385,12 @@ function PokerTable({ game }: { game: Game }) {
           ? "chips"
           : undefined;
     if (table.phase === "shuffling" && previous.phase !== "shuffling")
-      playPokerSound(context, "shuffle");
-    else if (actionEffect) playPokerSound(context, actionEffect);
+      playCasinoSound(context, "shuffle");
+    else if (actionEffect) playCasinoSound(context, actionEffect);
     if (table.community.length > previous.cards)
-      playPokerSound(context, "card", table.community.length - previous.cards);
+      playCasinoSound(context, "card", table.community.length - previous.cards);
     else if (table.hand > previous.hand)
-      playPokerSound(
+      playCasinoSound(
         context,
         "card",
         table.seats.reduce((total, seat) => total + seat.cards.length, 0),
@@ -577,7 +437,7 @@ function PokerTable({ game }: { game: Game }) {
     seatsInDealOrder.forEach((seat, seatIndex) => {
       seat.cards.forEach((card, cardIndex) => {
         const dealIndex = cardIndex * seatsInDealOrder.length + seatIndex;
-        delays.set(card.id, dealIndex * POKER_DEAL_INTERVAL);
+        delays.set(card.id, dealIndex * CASINO_DEAL_INTERVAL);
       });
     });
     return delays;
@@ -682,7 +542,7 @@ function PokerTable({ game }: { game: Game }) {
           onClick={() => {
             const context = (audioRef.current ??= new AudioContext());
             void context.resume();
-            preloadPokerSounds(context);
+            preloadCasinoSounds(context);
             setSound(!sound);
           }}
         >
@@ -709,7 +569,7 @@ function PokerTable({ game }: { game: Game }) {
                     key={table.community[index].id}
                     card={table.community[index]}
                     index={index}
-                    dealDelay={index < 3 ? index * POKER_DEAL_INTERVAL : 0}
+                    dealDelay={index < 3 ? index * CASINO_DEAL_INTERVAL : 0}
                     highlighted={showdownCards.winning.has(
                       table.community[index].id,
                     )}

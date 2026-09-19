@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { makeShoe, Table, type Player } from "../server/engine";
+import {
+  BLACKJACK_SHUFFLE_MS,
+  makeShoe,
+  Table,
+  type Player,
+} from "../server/engine";
 import { casinoChipStackForAmount } from "../src/lib/chips";
 import {
   evaluate21Plus3,
@@ -507,6 +512,37 @@ describe("European blackjack and credit accounting", () => {
 });
 
 describe("Multiplayer authority and lifecycle", () => {
+  test("a fresh shoe is shuffled in an exclusive phase before dealing", () => {
+    const { table, p } = tableWith([]);
+    const seat = table.state.seats.find((entry) => entry.playerId === p.id)!;
+    table.shoe = table.shoe.slice(0, 159);
+    table.command(p.id, { type: "ready", ready: true });
+
+    const balanceBeforeShuffle = p.balance;
+    table.startRound();
+
+    expect(table.state.phase).toBe("shuffling");
+    expect(table.state.round).toBe(0);
+    expect(table.snapshot().shoeRemaining).toBe(416);
+    expect(p.balance).toBe(balanceBeforeShuffle);
+    expect(() =>
+      table.command(p.id, {
+        type: "bet",
+        seat: seat.index,
+        bet: { main: 50, three: 0, pairs: 0 },
+      }),
+    ).toThrow("prochaine manche");
+    expect(() => table.command(p.id, { type: "cashout" })).toThrow(
+      "cours de mélange",
+    );
+
+    table.tick(Date.now() + BLACKJACK_SHUFFLE_MS + 100);
+
+    expect(table.state.phase).toBe("dealing");
+    expect(table.state.round).toBe(1);
+    expect(p.balance).toBe(balanceBeforeShuffle - 25);
+  });
+
   test("one player may take multiple spots; bets must fit their combined balance", () => {
     const { table, p } = tableWith([]);
     p.balance = 40;

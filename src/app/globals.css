@@ -2281,12 +2281,17 @@ h1 > span:not(.live-tag) {
   color: #a095b0;
   font-size: 10px;
 }
-.table-toolbar > .text-button {
+.table-toolbar .text-button {
   color: #c1b3ce;
 }
-.table-toolbar > .text-button > span {
+.table-toolbar .text-button > span {
   color: #74677f;
   font-size: 9px;
+}
+.table-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .table-stage {
   position: relative;
@@ -4815,7 +4820,7 @@ h1 > span:not(.live-tag) {
   .table-identity {
     gap: 7px;
   }
-  .table-toolbar > .text-button > span {
+  .table-toolbar .text-button > span {
     display: none;
   }
   .seat {
@@ -4953,7 +4958,7 @@ h1 > span:not(.live-tag) {
   .table-toolbar {
     padding: 20px 22px;
   }
-  .table-toolbar > .text-button > span {
+  .table-toolbar .text-button > span {
     display: inline;
   }
   .table-status {
@@ -5092,10 +5097,10 @@ h1 > span:not(.live-tag) {
   .table-separator {
     margin: 0;
   }
-  .table-toolbar > .text-button {
+  .table-toolbar .text-button {
     font-size: 8px;
   }
-  .table-toolbar > .text-button > span {
+  .table-toolbar .text-button > span {
     display: none;
   }
   .table-stage {
