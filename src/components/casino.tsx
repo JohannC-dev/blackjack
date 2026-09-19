@@ -21,6 +21,7 @@ import {
   Eye,
   EyeOff,
   History,
+  House,
   Layers2,
   LoaderCircle,
   Minus,
@@ -56,6 +57,7 @@ import type {
 import { newToken } from "@/lib/identity";
 import { useGame } from "@/lib/use-game";
 import { PlayingCard } from "./playing-card";
+import { CasinoHome, PokerCasino } from "./poker-casino";
 import { ShoeShuffleAnimation } from "./shoe-shuffle";
 
 const THREE_PAYOUTS = [
@@ -851,8 +853,27 @@ function GamblePanel({
   );
 }
 
+export type CasinoView = "home" | "blackjack" | "poker";
+
 export function Casino() {
   const game = useGame();
+  const [view, setView] = useState<CasinoView>("home");
+  const navigate = (next: CasinoView) => setView(next);
+  if (!game.profile)
+    return <BlackjackCasino game={game} onNavigate={navigate} />;
+  if (view === "home") return <CasinoHome game={game} onNavigate={navigate} />;
+  if (view === "poker")
+    return <PokerCasino game={game} onNavigate={navigate} />;
+  return <BlackjackCasino game={game} onNavigate={navigate} />;
+}
+
+function BlackjackCasino({
+  game,
+  onNavigate,
+}: {
+  game: ReturnType<typeof useGame>;
+  onNavigate: (view: CasinoView) => void;
+}) {
   const { state, playerId, connected, profile, loaded, command, pending } =
     game;
   const [modal, setModal] = useState<
@@ -1172,10 +1193,23 @@ export function Casino() {
   return (
     <div className="casino-shell">
       <aside className="rail" aria-label="Navigation principale">
-        <a href="/" className="brand-mark" aria-label="Minuit, accueil">
+        <button
+          type="button"
+          className="brand-mark"
+          aria-label="Minuit, accueil"
+          onClick={() => onNavigate("home")}
+        >
           <Spade size={28} fill="currentColor" strokeWidth={1.3} />
-        </a>
+        </button>
         <div className="rail-navigation">
+          <button
+            className="rail-button"
+            title="Accueil"
+            aria-label="Accueil"
+            onClick={() => onNavigate("home")}
+          >
+            <House size={21} />
+          </button>
           <button
             className="rail-button active"
             title="Table de blackjack"
@@ -1183,6 +1217,14 @@ export function Casino() {
             onClick={() => setModal(null)}
           >
             <Layers2 size={22} />
+          </button>
+          <button
+            className="rail-button"
+            title="Poker"
+            aria-label="Poker"
+            onClick={() => onNavigate("poker")}
+          >
+            <Spade size={21} />
           </button>
           <button
             className="rail-button"

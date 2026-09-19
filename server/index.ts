@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import next from "next";
 import { Server } from "socket.io";
 import { Table, type Player } from "./engine";
-import type { Ack, Command, Profile } from "../src/lib/types";
+import { PokerManager } from "./poker";
+import type { Ack, Command, PokerCommand, Profile } from "../src/lib/types";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number(process.env.PORT ?? 3000);
@@ -36,6 +37,10 @@ const io = new Server(http, {
 const tables = new Map<string, Table>();
 const profiles = new Map<string, Player>();
 const playerSockets = new Map<string, Set<string>>();
+const poker = new PokerManager((playerId, state) => {
+  for (const socketId of playerSockets.get(playerId) ?? [])
+    io.to(socketId).emit("poker:state", state);
+});
 
 function getTable(id: string) {
   let table = tables.get(id);
@@ -144,6 +149,7 @@ io.on("connection", (socket) => {
         if (typeof ack === "function")
           ack({ ok: true, playerId: player.id, tableId: data.tableId });
         table.add(player);
+        poker.connect(player);
       } catch (error) {
         replyError(ack, error);
       }
@@ -159,6 +165,22 @@ io.on("connection", (socket) => {
       replyError(ack, error);
     }
   });
+  socket.on(
+    "poker:command",
+    (command: PokerCommand, ack: (value: Ack) => void) => {
+      try {
+        throttle();
+        if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+        poker.command(player, command);
+        const blackjackTable = tables.get(player.roomId);
+        if (blackjackTable)
+          io.to(player.roomId).emit("state", blackjackTable.snapshot());
+        if (typeof ack === "function") ack({ ok: true });
+      } catch (error) {
+        replyError(ack, error);
+      }
+    },
+  );
   socket.on("disconnect", () => {
     if (!player) return;
     const connections = playerSockets.get(player.id);
@@ -167,6 +189,7 @@ io.on("connection", (socket) => {
       playerSockets.delete(player.id);
       player.connected = false;
       player.lastSeen = Date.now();
+      poker.disconnect(player);
       if (tables.get(player.roomId)?.state.phase === "betting")
         player.ready = false;
       io.to(player.roomId).emit("state", tables.get(player.roomId)?.snapshot());
@@ -180,6 +203,7 @@ setInterval(() => {
     if (!table.players.size && now - table.lastUsed > 30 * 60_000)
       tables.delete(id);
   }
+  poker.tick(now);
   for (const [token, player] of profiles)
     if (!player.connected && now - player.lastSeen > 24 * 60 * 60_000)
       profiles.delete(token);

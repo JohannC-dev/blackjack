@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
-import type { Ack, Command, Profile, TableState } from "./types";
+import type {
+  Ack,
+  Command,
+  PokerClientState,
+  PokerCommand,
+  Profile,
+  TableState,
+} from "./types";
 import { newToken } from "./identity";
 
 const STORAGE_KEY = "minuit.profile.v1";
@@ -11,6 +18,7 @@ export function useGame() {
   const [loaded, setLoaded] = useState(false);
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState<TableState | null>(null);
+  const [pokerState, setPokerState] = useState<PokerClientState | null>(null);
   const [playerId, setPlayerId] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -99,6 +107,12 @@ export function useGame() {
       if (me && profileRef.current)
         save({ ...profileRef.current, name: me.name, balance: me.balance });
     });
+    socket.on("poker:state", (snapshot: PokerClientState) => {
+      if (!snapshot) return;
+      setPokerState(snapshot);
+      if (profileRef.current)
+        save({ ...profileRef.current, balance: snapshot.balance });
+    });
     socket.on("disconnect", () => {
       setConnected(false);
       setPending(false);
@@ -136,6 +150,24 @@ export function useGame() {
         });
     });
   }, []);
+  const pokerCommand = useCallback((action: PokerCommand): Promise<boolean> => {
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      setError("La connexion au club est interrompue.");
+      return Promise.resolve(false);
+    }
+    setPending(true);
+    return new Promise((resolve) => {
+      socket
+        .timeout(6000)
+        .emit("poker:command", action, (timeout: Error | null, ack: Ack) => {
+          setPending(false);
+          if (timeout) setError("Le serveur Poker ne répond pas.");
+          else if (!ack.ok) setError(ack.error);
+          resolve(!timeout && ack?.ok);
+        });
+    });
+  }, []);
   const changeTable = (tableId: string) => {
     const socket = socketRef.current;
     if (!socket?.connected) {
@@ -168,12 +200,14 @@ export function useGame() {
     loaded,
     connected,
     state,
+    pokerState,
     playerId,
     error,
     pending,
     setError,
     register,
     command,
+    pokerCommand,
     changeTable,
   };
 }

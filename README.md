@@ -1,6 +1,6 @@
-# MINUIT · Blackjack entre amis
+# MINUIT · Casino multijoueur
 
-Blackjack européen multijoueur en crédits fictifs. Next.js **16.3.5**, React, TypeScript, **Bun**, Socket.IO. Aucune base de données.
+Blackjack européen et Texas Hold’em multijoueurs en crédits fictifs. Next.js **16.3.5**, React, TypeScript, **Bun**, Socket.IO. Aucune base de données.
 
 ## Lancer le jeu
 
@@ -24,6 +24,19 @@ Next.js recharge automatiquement les composants et le CSS. Après une modificati
 Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table=CODE`. Remplacer `localhost` dans le lien partagé par l’adresse IP du serveur. Le serveur écoute sur `0.0.0.0` par défaut. Pour simuler deux joueurs sur un ordinateur, utiliser deux profils de navigateur ou une fenêtre privée : deux onglets ordinaires partagent la même identité locale.
 
 ## Règles implémentées
+
+### Poker Texas Hold’em
+
+- **Cash Game public** à 2–5 joueurs avec matchmaking et placement automatiques. Limites 10/20, 50/100 et 250/500 ; buy-in réglable de 40 à 100 grosses blinds. Aucun rake.
+- **Spin & Play public** à 3 joueurs, buy-ins de 200 à 25 000 crédits, tapis de tournoi de 500 et blinds croissantes toutes les deux minutes. La roue serveur attribue un multiplicateur de ×2 à ×1 000 ; le dernier joueur remporte tout.
+- Règles No-Limit complètes : bouton et heads-up, relance minimale, all-in incomplet, pots secondaires, kickers, partages et jetons indivisibles.
+- Paquet neuf de 52 cartes mélangé cryptographiquement à chaque main. Burn cards, flop, turn et river standards. Toutes les mains encore actives sont révélées au showdown.
+- 25 secondes par décision en Cash Game et 15 secondes en Spin. Un joueur absent paie ses blinds puis check automatiquement si possible, sinon fold.
+- Les cartes privées sont retirées individuellement des snapshots envoyés aux adversaires. La reconnexion restaure table, siège et cartes.
+- Chat de table éphémère, limité à cinq messages en dix secondes et sans filtre lexical. Chaque client peut masquer localement un joueur.
+- Les dix dernières mains de la table conservent le board, le pot, les gagnants et uniquement les cartes révélées.
+
+### Blackjack européen
 
 - Sabot mélangé de **8 jeux** avec générateur aléatoire cryptographique ; renouvellement entre les manches lorsque le sabot devient court.
 - **Blackjack européen / ENHC** : le croupier ne reçoit initialement qu’une carte. Il reçoit sa deuxième carte après les joueurs et reste sur tous les 17, même souples.
@@ -82,21 +95,26 @@ bun run test
 bun run build
 # Serveur lancé dans un autre terminal :
 bun run test:multiplayer
+bun run test:poker-multiplayer
+bun run test:spin-multiplayer
 # Port personnalisé :
 TEST_URL=http://localhost:3001 bun run test:multiplayer
 # Avec Chromium Playwright installé :
 PLAYWRIGHT_BROWSERS_PATH=/tmp/minuit-browsers TEST_URL=http://localhost:3001 bun run test:ui
+PLAYWRIGHT_BROWSERS_PATH=/tmp/minuit-browsers TEST_URL=http://localhost:3001 bun run test:poker-ui
 ```
 
-Les tests du moteur couvrent les barèmes, le paiement anticipé des bonus, les crédits, ENHC, les as, doubles, séparations, délais et contrôles de propriété. Le test d’intégration joue une manche avec deux vrais clients WebSocket, trois places et une reconnexion.
+Les tests couvrent les deux moteurs, toutes les catégories de mains Poker, la confidentialité des cartes, les side pots, les règles d’enchères, les crédits, les délais et les contrôles de propriété. Les intégrations jouent une manche Blackjack, une main Cash Game et un Spin & Play complet avec de vrais clients WebSocket.
 
 ## Fichiers principaux
 
-- `server/engine.ts` : moteur et phases de jeu.
+- `server/engine.ts` : moteur et phases du Blackjack.
+- `server/poker.ts` : moteur Hold’em, matchmaking, files et tables Poker.
 - `server/index.ts` : serveur Bun/Next.js et protocole Socket.IO.
 - `src/lib/rules.ts` : valeurs des cartes et évaluation des paris annexes.
 - `src/lib/use-game.ts` : connexion, reconnexion et sauvegarde du profil.
-- `src/components/casino.tsx` : table, jetons, mains et commandes.
+- `src/components/casino.tsx` : shell du casino et table Blackjack.
+- `src/components/poker-casino.tsx` : accueil, lobby, table, chat et commandes Poker.
 - `src/app/globals.css` : styles, animations et adaptation mobile.
 
 `bun run format` formate le projet ; `bun run format:check` vérifie son formatage.
