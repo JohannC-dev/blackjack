@@ -334,6 +334,27 @@ export class PokerTable {
     this.deadline = entry ? now + ACTION_MS[this.mode] : null;
   }
 
+  private shouldRunoutAfterAllIn() {
+    const contenders = this.participants.filter(
+      (candidate) =>
+        candidate.status === "active" || candidate.status === "all-in",
+    );
+    return (
+      contenders.length === 2 &&
+      contenders.some((candidate) => candidate.status === "all-in")
+    );
+  }
+
+  private callAllInAmount() {
+    for (const entry of this.participants) {
+      if (entry.status !== "active") continue;
+      const toCall = Math.max(0, this.currentBet - entry.bet);
+      if (!toCall) continue;
+      const paid = this.commit(entry, toCall);
+      entry.lastAction = paid < toCall ? "All-in" : `Call ${paid}`;
+    }
+  }
+
   action(playerId: string, action: PokerAction, amount?: number) {
     const entry = this.find(playerId);
     if (entry.player.id !== this.activePlayerId)
@@ -402,6 +423,11 @@ export class PokerTable {
       this.awardUncontested(contenders[0]);
       return;
     }
+    if (this.shouldRunoutAfterAllIn()) {
+      this.callAllInAmount();
+      this.scheduleStreet();
+      return;
+    }
     const canAct = contenders.filter(
       (candidate) => candidate.status === "active",
     );
@@ -456,7 +482,7 @@ export class PokerTable {
     const active = this.participants.filter(
       (entry) => entry.status === "active",
     );
-    if (!active.length) {
+    if (!active.length || this.shouldRunoutAfterAllIn()) {
       this.scheduleStreet();
       return;
     }
@@ -691,7 +717,10 @@ export class PokerTable {
   }
 
   snapshot(viewerId: string): PokerTableState {
-    const reveal = this.phase === "showdown" || this.phase === "complete";
+    const reveal =
+      this.phase === "showdown" ||
+      this.phase === "complete" ||
+      (this.inHand() && this.shouldRunoutAfterAllIn());
     return {
       id: this.id,
       mode: this.mode,

@@ -217,6 +217,62 @@ describe("Poker table authority", () => {
     expect(table.community).toHaveLength(3);
   });
 
+  test("reveals and runs out automatically after a heads-up all-in", () => {
+    const table = new PokerTable("cash", 20, 10, 20, () => {});
+    const short = player("short");
+    const deep = player("deep");
+    table.add(short, 100);
+    table.add(deep, 200);
+    table.tick(Date.now() + 2_000);
+
+    let guard = 0;
+    while (
+      table.phase !== "showdown" &&
+      table.participants.find((entry) => entry.player.id === short.id)
+        ?.status !== "all-in" &&
+      guard++ < 4
+    ) {
+      const active = table.participants.find(
+        (entry) => entry.player.id === table.activePlayerId,
+      )!;
+      table.action(
+        active.player.id,
+        active.player.id === short.id
+          ? "all-in"
+          : table.currentBet > active.bet
+            ? "call"
+            : "check",
+      );
+    }
+
+    const shortEntry = table.participants.find(
+      (entry) => entry.player.id === short.id,
+    )!;
+    const deepEntry = table.participants.find(
+      (entry) => entry.player.id === deep.id,
+    )!;
+    expect(shortEntry.status).toBe("all-in");
+    expect(deepEntry.committed).toBeGreaterThanOrEqual(shortEntry.committed);
+    expect(table.activePlayerId).toBeNull();
+    expect(
+      table
+        .snapshot(deep.id)
+        .seats.find((seat) => seat.id === short.id)!
+        .cards.every((card) => !card.hidden),
+    ).toBe(true);
+
+    table.tick(Date.now() + 1_000);
+    expect(table.phase).toBe("flop");
+    expect(table.community).toHaveLength(3);
+    expect(table.activePlayerId).toBeNull();
+
+    guard = 0;
+    while (table.phase !== "showdown" && guard++ < 5)
+      table.tick(Date.now() + 1_000);
+    expect(table.phase).toBe("showdown");
+    expect(table.community).toHaveLength(5);
+  });
+
   test("rate limits table chat without filtering its contents", () => {
     const table = new PokerTable("cash", 20, 10, 20, () => {});
     const one = player("1");

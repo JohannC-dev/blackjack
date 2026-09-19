@@ -7620,6 +7620,28 @@ h1 > span:not(.live-tag) {
 .poker-action-zone.enabled {
   opacity: 1;
 }
+.poker-runout {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 16px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.poker-runout span {
+  color: var(--purple);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+.poker-runout b {
+  color: #d8c9ec;
+  font-size: 10px;
+}
 .poker-actions {
   min-height: 52px;
   display: grid;
@@ -7703,36 +7725,34 @@ h1 > span:not(.live-tag) {
 }
 .hand-result-banner {
   position: absolute;
-  top: 26px;
+  top: 30px;
   left: 50%;
   z-index: 14;
-  width: min(610px, calc(100% - 210px));
+  width: min(560px, calc(100% - 230px));
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 13px;
-  padding: 10px 14px 10px 10px;
+  gap: 14px;
+  padding: 8px 4px 11px;
   transform: translateX(-50%);
   color: #ead39a;
-  background: linear-gradient(90deg, #120e1ad9, #21172bd9, #120e1ad9);
-  border-top: 1px solid #ead39a75;
-  border-bottom: 1px solid #b79afa4d;
-  box-shadow: 0 18px 42px #08050c80;
-  backdrop-filter: blur(12px);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, #ead39a70, transparent) 1;
+  box-shadow: none;
+  text-shadow: 0 3px 12px #0b0610;
+  backdrop-filter: none;
   animation: poker-result-in 220ms var(--ease) both;
 }
 .result-medallion {
-  width: 38px;
-  height: 38px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
-  color: #24182e;
-  border-radius: 50%;
-  background: repeating-conic-gradient(#fff1bd 0deg 12deg, #b98b44 12deg 45deg);
-  box-shadow:
-    inset 0 0 0 5px #d8b46b,
-    inset 0 0 0 6px #fff0b0a6,
-    0 6px 15px #0008;
+  color: #ead39a;
+  background: transparent;
+  filter: drop-shadow(0 3px 7px #0a050d);
 }
 .hand-result-banner .result-copy {
   flex: 1;
@@ -7740,11 +7760,11 @@ h1 > span:not(.live-tag) {
 }
 .hand-result-banner .result-kicker {
   display: block;
-  margin-bottom: 3px;
-  color: #91879c;
+  margin-bottom: 4px;
+  color: #b5a9bd;
   font-size: 7px;
   font-weight: 750;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.19em;
 }
 .result-winners {
   display: flex;
@@ -7766,9 +7786,9 @@ h1 > span:not(.live-tag) {
   gap: 7px;
 }
 .hand-result-banner b {
-  color: var(--text);
+  color: #f4edf7;
   font-family: Georgia, serif;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
 }
 .hand-result-banner small {
@@ -7781,19 +7801,20 @@ h1 > span:not(.live-tag) {
 }
 .hand-result-banner strong {
   color: #ead39a;
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
 }
 .muck-hand {
-  min-height: 31px;
+  min-height: 26px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 10px;
-  color: #c7b7d8;
-  border: 1px solid #b79afa45;
-  border-radius: 999px;
-  background: #b79afa0d;
+  padding: 0 2px;
+  color: #cfc1da;
+  border: 0;
+  border-bottom: 1px solid #b79afa66;
+  border-radius: 0;
+  background: transparent;
   font-size: 8px;
   font-weight: 750;
   letter-spacing: 0.04em;
@@ -7801,8 +7822,8 @@ h1 > span:not(.live-tag) {
 }
 .muck-hand:hover:not(:disabled) {
   color: #f1e9f7;
-  border-color: #d4bef5;
-  background: #b79afa1a;
+  border-color: #ead39a;
+  background: transparent;
 }
 .muck-hand:disabled {
   cursor: default;
@@ -7905,9 +7926,18 @@ h1 > span:not(.live-tag) {
 }
 .poker-shell .poker-seat.acting .poker-player-card::after {
   top: 50%;
-  right: 6px;
+  right: 10px;
   z-index: 3;
+  min-width: 0;
+  height: auto;
+  padding: 0;
   transform: translateY(-50%);
+  color: #9e91ad;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  font-size: 8px;
+  letter-spacing: 0.04em;
 }
 
 /* Showdown: emphasize only the cards that explain the made hand. */
@@ -7949,104 +7979,76 @@ h1 > span:not(.live-tag) {
   box-shadow: 0 5px 14px #08050c99;
 }
 
-/* Poker uses the same top-down, inlaid chips as the blackjack rack. */
+/* Bets sit directly on the felt, using the exact blackjack chip language. */
 .poker-chip-stack {
   position: relative;
-  width: 50px;
-  height: 30px;
+  isolation: isolate;
+  width: 42px;
+  height: 42px;
   flex: 0 0 auto;
-  --chip-edge: #ded5ee;
-  --chip-base: #aaa0b7;
-  --chip-border: #dcd5e7;
-  --chip-shadow: #786d88;
-  filter: drop-shadow(0 5px 5px #09050d80);
+  display: grid;
+  place-items: center;
+  color: #f0ddff;
+  border-radius: 50%;
+  background: repeating-conic-gradient(#d4b0ff 0deg 12deg, #7547a0 12deg 45deg);
+  box-shadow:
+    0 3px 0 #422760,
+    0 6px 8px #0006;
+}
+.poker-chip-stack::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  z-index: -1;
+  border: 1px solid #dcc0f680;
+  border-radius: 50%;
+  background: radial-gradient(circle, #8151ab, #543372);
 }
 .poker-chip-stack > span {
-  position: absolute;
-  left: calc(var(--chip-level, 0) * 9px);
-  top: calc(var(--chip-level, 0) * -1px);
-  width: 29px;
-  height: 29px;
-  padding: 3px;
-  border: 1px solid var(--chip-border);
-  border-radius: 50%;
-  background: repeating-conic-gradient(
-    var(--chip-edge) 0deg 12deg,
-    var(--chip-base) 12deg 45deg
-  );
-  box-shadow:
-    0 2px 0 var(--chip-shadow),
-    0 4px 7px #0004;
-}
-.poker-chip-stack > span > i {
-  width: 100%;
-  height: 100%;
-  display: block;
-  border: 1px solid var(--chip-border);
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--chip-base), var(--chip-shadow));
-}
-.poker-chip-stack > span:nth-child(1) {
-  --chip-level: 0;
-}
-.poker-chip-stack > span:nth-child(2) {
-  --chip-level: 1;
-}
-.poker-chip-stack > span:nth-child(3) {
-  --chip-level: 2;
-}
-.poker-chip-25 {
-  --chip-edge: #d2b5ff;
-  --chip-base: #8c5ebe;
-  --chip-border: #c3a2e7;
-  --chip-shadow: #67418d;
-}
-.poker-chip-50 {
-  --chip-edge: #b7dce0;
-  --chip-base: #4e9299;
-  --chip-border: #7cbec6;
-  --chip-shadow: #34616a;
-}
-.poker-chip-100 {
-  --chip-edge: #e4c28b;
-  --chip-base: #af8550;
-  --chip-border: #daba8c;
-  --chip-shadow: #785638;
+  position: relative;
+  z-index: 1;
+  max-width: 30px;
+  overflow: hidden;
+  color: inherit;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
 }
 .pot-display {
-  top: -59px;
-  align-items: center;
-  gap: 9px;
-  min-height: 45px;
-  padding: 6px 11px 6px 8px;
-  backdrop-filter: blur(7px);
-}
-.pot-display > div:last-child {
-  display: flex;
+  top: -70px;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
+  align-items: center;
+  gap: 5px;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 .pot-display .pot-chips {
-  transform: scale(1.04);
+  width: 46px;
+  height: 46px;
 }
 .seat-bet {
-  top: -31px;
+  top: -39px;
   z-index: 9;
-  min-width: 74px;
-  min-height: 34px;
+  min-width: 0;
+  min-height: 0;
   justify-content: center;
-  gap: 1px;
-  padding: 2px 6px 2px 3px;
-  background: #150f1ce8;
-  border: 1px solid #b79afa33;
-  box-shadow: 0 7px 14px #08050c70;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
-.seat-bet b {
-  min-width: 23px;
-  color: #ead39a;
+.seat-bet .bet-chips {
+  width: 36px;
+  height: 36px;
+}
+.seat-bet .bet-chips > span {
   font-size: 9px;
-  font-variant-numeric: tabular-nums;
 }
 
 @keyframes winning-card-glow {

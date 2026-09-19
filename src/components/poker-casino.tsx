@@ -522,6 +522,14 @@ function PokerTable({ game }: { game: Game }) {
     ? Math.max(0, Math.ceil((table.deadline - now) / 1000))
     : 0;
   const myTurn = table.activePlayerId === game.playerId;
+  const allInContenders = table.seats.filter(
+    (seat) => seat.status === "active" || seat.status === "all-in",
+  );
+  const allInRunout =
+    !table.activePlayerId &&
+    ["preflop", "flop", "turn", "river"].includes(table.phase) &&
+    allInContenders.length === 2 &&
+    allInContenders.some((seat) => seat.status === "all-in");
   const positions = table.mode === "spin" ? THREE_POSITIONS : FIVE_POSITIONS;
   const totalSeats = table.mode === "spin" ? 3 : 5;
   const dealDelays = useMemo(() => {
@@ -668,11 +676,8 @@ function PokerTable({ game }: { game: Game }) {
                 ),
               )}
               <div className="pot-display">
+                <span>POT TOTAL</span>
                 <PokerChipStack amount={table.pot} pot />
-                <div>
-                  <span>POT TOTAL</span>
-                  <b>{credits(table.pot)} cr.</b>
-                </div>
               </div>
             </div>
             {seatSlots.map((seat, index) => (
@@ -769,7 +774,13 @@ function PokerTable({ game }: { game: Game }) {
           <div className="poker-status">
             <span className={myTurn ? "active" : ""} />
             <div>
-              <b>{myTurn ? "YOUR TURN" : table.message}</b>
+              <b>
+                {myTurn
+                  ? "YOUR TURN"
+                  : allInRunout
+                    ? "ALL-IN · RÉVÉLATION"
+                    : table.message}
+              </b>
               <small>
                 {table.phase === "waiting"
                   ? "La prochaine hand démarre dès qu’un adversaire arrive."
@@ -794,89 +805,105 @@ function PokerTable({ game }: { game: Game }) {
             )}
           </div>
           <div className={`poker-action-zone ${myTurn ? "enabled" : ""}`}>
-            <div className="poker-actions">
-              <button
-                disabled={!myTurn || game.pending}
-                onClick={() => sendAction("fold")}
-                className="fold"
-              >
-                Fold
-              </button>
-              <button
-                disabled={!myTurn || game.pending}
-                onClick={() => sendAction(toCall ? "call" : "check")}
-              >
-                <span>{toCall ? "Call" : "Check"}</span>
-                {!!toCall && (
-                  <small>{credits(Math.min(toCall, me?.stack ?? 0))} cr.</small>
-                )}
-              </button>
-              <button
-                type="button"
-                disabled={
-                  !myTurn || game.pending || maximum <= table.currentBet
-                }
-                onClick={() => setRaiseOpen(!raiseOpen)}
-                className="raise"
-                aria-expanded={raiseOpen}
-              >
-                {table.currentBet ? "Raise" : "Bet"}
-              </button>
-            </div>
-            {raiseOpen && (
-              <div className="raise-drawer">
-                <div className="raise-presets">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setRaiseTo(
-                        Math.min(
-                          maximum,
-                          Math.max(minimumRaise, Math.round(table.pot / 2)),
-                        ),
-                      )
-                    }
-                  >
-                    ½ pot
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setRaiseTo(
-                        Math.min(maximum, Math.max(minimumRaise, table.pot)),
-                      )
-                    }
-                  >
-                    Pot
-                  </button>
-                  <button type="button" onClick={() => setRaiseTo(maximum)}>
-                    All-in
-                  </button>
-                </div>
-                <div className="raise-slider">
-                  <span>TOTAL BET</span>
-                  <input
-                    aria-label="Total raise amount"
-                    type="range"
-                    min={Math.min(minimumRaise, maximum)}
-                    max={maximum}
-                    value={raiseTo || 0}
-                    onChange={(event) => setRaiseTo(Number(event.target.value))}
-                  />
-                  <b>{credits(raiseTo)} cr.</b>
-                </div>
-                <button
-                  type="button"
-                  className="raise-confirm"
-                  onClick={() =>
-                    raiseTo >= maximum
-                      ? sendAction("all-in")
-                      : sendAction("raise", raiseTo)
-                  }
-                >
-                  {raiseTo >= maximum ? "Confirm all-in" : "Confirm raise"}
-                </button>
+            {allInRunout ? (
+              <div className="poker-runout" role="status">
+                <span>ALL-IN</span>
+                <b>Les cartes se révèlent…</b>
               </div>
+            ) : (
+              <>
+                <div className="poker-actions">
+                  <button
+                    disabled={!myTurn || game.pending}
+                    onClick={() => sendAction("fold")}
+                    className="fold"
+                  >
+                    Fold
+                  </button>
+                  <button
+                    disabled={!myTurn || game.pending}
+                    onClick={() => sendAction(toCall ? "call" : "check")}
+                  >
+                    <span>{toCall ? "Call" : "Check"}</span>
+                    {!!toCall && (
+                      <small>
+                        {credits(Math.min(toCall, me?.stack ?? 0))} cr.
+                      </small>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      !myTurn || game.pending || maximum <= table.currentBet
+                    }
+                    onClick={() => setRaiseOpen(!raiseOpen)}
+                    className="raise"
+                    aria-expanded={raiseOpen}
+                  >
+                    {table.currentBet ? "Raise" : "Bet"}
+                  </button>
+                </div>
+                {raiseOpen && (
+                  <div className="raise-drawer">
+                    <div className="raise-presets">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRaiseTo(
+                            Math.min(
+                              maximum,
+                              Math.max(minimumRaise, Math.round(table.pot / 2)),
+                            ),
+                          )
+                        }
+                      >
+                        ½ pot
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRaiseTo(
+                            Math.min(
+                              maximum,
+                              Math.max(minimumRaise, table.pot),
+                            ),
+                          )
+                        }
+                      >
+                        Pot
+                      </button>
+                      <button type="button" onClick={() => setRaiseTo(maximum)}>
+                        All-in
+                      </button>
+                    </div>
+                    <div className="raise-slider">
+                      <span>TOTAL BET</span>
+                      <input
+                        aria-label="Total raise amount"
+                        type="range"
+                        min={Math.min(minimumRaise, maximum)}
+                        max={maximum}
+                        value={raiseTo || 0}
+                        onChange={(event) =>
+                          setRaiseTo(Number(event.target.value))
+                        }
+                      />
+                      <b>{credits(raiseTo)} cr.</b>
+                    </div>
+                    <button
+                      type="button"
+                      className="raise-confirm"
+                      onClick={() =>
+                        raiseTo >= maximum
+                          ? sendAction("all-in")
+                          : sendAction("raise", raiseTo)
+                      }
+                    >
+                      {raiseTo >= maximum ? "Confirm all-in" : "Confirm raise"}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </section>
@@ -984,22 +1011,13 @@ function PokerChipStack({
   amount: number;
   pot?: boolean;
 }) {
-  const tone = amount >= 100 ? 100 : amount >= 50 ? 50 : amount >= 25 ? 25 : 5;
   return (
     <div
-      className={`poker-chip-stack poker-chip-${tone} ${pot ? "pot-chips" : "bet-chips"}`}
+      className={`poker-chip-stack ${pot ? "pot-chips" : "bet-chips"}`}
       role="img"
       aria-label={`${credits(amount)} crédits en jetons`}
     >
-      <span>
-        <i />
-      </span>
-      <span>
-        <i />
-      </span>
-      <span>
-        <i />
-      </span>
+      <span>{credits(amount)}</span>
     </div>
   );
 }
@@ -1060,7 +1078,7 @@ function PokerSeatView({
       <div className="poker-hole-cards">
         {seat.cards.map((card, index) => (
           <PlayingCard
-            key={card.id}
+            key={`${card.id}-${card.hidden ? "hidden" : "revealed"}`}
             card={card}
             back={!!card.hidden}
             index={index}
@@ -1073,7 +1091,6 @@ function PokerSeatView({
       {!!seat.bet && (
         <div className="seat-bet">
           <PokerChipStack amount={seat.bet} />
-          <b>{credits(seat.bet)}</b>
         </div>
       )}
       {seat.seat === table.button && <span className="dealer-button">D</span>}
