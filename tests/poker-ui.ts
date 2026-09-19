@@ -74,14 +74,36 @@ try {
     communitySlots: document.querySelectorAll(
       ".community-cards > .community-placeholder",
     ).length,
-    chat: !!document.querySelector(".poker-chat"),
+    chatClosedByDefault: !document.querySelector(".poker-chat"),
+    primaryActions: document.querySelectorAll(".poker-actions > button").length,
+    raiseClosedByDefault: !document.querySelector(".raise-drawer"),
+    handSummary: document.querySelector(".poker-hand-summary")?.textContent,
+    seatTimer: document
+      .querySelector(".poker-seat.acting .poker-player-card")
+      ?.getAttribute("data-turn-seconds"),
+    duplicateStatusTimer: !!document.querySelector(".poker-status > strong"),
     overflow: document.documentElement.scrollWidth > window.innerWidth,
   }));
   if (result.seats !== 2)
     throw new Error(`Deux sièges attendus, reçu ${result.seats}`);
   if (result.communitySlots !== 5)
     throw new Error("Le board doit afficher cinq emplacements");
-  if (!result.chat) throw new Error("Le chat de table est absent");
+  if (!result.chatClosedByDefault)
+    throw new Error("Le chat doit être fermé par défaut");
+  if (result.primaryActions !== 3)
+    throw new Error(`Trois actions attendues, reçu ${result.primaryActions}`);
+  if (!result.raiseClosedByDefault)
+    throw new Error("Le réglage de relance doit être fermé par défaut");
+  if (!result.handSummary?.includes("VOTRE TAPIS"))
+    throw new Error("Le tapis du joueur doit être clairement visible");
+  if (!result.seatTimer?.endsWith("s"))
+    throw new Error("Le temps de parole doit apparaître sur le siège actif");
+  if (result.duplicateStatusTimer)
+    throw new Error(
+      "Le temps de parole ne doit plus être dupliqué sous la table",
+    );
+  await page.getByRole("button", { name: "Ouvrir la discussion" }).click();
+  await page.getByRole("dialog", { name: "Discussion" }).waitFor();
   if (result.overflow)
     throw new Error("La table Poker déborde horizontalement sur desktop");
   console.log(JSON.stringify(result));

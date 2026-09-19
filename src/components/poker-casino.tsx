@@ -6,7 +6,6 @@ import {
   Check,
   ChevronRight,
   CircleDollarSign,
-  Clock3,
   Coins,
   House,
   Layers2,
@@ -31,7 +30,7 @@ import {
   type CSSProperties,
   type FormEvent,
 } from "react";
-import { credits } from "@/lib/rules";
+import { credits, describePokerHolding } from "@/lib/rules";
 import type { PokerAction, PokerMode, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import type { CasinoView } from "./casino";
@@ -64,6 +63,77 @@ const THREE_POSITIONS = [
   { x: 50, y: 77 },
   { x: 85, y: 61 },
 ];
+
+type PokerSoundEffect = "card" | "chips" | "turn" | "win" | "wheel";
+
+function playPokerSound(
+  context: AudioContext,
+  effect: PokerSoundEffect,
+  count = 1,
+) {
+  const noise = (
+    delay: number,
+    duration: number,
+    frequency: number,
+    volume: number,
+    filterType: BiquadFilterType,
+  ) => {
+    const sampleRate = context.sampleRate;
+    const buffer = context.createBuffer(
+      1,
+      Math.ceil(sampleRate * duration),
+      sampleRate,
+    );
+    const data = buffer.getChannelData(0);
+    for (let index = 0; index < data.length; index++) {
+      const envelope = 1 - index / data.length;
+      data[index] = (Math.random() * 2 - 1) * envelope;
+    }
+    const source = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+    const startsAt = context.currentTime + delay;
+    source.buffer = buffer;
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(frequency, startsAt);
+    filter.Q.setValueAtTime(filterType === "bandpass" ? 5 : 0.7, startsAt);
+    gain.gain.setValueAtTime(volume, startsAt);
+    gain.gain.exponentialRampToValueAtTime(0.001, startsAt + duration);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(context.destination);
+    source.start(startsAt);
+    source.stop(startsAt + duration);
+  };
+
+  if (effect === "card") {
+    for (let index = 0; index < count; index++) {
+      const delay = index * 0.075;
+      noise(delay, 0.105, 1_700, 0.12, "lowpass");
+      noise(delay + 0.018, 0.035, 3_600, 0.045, "highpass");
+    }
+    return;
+  }
+  if (effect === "chips" || effect === "win") {
+    const hits = effect === "win" ? 7 : 3;
+    for (let index = 0; index < hits; index++)
+      noise(
+        index * 0.045,
+        0.045,
+        2_200 + (index % 3) * 620,
+        effect === "win" ? 0.055 : 0.04,
+        "bandpass",
+      );
+    return;
+  }
+  if (effect === "wheel") {
+    for (let index = 0; index < 11; index++)
+      noise(index * 0.055, 0.035, 1_400 + index * 130, 0.035, "bandpass");
+    return;
+  }
+  noise(0, 0.075, 850, 0.07, "lowpass");
+  noise(0.055, 0.055, 1_450, 0.04, "bandpass");
+}
 
 function CasinoRail({
   active,
@@ -505,11 +575,11 @@ function PokerTable({ game }: { game: Game }) {
   const me = table.seats.find((seat) => seat.id === game.playerId);
   const [now, setNow] = useState(Date.now());
   const [raiseTo, setRaiseTo] = useState(0);
+  const [raiseOpen, setRaiseOpen] = useState(false);
   const [chat, setChat] = useState("");
   const [blocked, setBlocked] = useState<string[]>([]);
-  const [chatOpen, setChatOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
   const [sound, setSound] = useState(false);
-  const previousHand = useRef(table.hand);
   const audioRef = useRef<AudioContext | null>(null);
   const previousAudioState = useRef({
     hand: table.hand,
@@ -517,6 +587,7 @@ function PokerTable({ game }: { game: Game }) {
     active: table.activePlayerId,
     phase: table.phase,
     wheel: table.wheelSpinning,
+    pot: table.pot,
   });
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 250);
@@ -530,8 +601,16 @@ function PokerTable({ game }: { game: Game }) {
     [minimumRaise, maximum, table.bigBlind],
   );
   useEffect(() => {
-    previousHand.current = table.hand;
-  }, [table.hand]);
+    setRaiseOpen(false);
+  }, [table.activePlayerId, table.phase]);
+  useEffect(() => {
+    if (!chatOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setChatOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [chatOpen]);
   useEffect(() => {
     const previous = previousAudioState.current;
     previousAudioState.current = {
@@ -540,34 +619,26 @@ function PokerTable({ game }: { game: Game }) {
       active: table.activePlayerId,
       phase: table.phase,
       wheel: table.wheelSpinning,
+      pot: table.pot,
     };
     const context = audioRef.current;
     if (!sound || !context) return;
-    const tone = (frequency: number, duration = 0.08) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(frequency, context.currentTime);
-      gain.gain.setValueAtTime(0.035, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(
-        0.001,
-        context.currentTime + duration,
-      );
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start();
-      oscillator.stop(context.currentTime + duration);
-    };
-    if (table.wheelSpinning && !previous.wheel) tone(220, 0.35);
-    else if (table.phase === "complete" && previous.phase !== "complete")
-      tone(760, 0.4);
-    else if (table.community.length > previous.cards) tone(520);
-    else if (table.hand > previous.hand) tone(340);
-    else if (
+    if (table.wheelSpinning && !previous.wheel)
+      playPokerSound(context, "wheel");
+    if (
+      (table.phase === "showdown" || table.phase === "complete") &&
+      table.phase !== previous.phase
+    )
+      playPokerSound(context, "win");
+    else if (table.community.length > previous.cards)
+      playPokerSound(context, "card", table.community.length - previous.cards);
+    else if (table.hand > previous.hand) playPokerSound(context, "card", 2);
+    else if (table.pot > previous.pot) playPokerSound(context, "chips");
+    if (
       table.activePlayerId === game.playerId &&
       previous.active !== game.playerId
     )
-      tone(660, 0.14);
+      playPokerSound(context, "turn");
   }, [
     game.playerId,
     sound,
@@ -575,6 +646,7 @@ function PokerTable({ game }: { game: Game }) {
     table.community.length,
     table.hand,
     table.phase,
+    table.pot,
     table.wheelSpinning,
   ]);
   const seconds = table.deadline
@@ -583,8 +655,10 @@ function PokerTable({ game }: { game: Game }) {
   const myTurn = table.activePlayerId === game.playerId;
   const positions = table.mode === "spin" ? THREE_POSITIONS : FIVE_POSITIONS;
   const totalSeats = table.mode === "spin" ? 3 : 5;
-  const sendAction = (action: PokerAction, amount?: number) =>
-    game.pokerCommand({ type: "action", action, amount });
+  const sendAction = (action: PokerAction, amount?: number) => {
+    setRaiseOpen(false);
+    return game.pokerCommand({ type: "action", action, amount });
+  };
   const submitChat = (event: FormEvent) => {
     event.preventDefault();
     if (!chat.trim()) return;
@@ -595,6 +669,10 @@ function PokerTable({ game }: { game: Game }) {
   const seatSlots = Array.from({ length: totalSeats }, (_, seat) =>
     table.seats.find((entry) => entry.seat === seat),
   );
+  const handResult = table.history.find((item) => item.hand === table.hand);
+  const handLabel = me
+    ? (describePokerHolding(me.cards, table.community) ?? me.handLabel)
+    : undefined;
   return (
     <main className="poker-table-page">
       <div className="poker-table-heading">
@@ -617,6 +695,17 @@ function PokerTable({ game }: { game: Game }) {
         </div>
         <button
           type="button"
+          className="poker-chat-launch"
+          aria-label="Ouvrir la discussion"
+          aria-haspopup="dialog"
+          onClick={() => setChatOpen(true)}
+        >
+          <MessageCircle size={15} />
+          <span>Chat</span>
+          {!!table.chat.length && <b>{table.chat.length}</b>}
+        </button>
+        <button
+          type="button"
           className={`poker-sound ${sound ? "active" : ""}`}
           aria-label={
             sound ? "Couper les sons Poker" : "Activer les sons Poker"
@@ -633,7 +722,7 @@ function PokerTable({ game }: { game: Game }) {
           <Users size={16} /> {table.seats.length} / {totalSeats}
         </div>
       </div>
-      <div className={`poker-room-layout ${chatOpen ? "chat-visible" : ""}`}>
+      <div className="poker-room-layout">
         <section className="poker-table-panel">
           <div className="poker-felt">
             <div className="poker-rail-line" />
@@ -669,6 +758,7 @@ function PokerTable({ game }: { game: Game }) {
                 position={positions[index]}
                 table={table}
                 playerId={game.playerId}
+                turnSeconds={seconds}
               />
             ))}
             {table.wheelSpinning && (
@@ -682,6 +772,23 @@ function PokerTable({ game }: { game: Game }) {
                   <strong>×{table.wheelMultiplier}</strong>
                 </div>
                 <p>Le prix de la nuit…</p>
+              </div>
+            )}
+            {table.phase === "showdown" && handResult && (
+              <div className="hand-result-banner" role="status">
+                <Trophy size={20} />
+                <div>
+                  <span>
+                    RÉSULTAT · MAIN {String(table.hand).padStart(3, "0")}
+                  </span>
+                  {handResult.winners.map((winner) => (
+                    <p key={`${winner.name}-${winner.amount}`}>
+                      <b>{winner.name}</b>
+                      <small>{winner.label}</small>
+                      <strong>+{credits(winner.amount)} cr.</strong>
+                    </p>
+                  ))}
+                </div>
               </div>
             )}
             {table.phase === "complete" && (
@@ -724,169 +831,203 @@ function PokerTable({ game }: { game: Game }) {
                   : `${table.phase.toUpperCase()} · Main ${String(table.hand).padStart(3, "0")}`}
               </small>
             </div>
-            {table.deadline && (
-              <strong>
-                <Clock3 size={14} /> {seconds}s
-              </strong>
+          </div>
+          <div className="poker-hand-summary">
+            <div>
+              <span>VOTRE MAIN</span>
+              <b>{handLabel ?? "En attente des cartes"}</b>
+            </div>
+            <div>
+              <span>VOTRE TAPIS</span>
+              <b>{credits(me?.stack ?? 0)} cr.</b>
+            </div>
+            {!!me?.bet && (
+              <div>
+                <span>ENGAGÉ CE TOUR</span>
+                <b>{credits(me.bet)} cr.</b>
+              </div>
             )}
           </div>
-          <div className={`poker-actions ${myTurn ? "enabled" : ""}`}>
-            <button
-              disabled={!myTurn || game.pending}
-              onClick={() => sendAction("fold")}
-              className="fold"
-            >
-              Fold
-            </button>
-            <button
-              disabled={!myTurn || game.pending || !!toCall}
-              onClick={() => sendAction("check")}
-            >
-              Check
-            </button>
-            <button
-              disabled={!myTurn || game.pending || !toCall}
-              onClick={() => sendAction("call")}
-            >
-              <span>Call</span>
-              <small>{credits(Math.min(toCall, me?.stack ?? 0))}</small>
-            </button>
-            <div className="raise-control">
-              <div>
+          <div className={`poker-action-zone ${myTurn ? "enabled" : ""}`}>
+            <div className="poker-actions">
+              <button
+                disabled={!myTurn || game.pending}
+                onClick={() => sendAction("fold")}
+                className="fold"
+              >
+                Fold
+              </button>
+              <button
+                disabled={!myTurn || game.pending}
+                onClick={() => sendAction(toCall ? "call" : "check")}
+              >
+                <span>{toCall ? "Call" : "Check"}</span>
+                {!!toCall && (
+                  <small>{credits(Math.min(toCall, me?.stack ?? 0))} cr.</small>
+                )}
+              </button>
+              <button
+                type="button"
+                disabled={
+                  !myTurn || game.pending || maximum <= table.currentBet
+                }
+                onClick={() => setRaiseOpen(!raiseOpen)}
+                className="raise"
+                aria-expanded={raiseOpen}
+              >
+                {table.currentBet ? "Raise" : "Miser"}
+              </button>
+            </div>
+            {raiseOpen && (
+              <div className="raise-drawer">
+                <div className="raise-presets">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRaiseTo(
+                        Math.min(
+                          maximum,
+                          Math.max(minimumRaise, Math.round(table.pot / 2)),
+                        ),
+                      )
+                    }
+                  >
+                    ½ pot
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRaiseTo(
+                        Math.min(maximum, Math.max(minimumRaise, table.pot)),
+                      )
+                    }
+                  >
+                    Pot
+                  </button>
+                  <button type="button" onClick={() => setRaiseTo(maximum)}>
+                    All-in
+                  </button>
+                </div>
+                <div className="raise-slider">
+                  <span>MISE TOTALE</span>
+                  <input
+                    aria-label="Montant total de la relance"
+                    type="range"
+                    min={Math.min(minimumRaise, maximum)}
+                    max={maximum}
+                    value={raiseTo || 0}
+                    onChange={(event) => setRaiseTo(Number(event.target.value))}
+                  />
+                  <b>{credits(raiseTo)} cr.</b>
+                </div>
                 <button
                   type="button"
+                  className="raise-confirm"
                   onClick={() =>
-                    setRaiseTo(
-                      Math.min(
-                        maximum,
-                        Math.max(minimumRaise, Math.round(table.pot / 2)),
-                      ),
-                    )
+                    raiseTo >= maximum
+                      ? sendAction("all-in")
+                      : sendAction("raise", raiseTo)
                   }
                 >
-                  ½
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setRaiseTo(
-                      Math.min(maximum, Math.max(minimumRaise, table.pot)),
-                    )
-                  }
-                >
-                  Pot
-                </button>
-                <button type="button" onClick={() => setRaiseTo(maximum)}>
-                  All-in
+                  Confirmer {raiseTo >= maximum ? "le all-in" : "la relance"}
                 </button>
               </div>
-              <input
-                type="range"
-                min={Math.min(minimumRaise, maximum)}
-                max={Math.max(minimumRaise, maximum)}
-                value={raiseTo || 0}
-                onChange={(event) => setRaiseTo(Number(event.target.value))}
-                disabled={!myTurn || maximum <= table.currentBet}
-              />
-            </div>
-            <button
-              disabled={!myTurn || game.pending || maximum <= table.currentBet}
-              onClick={() =>
-                raiseTo >= maximum
-                  ? sendAction("all-in")
-                  : sendAction("raise", raiseTo)
-              }
-              className="raise"
-            >
-              <span>
-                {raiseTo >= maximum
-                  ? "All-in"
-                  : table.currentBet
-                    ? "Raise"
-                    : "Miser"}
-              </span>
-              <small>{credits(raiseTo)}</small>
-            </button>
+            )}
           </div>
         </section>
-        <aside className={`poker-chat ${chatOpen ? "open" : ""}`}>
-          <button
-            className="chat-toggle"
-            onClick={() => setChatOpen(!chatOpen)}
+      </div>
+      {chatOpen && (
+        <div
+          className="poker-chat-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setChatOpen(false);
+          }}
+        >
+          <aside
+            className="poker-chat"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="poker-chat-title"
           >
-            <MessageCircle size={17} /> Discussion
-          </button>
-          <div className="chat-heading">
-            <div>
-              <MessageCircle size={17} />
-              <span>
-                <b>Discussion</b>
-                <small>Table uniquement</small>
-              </span>
+            <div className="chat-heading">
+              <div>
+                <MessageCircle size={17} />
+                <span>
+                  <b id="poker-chat-title">Discussion</b>
+                  <small>Table uniquement</small>
+                </span>
+              </div>
+              <button
+                aria-label="Fermer la discussion"
+                onClick={() => setChatOpen(false)}
+              >
+                <X size={15} />
+              </button>
             </div>
-            <button onClick={() => setChatOpen(false)}>
-              <X size={15} />
-            </button>
-          </div>
-          <div className="chat-messages">
-            {table.chat
-              .filter((message) => !blocked.includes(message.playerId))
-              .map((message) => (
-                <button
-                  key={message.id}
-                  onDoubleClick={() =>
-                    message.playerId !== game.playerId &&
-                    setBlocked([...blocked, message.playerId])
-                  }
-                  title="Double-cliquez pour masquer ce joueur"
-                >
-                  <span>{message.name}</span>
-                  <p>{message.text}</p>
-                </button>
-              ))}
-            {!table.chat.length && (
-              <div className="chat-empty">
-                <MessageCircle size={25} />
-                <p>
-                  La table est silencieuse.
-                  <br />
-                  Brisez la glace.
-                </p>
+            <div className="chat-messages">
+              {table.chat
+                .filter((message) => !blocked.includes(message.playerId))
+                .map((message) => (
+                  <button
+                    key={message.id}
+                    onDoubleClick={() =>
+                      message.playerId !== game.playerId &&
+                      setBlocked([...blocked, message.playerId])
+                    }
+                    title="Double-cliquez pour masquer ce joueur"
+                  >
+                    <span>{message.name}</span>
+                    <p>{message.text}</p>
+                  </button>
+                ))}
+              {!table.chat.length && (
+                <div className="chat-empty">
+                  <MessageCircle size={25} />
+                  <p>
+                    La table est silencieuse.
+                    <br />
+                    Brisez la glace.
+                  </p>
+                </div>
+              )}
+            </div>
+            <form onSubmit={submitChat}>
+              <input
+                autoFocus
+                value={chat}
+                onChange={(event) => setChat(event.target.value)}
+                maxLength={240}
+                placeholder="Votre message…"
+              />
+              <button
+                aria-label="Envoyer le message"
+                disabled={!chat.trim() || game.pending}
+              >
+                <Send size={16} />
+              </button>
+            </form>
+            <p className="chat-note">
+              Double-cliquez sur un message pour masquer son auteur.
+            </p>
+            {!!table.history.length && (
+              <div className="table-history-mini">
+                <span>DERNIÈRES MAINS</span>
+                {table.history.slice(0, 3).map((item) => (
+                  <div key={item.hand}>
+                    <b>#{String(item.hand).padStart(3, "0")}</b>
+                    <p>
+                      {item.winners
+                        .map((winner) => `${winner.name} · ${winner.label}`)
+                        .join(", ")}
+                    </p>
+                    <strong>{credits(item.pot)}</strong>
+                  </div>
+                ))}
               </div>
             )}
-          </div>
-          <form onSubmit={submitChat}>
-            <input
-              value={chat}
-              onChange={(event) => setChat(event.target.value)}
-              maxLength={240}
-              placeholder="Votre message…"
-            />
-            <button disabled={!chat.trim() || game.pending}>
-              <Send size={16} />
-            </button>
-          </form>
-          <p className="chat-note">
-            Double-cliquez sur un message pour masquer son auteur.
-          </p>
-          {!!table.history.length && (
-            <div className="table-history-mini">
-              <span>DERNIÈRES MAINS</span>
-              {table.history.slice(0, 3).map((item) => (
-                <div key={item.hand}>
-                  <b>#{String(item.hand).padStart(3, "0")}</b>
-                  <p>
-                    {item.winners
-                      .map((winner) => `${winner.name} · ${winner.label}`)
-                      .join(", ")}
-                  </p>
-                  <strong>{credits(item.pot)}</strong>
-                </div>
-              ))}
-            </div>
-          )}
-        </aside>
-      </div>
+          </aside>
+        </div>
+      )}
     </main>
   );
 }
@@ -896,11 +1037,13 @@ function PokerSeatView({
   position,
   table,
   playerId,
+  turnSeconds,
 }: {
   seat?: PokerSeat;
   position: { x: number; y: number };
   table: NonNullable<NonNullable<Game["pokerState"]>["table"]>;
   playerId: string;
+  turnSeconds: number;
 }) {
   if (!seat)
     return (
@@ -921,13 +1064,18 @@ function PokerSeatView({
     );
   const mine = seat.id === playerId;
   const active = table.activePlayerId === seat.id;
+  const turnDuration = table.mode === "spin" ? 15 : 25;
+  const turnProgress = active
+    ? Math.max(0, Math.min(1, turnSeconds / turnDuration))
+    : 0;
   return (
     <div
-      className={`poker-seat occupied ${mine ? "mine" : ""} ${active ? "active" : ""} ${seat.status}`}
+      className={`poker-seat occupied ${mine ? "mine" : ""} ${active ? "acting" : ""} ${seat.status}`}
       style={
         {
           "--seat-x": `${position.x}%`,
           "--seat-y": `${position.y}%`,
+          "--turn-progress": `${turnProgress * 360}deg`,
         } as CSSProperties
       }
     >
@@ -954,7 +1102,10 @@ function PokerSeatView({
       {seat.seat === table.bigBlindSeat && (
         <span className="blind-badge bb">BB</span>
       )}
-      <div className="poker-player-card">
+      <div
+        className="poker-player-card"
+        data-turn-seconds={active ? `${turnSeconds}s` : undefined}
+      >
         <span className="avatar tiny">
           {seat.name.slice(0, 1).toUpperCase()}
         </span>
@@ -963,7 +1114,9 @@ function PokerSeatView({
             {seat.name}
             {mine ? " · Vous" : ""}
           </b>
-          <strong>{credits(seat.stack)} cr.</strong>
+          <strong>
+            <small>Tapis</small> {credits(seat.stack)} cr.
+          </strong>
         </div>
         {!seat.connected && <i className="offline-dot" />}
       </div>

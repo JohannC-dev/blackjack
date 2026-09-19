@@ -84,6 +84,15 @@ try {
   let guard = 0;
   while (alice.poker?.table?.phase !== "showdown" && guard++ < 20) {
     const table = alice.poker!.table!;
+    if (!table.activePlayerId) {
+      await until(
+        () =>
+          alice.poker?.table?.phase === "showdown" ||
+          !!alice.poker?.table?.activePlayerId,
+        "Le croupier ne distribue pas la street suivante",
+      );
+      continue;
+    }
     const active = table.activePlayerId === alice.id ? alice : bob;
     const seat = table.seats.find(
       (entry) => entry.id === table.activePlayerId,
@@ -110,8 +119,15 @@ try {
     ),
     "Le showdown doit révéler toutes les mains actives",
   );
+  await command(alice, { type: "leave" });
+  await until(
+    () =>
+      alice.poker?.status === "lobby" &&
+      !bob.poker?.table?.seats.some((seat) => seat.id === alice.id),
+    "Quitter doit renvoyer au lobby et retirer le siège chez les adversaires",
+  );
   console.log(
-    "PASS: matchmaking cash, portefeuille, confidentialité, chat et main Hold’em complète à deux clients.",
+    "PASS: matchmaking cash, portefeuille, confidentialité, chat, showdown et départ synchronisé.",
   );
 } finally {
   sockets.forEach((socket) => socket.disconnect());

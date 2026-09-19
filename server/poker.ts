@@ -12,6 +12,14 @@ import type {
   PokerTableState,
   Suit,
 } from "../src/lib/types";
+import {
+  comparePokerScore,
+  describePokerHand,
+  describePokerHolding,
+  evaluatePokerHand,
+} from "../src/lib/rules";
+
+export { evaluatePokerHand } from "../src/lib/rules";
 
 export const CASH_LIMITS = new Map([
   [20, { smallBlind: 10, bigBlind: 20 }],
@@ -31,7 +39,6 @@ const SPIN_LEVELS = [
 ] as const;
 const ACTION_MS = { cash: 25_000, spin: 15_000 } as const;
 
-type HandValue = { score: number[]; label: string };
 type Participant = {
   player: Player;
   seat: number;
@@ -46,94 +53,6 @@ type Participant = {
   pendingLeave: boolean;
   chatJoinedAt: number;
 };
-
-function compareScore(a: number[], b: number[]) {
-  for (let index = 0; index < Math.max(a.length, b.length); index++) {
-    const difference = (a[index] ?? 0) - (b[index] ?? 0);
-    if (difference) return difference;
-  }
-  return 0;
-}
-
-function fiveCardValue(cards: Card[]): HandValue {
-  const ranks = cards.map((card) => (card.rank === 1 ? 14 : card.rank));
-  const counts = new Map<number, number>();
-  for (const rank of ranks) counts.set(rank, (counts.get(rank) ?? 0) + 1);
-  const groups = [...counts.entries()].sort(
-    (a, b) => b[1] - a[1] || b[0] - a[0],
-  );
-  const flush = cards.every((card) => card.suit === cards[0].suit);
-  const unique = [...new Set(ranks)].sort((a, b) => b - a);
-  if (unique.includes(14)) unique.push(1);
-  let straightHigh = 0;
-  for (let index = 0; index <= unique.length - 5; index++) {
-    if (unique[index] - unique[index + 4] === 4) {
-      straightHigh = unique[index];
-      break;
-    }
-  }
-  if (flush && straightHigh)
-    return { score: [8, straightHigh], label: "Quinte flush" };
-  if (groups[0][1] === 4)
-    return {
-      score: [7, groups[0][0], groups.find((group) => group[1] === 1)![0]],
-      label: "Carré",
-    };
-  if (groups[0][1] === 3 && groups[1]?.[1] === 2)
-    return {
-      score: [6, groups[0][0], groups[1][0]],
-      label: "Full",
-    };
-  if (flush)
-    return { score: [5, ...ranks.sort((a, b) => b - a)], label: "Couleur" };
-  if (straightHigh) return { score: [4, straightHigh], label: "Quinte" };
-  if (groups[0][1] === 3)
-    return {
-      score: [
-        3,
-        groups[0][0],
-        ...groups.filter((g) => g[1] === 1).map((g) => g[0]),
-      ],
-      label: "Brelan",
-    };
-  const pairs = groups.filter((group) => group[1] === 2);
-  if (pairs.length >= 2)
-    return {
-      score: [2, pairs[0][0], pairs[1][0], groups.find((g) => g[1] === 1)![0]],
-      label: "Deux paires",
-    };
-  if (pairs.length === 1)
-    return {
-      score: [
-        1,
-        pairs[0][0],
-        ...groups.filter((g) => g[1] === 1).map((g) => g[0]),
-      ],
-      label: "Paire",
-    };
-  return { score: [0, ...ranks.sort((a, b) => b - a)], label: "Carte haute" };
-}
-
-export function evaluatePokerHand(cards: Card[]): HandValue {
-  if (cards.length < 5) throw new Error("Cinq cartes sont nécessaires.");
-  let best: HandValue | null = null;
-  for (let a = 0; a < cards.length - 4; a++)
-    for (let b = a + 1; b < cards.length - 3; b++)
-      for (let c = b + 1; c < cards.length - 2; c++)
-        for (let d = c + 1; d < cards.length - 1; d++)
-          for (let e = d + 1; e < cards.length; e++) {
-            const candidate = fiveCardValue([
-              cards[a],
-              cards[b],
-              cards[c],
-              cards[d],
-              cards[e],
-            ]);
-            if (!best || compareScore(candidate.score, best.score) > 0)
-              best = candidate;
-          }
-  return best!;
-}
 
 export function makePokerDeck(): Card[] {
   const deck: Card[] = [];
@@ -179,11 +98,13 @@ export class PokerTable {
   chat: PokerChatMessage[] = [];
   message = "En attente de joueurs.";
   nextStepAt = 0;
+  streetStepAt = 0;
   level = 0;
   levelStartedAt = 0;
   lonelySince = 0;
   private acted = new Set<string>();
   private raiseClosedFor = new Set<string>();
+  private deadContributions: number[] = [];
   prizePaid = false;
 
   constructor(
@@ -274,13 +195,20 @@ export class PokerTable {
     const entry = this.find(playerId);
     if (!this.inHand() || entry.status === "waiting")
       return this.remove(playerId);
-    entry.pendingLeave = true;
+    const wasActive = entry.player.id === this.activePlayerId;
     entry.status = "folded";
-    entry.lastAction = "Quitté";
-    if (entry.player.id === this.activePlayerId)
-      this.continueAfterAction(entry);
-    this.publish();
-    return null;
+    if (entry.committed > 0) this.deadContributions.push(entry.committed);
+    this.participants = this.participants.filter((item) => item !== entry);
+    if (wasActive) this.continueAfterAction(entry);
+    else {
+      const contenders = this.participants.filter(
+        (candidate) =>
+          candidate.status === "active" || candidate.status === "all-in",
+      );
+      if (contenders.length === 1) this.awardUncontested(contenders[0]);
+      else this.publish();
+    }
+    return entry;
   }
 
   private find(playerId: string) {
@@ -349,6 +277,8 @@ export class PokerTable {
     this.lonelySince = 0;
     this.phase = "preflop";
     this.community = [];
+    this.deadContributions = [];
+    this.streetStepAt = 0;
     this.deck = makePokerDeck();
     this.currentBet = 0;
     this.minRaise = this.bigBlind;
@@ -480,7 +410,7 @@ export class PokerTable {
         candidate.bet === this.currentBet,
     );
     if (roundComplete || canAct.length === 0) {
-      this.advanceStreet();
+      this.scheduleStreet();
       return;
     }
     const next = this.nextSeat(
@@ -491,6 +421,13 @@ export class PokerTable {
           candidate.bet < this.currentBet),
     );
     this.setTurn(next);
+    this.publish();
+  }
+
+  private scheduleStreet(now = Date.now()) {
+    this.setTurn(null);
+    this.streetStepAt = now + 650;
+    this.message = "Le croupier prépare les cartes…";
     this.publish();
   }
 
@@ -519,7 +456,7 @@ export class PokerTable {
       (entry) => entry.status === "active",
     );
     if (!active.length) {
-      this.advanceStreet();
+      this.scheduleStreet();
       return;
     }
     const first = this.nextSeat(
@@ -532,7 +469,10 @@ export class PokerTable {
   }
 
   private totalPot() {
-    return this.participants.reduce((sum, entry) => sum + entry.committed, 0);
+    return (
+      this.participants.reduce((sum, entry) => sum + entry.committed, 0) +
+      this.deadContributions.reduce((sum, amount) => sum + amount, 0)
+    );
   }
 
   private winnerOrder(entries: Participant[]) {
@@ -554,7 +494,10 @@ export class PokerTable {
     this.setTurn(null);
     const levels = [
       ...new Set(
-        this.participants.map((entry) => entry.committed).filter(Boolean),
+        [
+          ...this.participants.map((entry) => entry.committed),
+          ...this.deadContributions,
+        ].filter(Boolean),
       ),
     ].sort((a, b) => a - b);
     let previous = 0;
@@ -563,7 +506,11 @@ export class PokerTable {
       const contributors = this.participants.filter(
         (entry) => entry.committed >= level,
       );
-      const pot = (level - previous) * contributors.length;
+      const deadContributorCount = this.deadContributions.filter(
+        (amount) => amount >= level,
+      ).length;
+      const pot =
+        (level - previous) * (contributors.length + deadContributorCount);
       previous = level;
       const eligible = contributors.filter(
         (entry) => entry.status !== "folded" && entry.status !== "out",
@@ -573,9 +520,10 @@ export class PokerTable {
         entry,
         value: evaluatePokerHand([...entry.cards, ...this.community]),
       }));
-      values.sort((a, b) => compareScore(b.value.score, a.value.score));
+      values.sort((a, b) => comparePokerScore(b.value.score, a.value.score));
       const winners = values.filter(
-        (item) => compareScore(item.value.score, values[0].value.score) === 0,
+        (item) =>
+          comparePokerScore(item.value.score, values[0].value.score) === 0,
       );
       const share = Math.floor(pot / winners.length);
       let remainder = pot - share * winners.length;
@@ -588,7 +536,7 @@ export class PokerTable {
         const existing = payouts.get(winner);
         payouts.set(winner, {
           amount: (existing?.amount ?? 0) + amount,
-          label: found.value.label,
+          label: describePokerHand(found.value),
         });
       }
     }
@@ -602,6 +550,7 @@ export class PokerTable {
   ) {
     this.phase = "showdown";
     this.setTurn(null);
+    this.streetStepAt = 0;
     const pot = winners.reduce((sum, winner) => sum + winner.amount, 0);
     this.history.unshift({
       hand: this.hand,
@@ -669,6 +618,11 @@ export class PokerTable {
   }
 
   tick(now: number) {
+    if (this.streetStepAt && now >= this.streetStepAt) {
+      this.streetStepAt = 0;
+      this.advanceStreet();
+      return;
+    }
     if (
       this.mode === "cash" &&
       this.phase === "waiting" &&
@@ -742,6 +696,10 @@ export class PokerTable {
                 suit: "spades",
                 hidden: true,
               })),
+        handLabel:
+          entry.player.id === viewerId || (reveal && entry.status !== "folded")
+            ? describePokerHolding(entry.cards, this.community)
+            : undefined,
         lastAction: entry.lastAction,
       })),
       community: this.community.map((card) => ({ ...card })),

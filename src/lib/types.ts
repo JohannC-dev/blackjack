@@ -133,6 +133,7 @@ export type PokerSeat = {
   connected: boolean;
   status: "waiting" | "active" | "folded" | "all-in" | "out";
   cards: Card[];
+  handLabel?: string;
   lastAction?: string;
 };
 

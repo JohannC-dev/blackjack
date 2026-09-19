@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { evaluatePokerHand, makePokerDeck, PokerTable } from "../server/poker";
+import { describePokerHolding } from "../src/lib/rules";
 import type { Player } from "../server/engine";
 import type { Card, Suit } from "../src/lib/types";
 
@@ -62,6 +63,21 @@ describe("Poker hand evaluator", () => {
       52,
     );
   });
+
+  test("describes the player's best visible combination", () => {
+    const holeCards: Card[] = [
+      { id: "six-diamonds", rank: 6, suit: "diamonds" },
+      { id: "eight-clubs", rank: 8, suit: "clubs" },
+    ];
+    const board: Card[] = [
+      { id: "six-hearts", rank: 6, suit: "hearts" },
+      { id: "ace-spades", rank: 1, suit: "spades" },
+      { id: "king-spades", rank: 13, suit: "spades" },
+      { id: "seven-hearts", rank: 7, suit: "hearts" },
+      { id: "six-clubs", rank: 6, suit: "clubs" },
+    ];
+    expect(describePokerHolding(holeCards, board)).toBe("Brelan de Six");
+  });
 });
 
 describe("Poker table authority", () => {
@@ -101,6 +117,30 @@ describe("Poker table authority", () => {
     expect(theirs.cards.every((card) => card.hidden && card.rank === 0)).toBe(
       true,
     );
+    expect(mine.handLabel).toBeTruthy();
+    expect(theirs.handLabel).toBeUndefined();
+  });
+
+  test("removes a player immediately while preserving their chips in the pot", () => {
+    const table = new PokerTable("cash", 20, 10, 20, () => {});
+    const one = player("1");
+    const two = player("2");
+    table.add(one, 2_000);
+    table.add(two, 2_000);
+    table.tick(Date.now() + 2_000);
+    const leaving = table.participants.find(
+      (entry) => entry.player.id === table.activePlayerId,
+    )!;
+    const remaining = table.participants.find((entry) => entry !== leaving)!;
+
+    table.requestLeave(leaving.player.id);
+
+    expect(table.participants.map((entry) => entry.player.id)).toEqual([
+      remaining.player.id,
+    ]);
+    expect(table.snapshot(remaining.player.id).seats).toHaveLength(1);
+    expect(table.history[0].pot).toBe(30);
+    expect(table.history[0].winners[0].amount).toBe(30);
   });
 
   test("rejects out-of-turn actions and awards an uncontested pot", () => {
@@ -117,6 +157,25 @@ describe("Poker table authority", () => {
     expect(table.phase).toBe("showdown");
     expect(table.history[0].pot).toBe(30);
     expect(table.history[0].winners[0].amount).toBe(30);
+  });
+
+  test("waits briefly after the final check before dealing the next street", () => {
+    const table = new PokerTable("cash", 20, 10, 20, () => {});
+    table.add(player("1"), 2_000);
+    table.add(player("2"), 2_000);
+    table.tick(Date.now() + 2_000);
+
+    table.action(table.activePlayerId!, "call");
+    table.action(table.activePlayerId!, "check");
+
+    expect(table.phase).toBe("preflop");
+    expect(table.community).toHaveLength(0);
+    expect(table.activePlayerId).toBeNull();
+    expect(table.message).toContain("croupier");
+
+    table.tick(Date.now() + 1_000);
+    expect(table.phase).toBe("flop");
+    expect(table.community).toHaveLength(3);
   });
 
   test("rate limits table chat without filtering its contents", () => {
@@ -136,7 +195,11 @@ describe("Poker table authority", () => {
     table.add(player("3"), 300);
     table.tick(Date.now() + 2_000);
     let guard = 0;
-    while (table.phase !== "showdown" && guard++ < 12) {
+    while (table.phase !== "showdown" && guard++ < 24) {
+      if (!table.activePlayerId) {
+        table.tick(Date.now() + 1_000);
+        continue;
+      }
       const active = table.participants.find(
         (entry) => entry.player.id === table.activePlayerId,
       )!;
