@@ -859,13 +859,87 @@ export type CasinoView = "home" | "blackjack" | "poker";
 export function Casino() {
   const game = useGame();
   const [view, setView] = useState<CasinoView>("home");
-  const navigate = (next: CasinoView) => setView(next);
+  const [confirmPokerLeave, setConfirmPokerLeave] = useState(false);
+  const [leavingPoker, setLeavingPoker] = useState(false);
+  const navigate = (next: CasinoView) => {
+    if (
+      next === "blackjack" &&
+      game.pokerState &&
+      game.pokerState.status !== "lobby"
+    ) {
+      setConfirmPokerLeave(true);
+      return;
+    }
+    setView(next);
+  };
   if (!game.profile)
     return <BlackjackCasino game={game} onNavigate={navigate} />;
-  if (view === "home") return <CasinoHome game={game} onNavigate={navigate} />;
-  if (view === "poker")
-    return <PokerCasino game={game} onNavigate={navigate} />;
-  return <BlackjackCasino game={game} onNavigate={navigate} />;
+  const content =
+    view === "home" ? (
+      <CasinoHome game={game} onNavigate={navigate} />
+    ) : view === "poker" ? (
+      <PokerCasino game={game} onNavigate={navigate} />
+    ) : (
+      <BlackjackCasino game={game} onNavigate={navigate} />
+    );
+  const pokerExitMessage = game.pokerState?.queue
+    ? "Votre recherche sera annulée et votre buy-in sera récupéré."
+    : game.pokerState?.table?.mode === "cash"
+      ? "Votre place sera libérée et votre stack restant sera recrédité."
+      : "Vous abandonnerez le tournoi et votre buy-in ne sera pas récupéré.";
+
+  return (
+    <>
+      {content}
+      {confirmPokerLeave && (
+        <Modal
+          title="Quitter la partie de poker ?"
+          className="leave-poker-modal"
+          onClose={leavingPoker ? undefined : () => setConfirmPokerLeave(false)}
+        >
+          <span className="modal-emblem">
+            <Spade size={26} fill="currentColor" />
+          </span>
+          <span className="section-kicker">PARTIE EN COURS</span>
+          <h2>Quitter la partie de poker ?</h2>
+          <p className="modal-intro">
+            {pokerExitMessage} Voulez-vous vraiment rejoindre le Blackjack ?
+          </p>
+          <div className="leave-poker-actions">
+            <button
+              type="button"
+              className="button secondary"
+              autoFocus
+              disabled={leavingPoker}
+              onClick={() => setConfirmPokerLeave(false)}
+            >
+              Rester au poker
+            </button>
+            <button
+              type="button"
+              className="button primary"
+              disabled={leavingPoker}
+              onClick={async () => {
+                setLeavingPoker(true);
+                const left = await game.pokerCommand({ type: "leave" });
+                setLeavingPoker(false);
+                if (!left) return;
+                setConfirmPokerLeave(false);
+                setView("blackjack");
+              }}
+            >
+              {leavingPoker ? (
+                <LoaderCircle size={16} className="spinner" />
+              ) : (
+                <BlackjackIcon />
+              )}
+              Quitter et jouer au Blackjack
+            </button>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
 }
 
 function BlackjackCasino({

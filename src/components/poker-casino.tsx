@@ -467,10 +467,26 @@ function PokerTable({ game }: { game: Game }) {
   const toCall = me ? Math.max(0, table.currentBet - me.bet) : 0;
   const minimumRaise = table.currentBet + table.minRaise;
   const maximum = me ? me.bet + me.stack : 0;
-  useEffect(
-    () => setRaiseTo(Math.min(maximum, Math.max(minimumRaise, table.bigBlind))),
-    [minimumRaise, maximum, table.bigBlind],
-  );
+  const raiseSteps = useMemo(() => {
+    const minimum = Math.min(minimumRaise, maximum);
+    if (maximum <= minimum) return [Math.max(0, maximum)];
+    const clamp = (value: number) =>
+      Math.min(maximum, Math.max(minimum, Math.round(value)));
+    const values = new Set<number>([
+      minimum,
+      clamp(table.pot / 2),
+      clamp((table.pot * 3) / 4),
+      clamp(table.pot),
+      maximum,
+    ]);
+    const range = maximum - minimum;
+    const increment =
+      Math.max(1, Math.ceil(range / 9 / table.bigBlind)) * table.bigBlind;
+    for (let value = minimum + increment; value < maximum; value += increment)
+      values.add(clamp(value));
+    return [...values].sort((a, b) => a - b);
+  }, [maximum, minimumRaise, table.bigBlind, table.pot]);
+  useEffect(() => setRaiseTo(raiseSteps[0] ?? 0), [raiseSteps]);
   useEffect(() => {
     setRaiseOpen(false);
   }, [table.activePlayerId, table.phase]);
@@ -521,6 +537,11 @@ function PokerTable({ game }: { game: Game }) {
   const seconds = table.deadline
     ? Math.max(0, Math.ceil((table.deadline - now) / 1000))
     : 0;
+  const turnDurationMs = (table.mode === "spin" ? 15 : 25) * 1_000;
+  const turnRemainingMs = table.deadline
+    ? Math.max(0, Math.min(turnDurationMs, table.deadline - now))
+    : 0;
+  const turnProgress = 100 * (1 - turnRemainingMs / turnDurationMs);
   const myTurn = table.activePlayerId === game.playerId;
   const allInContenders = table.seats.filter(
     (seat) => seat.status === "active" || seat.status === "all-in",
@@ -553,6 +574,12 @@ function PokerTable({ game }: { game: Game }) {
   const sendAction = (action: PokerAction, amount?: number) => {
     setRaiseOpen(false);
     return game.pokerCommand({ type: "action", action, amount });
+  };
+  const selectRaiseTarget = (target: number) => {
+    const nearest = raiseSteps.reduce((best, value) =>
+      Math.abs(value - target) < Math.abs(best - target) ? value : best,
+    );
+    setRaiseTo(nearest);
   };
   const submitChat = (event: FormEvent) => {
     event.preventDefault();
@@ -590,6 +617,12 @@ function PokerTable({ game }: { game: Game }) {
   const myWin = handResult?.winners.find(
     (winner) => winner.playerId === game.playerId,
   );
+  const revealSeconds = table.revealDeadline
+    ? Math.max(0, Math.ceil((table.revealDeadline - now) / 1000))
+    : 0;
+  const uncontestedWin = myWin?.label === "Uncontested pot";
+  const canChooseReveal =
+    uncontestedWin && !!table.revealDeadline && table.revealDeadline > now;
   const handLabel = me
     ? (describePokerHolding(me.cards, table.community) ?? me.handLabel)
     : undefined;
@@ -688,6 +721,7 @@ function PokerTable({ game }: { game: Game }) {
                 table={table}
                 playerId={game.playerId}
                 turnSeconds={seconds}
+                turnProgress={turnProgress}
                 dealDelays={dealDelays}
                 winningCardIds={showdownCards.winning}
                 winnerPlayerIds={showdownCards.winnerPlayerIds}
@@ -728,7 +762,7 @@ function PokerTable({ game }: { game: Game }) {
                     ))}
                   </div>
                 </div>
-                {myWin && (
+                {myWin && !uncontestedWin && (
                   <button
                     type="button"
                     className="muck-hand"
@@ -771,23 +805,6 @@ function PokerTable({ game }: { game: Game }) {
               </div>
             )}
           </div>
-          <div className="poker-status">
-            <span className={myTurn ? "active" : ""} />
-            <div>
-              <b>
-                {myTurn
-                  ? "YOUR TURN"
-                  : allInRunout
-                    ? "ALL-IN · RÉVÉLATION"
-                    : table.message}
-              </b>
-              <small>
-                {table.phase === "waiting"
-                  ? "La prochaine hand démarre dès qu’un adversaire arrive."
-                  : `${table.phase.toUpperCase()} · Hand ${String(table.hand).padStart(3, "0")}`}
-              </small>
-            </div>
-          </div>
           <div className="poker-hand-summary">
             <div>
               <span>YOUR HAND</span>
@@ -804,8 +821,45 @@ function PokerTable({ game }: { game: Game }) {
               </div>
             )}
           </div>
-          <div className={`poker-action-zone ${myTurn ? "enabled" : ""}`}>
-            {allInRunout ? (
+          <div
+            className={`poker-action-zone ${myTurn || canChooseReveal ? "enabled" : ""}`}
+          >
+            {canChooseReveal ? (
+              <div
+                className="hand-visibility-actions"
+                role="group"
+                aria-label="Visibilité de votre main"
+              >
+                <button
+                  type="button"
+                  className="show-hand"
+                  disabled={game.pending}
+                  onClick={() => game.pokerCommand({ type: "show" })}
+                >
+                  <span>Montrer</span>
+                  <small>{revealSeconds}s pour décider</small>
+                </button>
+                <button
+                  type="button"
+                  className="hide-hand"
+                  disabled={game.pending}
+                  onClick={() => game.pokerCommand({ type: "muck" })}
+                >
+                  <span>
+                    <EyeOff size={13} /> Cacher
+                  </span>
+                  <small>Garder la main privée</small>
+                </button>
+              </div>
+            ) : uncontestedWin && table.phase === "showdown" ? (
+              <div className="hand-visibility-resolved" role="status">
+                <EyeOff size={14} />
+                <span>
+                  <small>VISIBILITÉ DE LA MAIN</small>
+                  <b>{me?.mucked ? "Main cachée" : "Main montrée"}</b>
+                </span>
+              </div>
+            ) : allInRunout ? (
               <div className="poker-runout" role="status">
                 <span>ALL-IN</span>
                 <b>Les cartes se révèlent…</b>
@@ -848,47 +902,102 @@ function PokerTable({ game }: { game: Game }) {
                     <div className="raise-presets">
                       <button
                         type="button"
-                        onClick={() =>
-                          setRaiseTo(
-                            Math.min(
-                              maximum,
-                              Math.max(minimumRaise, Math.round(table.pot / 2)),
-                            ),
-                          )
-                        }
+                        onClick={() => selectRaiseTarget(table.pot / 2)}
                       >
                         ½ pot
                       </button>
                       <button
                         type="button"
-                        onClick={() =>
-                          setRaiseTo(
-                            Math.min(
-                              maximum,
-                              Math.max(minimumRaise, table.pot),
-                            ),
-                          )
-                        }
+                        onClick={() => selectRaiseTarget((table.pot * 3) / 4)}
+                      >
+                        ¾ pot
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => selectRaiseTarget(table.pot)}
                       >
                         Pot
                       </button>
-                      <button type="button" onClick={() => setRaiseTo(maximum)}>
+                      <button
+                        type="button"
+                        onClick={() => selectRaiseTarget(maximum)}
+                      >
                         All-in
                       </button>
                     </div>
                     <div className="raise-slider">
-                      <span>TOTAL BET</span>
-                      <input
-                        aria-label="Total raise amount"
-                        type="range"
-                        min={Math.min(minimumRaise, maximum)}
-                        max={maximum}
-                        value={raiseTo || 0}
-                        onChange={(event) =>
-                          setRaiseTo(Number(event.target.value))
+                      <div className="raise-slider-heading">
+                        <span>TOTAL BET</span>
+                        <b>{credits(raiseTo)} cr.</b>
+                      </div>
+                      <div
+                        className="raise-range-shell"
+                        style={
+                          {
+                            "--raise-progress": `${raiseSteps.length > 1 ? (Math.max(0, raiseSteps.indexOf(raiseTo)) / (raiseSteps.length - 1)) * 100 : 0}%`,
+                          } as CSSProperties
                         }
-                      />
-                      <b>{credits(raiseTo)} cr.</b>
+                      >
+                        <button
+                          type="button"
+                          aria-label="Palier précédent"
+                          disabled={raiseSteps.indexOf(raiseTo) <= 0}
+                          onClick={() =>
+                            setRaiseTo(
+                              raiseSteps[
+                                Math.max(0, raiseSteps.indexOf(raiseTo) - 1)
+                              ],
+                            )
+                          }
+                        >
+                          −
+                        </button>
+                        <div className="raise-track">
+                          <input
+                            aria-label="Total raise amount"
+                            aria-valuetext={`${credits(raiseTo)} crédits`}
+                            type="range"
+                            min={0}
+                            max={Math.max(0, raiseSteps.length - 1)}
+                            step={1}
+                            value={Math.max(0, raiseSteps.indexOf(raiseTo))}
+                            onChange={(event) =>
+                              setRaiseTo(raiseSteps[Number(event.target.value)])
+                            }
+                          />
+                          <div className="raise-ticks" aria-hidden="true">
+                            {raiseSteps.map((value, index) => (
+                              <i
+                                key={value}
+                                className={value <= raiseTo ? "reached" : ""}
+                                style={{
+                                  left: `${raiseSteps.length > 1 ? (index / (raiseSteps.length - 1)) * 100 : 0}%`,
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label="Palier suivant"
+                          disabled={
+                            raiseSteps.indexOf(raiseTo) >= raiseSteps.length - 1
+                          }
+                          onClick={() =>
+                            setRaiseTo(
+                              raiseSteps[
+                                Math.min(
+                                  raiseSteps.length - 1,
+                                  raiseSteps.indexOf(raiseTo) + 1,
+                                )
+                              ],
+                            )
+                          }
+                        >
+                          +
+                        </button>
+                      </div>
+                      <small>{raiseSteps.length} paliers</small>
                     </div>
                     <button
                       type="button"
@@ -1011,13 +1120,28 @@ function PokerChipStack({
   amount: number;
   pot?: boolean;
 }) {
+  const layers = Math.max(
+    3,
+    Math.min(6, Math.ceil(Math.log10(Math.max(1, amount))) + 1),
+  );
+  const tone = amount >= 500 ? "gold" : amount >= 100 ? "teal" : "violet";
   return (
     <div
-      className={`poker-chip-stack ${pot ? "pot-chips" : "bet-chips"}`}
+      className={`poker-chip-stack chip-tone-${tone} ${pot ? "pot-chips" : "bet-chips"}`}
       role="img"
       aria-label={`${credits(amount)} crédits en jetons`}
+      data-chip-layers={layers}
     >
-      <span>{credits(amount)}</span>
+      <span className="poker-chip-pile" aria-hidden="true">
+        {Array.from({ length: layers }, (_, index) => (
+          <i
+            className="poker-chip-disc"
+            key={index}
+            style={{ "--chip-layer": index } as CSSProperties}
+          />
+        ))}
+      </span>
+      <span className="poker-chip-amount">{credits(amount)}</span>
     </div>
   );
 }
@@ -1028,6 +1152,7 @@ function PokerSeatView({
   table,
   playerId,
   turnSeconds,
+  turnProgress,
   dealDelays,
   winningCardIds,
   winnerPlayerIds,
@@ -1038,6 +1163,7 @@ function PokerSeatView({
   table: NonNullable<NonNullable<Game["pokerState"]>["table"]>;
   playerId: string;
   turnSeconds: number;
+  turnProgress: number;
   dealDelays: ReadonlyMap<string, number>;
   winningCardIds: ReadonlySet<string>;
   winnerPlayerIds: ReadonlySet<string>;
@@ -1063,7 +1189,6 @@ function PokerSeatView({
   const mine = seat.id === playerId;
   const active = table.activePlayerId === seat.id;
   const winner = winnerPlayerIds.has(seat.id);
-  const turnDuration = table.mode === "spin" ? 15 : 25;
   return (
     <div
       className={`poker-seat occupied ${mine ? "mine" : ""} ${active ? "acting" : ""} ${winner ? "winner" : ""} ${seat.status}`}
@@ -1071,7 +1196,6 @@ function PokerSeatView({
         {
           "--seat-x": `${position.x}%`,
           "--seat-y": `${position.y}%`,
-          "--turn-duration": `${turnDuration}s`,
         } as CSSProperties
       }
     >
@@ -1124,6 +1248,7 @@ function PokerSeatView({
               height="100%"
               rx="10"
               pathLength={100}
+              style={{ strokeDashoffset: turnProgress }}
             />
           </svg>
         )}

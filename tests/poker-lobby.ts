@@ -81,6 +81,7 @@ try {
     page.getByRole("button", { name: /^Spin & Play, 5\s000/ }),
   ).toBeDisabled();
   await checkLayout(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
   await cash.click();
   const dialog = page.getByRole("dialog", {
     name: "Choisissez votre plafond.",
@@ -103,7 +104,7 @@ try {
   await expect(dialog).not.toBeVisible();
   await expect(cash).toBeFocused();
   await cash.click();
-  await dialog.getByText("Personnaliser mon tapis").click();
+  await dialog.getByText("Personnaliser mon buy-in").click();
   await dialog.getByRole("slider").fill("40");
   await expect(
     dialog.getByRole("button", { name: /^Velours, plafond/ }),
@@ -111,7 +112,23 @@ try {
   await dialog.getByRole("button", { name: /^Velours, plafond/ }).click();
   await expect(page.locator(".poker-felt")).toBeVisible();
   await expect(page.locator(".wallet b")).toHaveText("462");
-  await page.getByRole("button", { name: /Quitter la table/ }).click();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByTitle("Blackjack", { exact: true }).click();
+  const leaveConfirmation = page.getByRole("dialog", {
+    name: "Quitter la partie de poker ?",
+  });
+  await expect(leaveConfirmation).toBeVisible();
+  await leaveConfirmation
+    .getByRole("button", { name: "Rester au poker" })
+    .click();
+  await expect(page.locator(".poker-felt")).toBeVisible();
+  await expect(page.locator(".wallet b")).toHaveText("462");
+  await page.getByTitle("Blackjack", { exact: true }).click();
+  await leaveConfirmation
+    .getByRole("button", { name: "Quitter et jouer au Blackjack" })
+    .click();
+  await expect(page.locator(".table-panel")).toBeVisible();
+  await expect(page.locator(".wallet b")).toHaveText("1 262");
   await page.context().close();
 
   const funded = await lobby(50_000);
@@ -151,7 +168,7 @@ try {
   await insufficient.context().close();
   expect(errors).toEqual([]);
   console.log(
-    "PASS: six cartes sans onglets, accès direct Cash/Spin, plafonds et tapis adaptés au solde, mobile 320–1440 px, focus de la modale et remboursement Spin.",
+    "PASS: six cartes sans onglets, accès direct Cash/Spin, plafonds et tapis adaptés au solde, mobile 320–1440 px, focus des modales et restitution du stack avant Blackjack.",
   );
 } finally {
   await browser.close();
