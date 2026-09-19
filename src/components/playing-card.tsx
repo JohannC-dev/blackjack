@@ -6,18 +6,26 @@ export function PlayingCard({
   card,
   back = false,
   index = 0,
+  dealDelay,
   decorative = false,
 }: {
   card?: Card;
   back?: boolean;
   index?: number;
+  dealDelay?: number;
   decorative?: boolean;
 }) {
   const concealed = back || card?.hidden;
   return (
     <div
       className={`playing-card ${concealed ? "card-back" : ""} ${card && !card.hidden && isRed(card) ? "red" : ""} ${decorative ? "decorative-card" : ""}`}
-      style={{ "--card-index": index } as CSSProperties}
+      style={
+        {
+          "--card-index": index,
+          "--deal-delay":
+            dealDelay === undefined ? undefined : `${dealDelay}ms`,
+        } as CSSProperties
+      }
       aria-label={
         concealed
           ? card?.hidden

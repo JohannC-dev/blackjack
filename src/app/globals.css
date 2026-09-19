@@ -1400,6 +1400,12 @@
 }
 
 /* The active-seat outline is the turn timer: it drains clockwise. */
+@property --turn-progress {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
 .poker-seat.acting .poker-player-card {
   box-shadow: 0 9px 22px rgba(0, 0, 0, 0.35);
 }
@@ -1410,6 +1416,7 @@
   z-index: -1;
   padding: 2px;
   border-radius: 10px;
+  --turn-progress: 360deg;
   background: conic-gradient(
     from -90deg,
     var(--purple) 0deg var(--turn-progress),
@@ -1421,6 +1428,16 @@
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
+  animation: poker-turn-countdown var(--turn-duration) linear forwards;
+}
+
+@keyframes poker-turn-countdown {
+  from {
+    --turn-progress: 360deg;
+  }
+  to {
+    --turn-progress: 0deg;
+  }
 }
 .poker-seat.acting .poker-player-card::after {
   content: attr(data-turn-seconds);
@@ -7712,34 +7729,12 @@ h1 > span:not(.live-tag) {
   min-height: 58px;
 }
 .community-cards .playing-card {
-  animation: poker-board-reveal 250ms var(--ease) backwards;
-  animation-delay: calc(var(--card-index) * 45ms);
+  animation: deal-in 0.4s var(--ease) both;
+  animation-delay: var(--deal-delay, 0ms);
 }
-.poker-hole-cards .playing-card:not(.card-back) {
-  animation: poker-hole-reveal 240ms var(--ease) backwards;
-  animation-delay: calc(var(--card-index) * 55ms);
-}
-@keyframes poker-board-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(-11px) rotateY(-48deg) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) rotateY(0) scale(1);
-  }
-}
-@keyframes poker-hole-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(-8px) rotateY(-55deg)
-      rotate(calc((var(--card-index) - 0.5) * 8deg));
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) rotateY(0)
-      rotate(calc((var(--card-index) - 0.5) * 8deg));
-  }
+.poker-hole-cards .playing-card {
+  animation: deal-in 0.4s var(--ease) both;
+  animation-delay: var(--deal-delay, 0ms);
 }
 @keyframes poker-result-in {
   from {
@@ -7779,11 +7774,12 @@ h1 > span:not(.live-tag) {
 }
 @media (prefers-reduced-motion: reduce) {
   .community-cards .playing-card,
-  .poker-hole-cards .playing-card:not(.card-back),
+  .poker-hole-cards .playing-card,
   .hand-result-banner,
   .raise-drawer,
   .poker-chat-backdrop,
-  .poker-chat-backdrop .poker-chat {
+  .poker-chat-backdrop .poker-chat,
+  .poker-seat.acting .poker-player-card::before {
     animation-duration: 1ms !important;
     animation-delay: 0ms !important;
   }

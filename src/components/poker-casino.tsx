@@ -63,8 +63,55 @@ const THREE_POSITIONS = [
   { x: 50, y: 77 },
   { x: 85, y: 61 },
 ];
+const POKER_DEAL_INTERVAL = 320;
 
-type PokerSoundEffect = "card" | "chips" | "turn" | "win" | "wheel";
+type PokerSoundEffect = "card" | "chips" | "fold" | "knock";
+
+const POKER_SOUND_FILES: Record<
+  Exclude<PokerSoundEffect, "knock">,
+  string[]
+> = {
+  card: [
+    "/audio/poker/deal-1.mp3",
+    "/audio/poker/deal-2.mp3",
+    "/audio/poker/deal-3.mp3",
+    "/audio/poker/deal-4.mp3",
+  ],
+  chips: [
+    "/audio/poker/chips-1.mp3",
+    "/audio/poker/chips-2.mp3",
+    "/audio/poker/chips-3.mp3",
+  ],
+  fold: ["/audio/poker/fold-1.mp3", "/audio/poker/fold-2.mp3"],
+};
+const pokerSampleCaches = new WeakMap<
+  AudioContext,
+  Map<string, Promise<AudioBuffer>>
+>();
+
+function loadPokerSample(context: AudioContext, path: string) {
+  let cache = pokerSampleCaches.get(context);
+  if (!cache) {
+    cache = new Map();
+    pokerSampleCaches.set(context, cache);
+  }
+  let sample = cache.get(path);
+  if (!sample) {
+    sample = fetch(path)
+      .then((response) => {
+        if (!response.ok) throw new Error(`Son Poker indisponible : ${path}`);
+        return response.arrayBuffer();
+      })
+      .then((data) => context.decodeAudioData(data));
+    cache.set(path, sample);
+  }
+  return sample;
+}
+
+function preloadPokerSounds(context: AudioContext) {
+  for (const path of Object.values(POKER_SOUND_FILES).flat())
+    void loadPokerSample(context, path).catch(() => undefined);
+}
 
 function playPokerSound(
   context: AudioContext,
@@ -106,33 +153,57 @@ function playPokerSound(
     source.stop(startsAt + duration);
   };
 
-  if (effect === "card") {
-    for (let index = 0; index < count; index++) {
-      const delay = index * 0.075;
-      noise(delay, 0.105, 1_700, 0.12, "lowpass");
-      noise(delay + 0.018, 0.035, 3_600, 0.045, "highpass");
+  const tone = (
+    delay: number,
+    duration: number,
+    frequency: number,
+    volume: number,
+  ) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const startsAt = context.currentTime + delay;
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency, startsAt);
+    oscillator.frequency.exponentialRampToValueAtTime(
+      frequency * 0.65,
+      startsAt + duration,
+    );
+    gain.gain.setValueAtTime(volume, startsAt);
+    gain.gain.exponentialRampToValueAtTime(0.001, startsAt + duration);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(startsAt);
+    oscillator.stop(startsAt + duration);
+  };
+
+  if (effect === "knock") {
+    for (const delay of [0, 0.14]) {
+      noise(delay, 0.07, 720, 0.13, "lowpass");
+      tone(delay, 0.085, 165, 0.075);
     }
     return;
   }
-  if (effect === "chips" || effect === "win") {
-    const hits = effect === "win" ? 7 : 3;
-    for (let index = 0; index < hits; index++)
-      noise(
-        index * 0.045,
-        0.045,
-        2_200 + (index % 3) * 620,
-        effect === "win" ? 0.055 : 0.04,
-        "bandpass",
-      );
-    return;
+  const files = POKER_SOUND_FILES[effect];
+  const startedAt = context.currentTime;
+  const variant =
+    effect === "card" ? 0 : Math.floor(Math.random() * files.length);
+  for (let index = 0; index < count; index++) {
+    const path = files[(variant + index) % files.length];
+    const scheduledAt =
+      startedAt + (effect === "card" ? index * POKER_DEAL_INTERVAL : 0) / 1000;
+    void loadPokerSample(context, path)
+      .then((buffer) => {
+        if (context.state === "closed") return;
+        const source = context.createBufferSource();
+        const gain = context.createGain();
+        source.buffer = buffer;
+        gain.gain.value = effect === "chips" ? 0.48 : 0.58;
+        source.connect(gain);
+        gain.connect(context.destination);
+        source.start(Math.max(context.currentTime, scheduledAt));
+      })
+      .catch(() => undefined);
   }
-  if (effect === "wheel") {
-    for (let index = 0; index < 11; index++)
-      noise(index * 0.055, 0.035, 1_400 + index * 130, 0.035, "bandpass");
-    return;
-  }
-  noise(0, 0.075, 850, 0.07, "lowpass");
-  noise(0.055, 0.055, 1_450, 0.04, "bandpass");
 }
 
 function CasinoRail({
@@ -585,9 +656,6 @@ function PokerTable({ game }: { game: Game }) {
     hand: table.hand,
     cards: table.community.length,
     active: table.activePlayerId,
-    phase: table.phase,
-    wheel: table.wheelSpinning,
-    pot: table.pot,
   });
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 250);
@@ -617,37 +685,35 @@ function PokerTable({ game }: { game: Game }) {
       hand: table.hand,
       cards: table.community.length,
       active: table.activePlayerId,
-      phase: table.phase,
-      wheel: table.wheelSpinning,
-      pot: table.pot,
     };
     const context = audioRef.current;
     if (!sound || !context) return;
-    if (table.wheelSpinning && !previous.wheel)
-      playPokerSound(context, "wheel");
-    if (
-      (table.phase === "showdown" || table.phase === "complete") &&
-      table.phase !== previous.phase
-    )
-      playPokerSound(context, "win");
-    else if (table.community.length > previous.cards)
+    const actedSeat =
+      previous.active && previous.active !== table.activePlayerId
+        ? table.seats.find((seat) => seat.id === previous.active)
+        : undefined;
+    const actionEffect = actedSeat?.lastAction?.startsWith("Check")
+      ? "knock"
+      : actedSeat?.lastAction?.startsWith("Fold")
+        ? "fold"
+        : /^(Raise|Mise|All-in)/.test(actedSeat?.lastAction ?? "")
+          ? "chips"
+          : undefined;
+    if (actionEffect) playPokerSound(context, actionEffect);
+    if (table.community.length > previous.cards)
       playPokerSound(context, "card", table.community.length - previous.cards);
-    else if (table.hand > previous.hand) playPokerSound(context, "card", 2);
-    else if (table.pot > previous.pot) playPokerSound(context, "chips");
-    if (
-      table.activePlayerId === game.playerId &&
-      previous.active !== game.playerId
-    )
-      playPokerSound(context, "turn");
+    else if (table.hand > previous.hand)
+      playPokerSound(
+        context,
+        "card",
+        table.seats.reduce((total, seat) => total + seat.cards.length, 0),
+      );
   }, [
-    game.playerId,
     sound,
     table.activePlayerId,
     table.community.length,
     table.hand,
-    table.phase,
-    table.pot,
-    table.wheelSpinning,
+    table.seats,
   ]);
   const seconds = table.deadline
     ? Math.max(0, Math.ceil((table.deadline - now) / 1000))
@@ -655,6 +721,24 @@ function PokerTable({ game }: { game: Game }) {
   const myTurn = table.activePlayerId === game.playerId;
   const positions = table.mode === "spin" ? THREE_POSITIONS : FIVE_POSITIONS;
   const totalSeats = table.mode === "spin" ? 3 : 5;
+  const dealDelays = useMemo(() => {
+    const dealtSeats = table.seats.filter((seat) => seat.cards.length > 0);
+    const seatsInDealOrder = [...dealtSeats].sort((a, b) => {
+      const distanceFromButton = (seat: number) => {
+        if (table.button < 0) return seat;
+        return (seat - table.button + totalSeats) % totalSeats || totalSeats;
+      };
+      return distanceFromButton(a.seat) - distanceFromButton(b.seat);
+    });
+    const delays = new Map<string, number>();
+    seatsInDealOrder.forEach((seat, seatIndex) => {
+      seat.cards.forEach((card, cardIndex) => {
+        const dealIndex = cardIndex * seatsInDealOrder.length + seatIndex;
+        delays.set(card.id, dealIndex * POKER_DEAL_INTERVAL);
+      });
+    });
+    return delays;
+  }, [table.button, table.seats, totalSeats]);
   const sendAction = (action: PokerAction, amount?: number) => {
     setRaiseOpen(false);
     return game.pokerCommand({ type: "action", action, amount });
@@ -711,8 +795,9 @@ function PokerTable({ game }: { game: Game }) {
             sound ? "Couper les sons Poker" : "Activer les sons Poker"
           }
           onClick={() => {
-            audioRef.current ??= new AudioContext();
-            void audioRef.current.resume();
+            const context = (audioRef.current ??= new AudioContext());
+            void context.resume();
+            preloadPokerSounds(context);
             setSound(!sound);
           }}
         >
@@ -739,6 +824,7 @@ function PokerTable({ game }: { game: Game }) {
                     key={table.community[index].id}
                     card={table.community[index]}
                     index={index}
+                    dealDelay={index < 3 ? index * POKER_DEAL_INTERVAL : 0}
                   />
                 ) : (
                   <div className="community-placeholder" key={index}>
@@ -759,6 +845,7 @@ function PokerTable({ game }: { game: Game }) {
                 table={table}
                 playerId={game.playerId}
                 turnSeconds={seconds}
+                dealDelays={dealDelays}
               />
             ))}
             {table.wheelSpinning && (
@@ -1038,12 +1125,14 @@ function PokerSeatView({
   table,
   playerId,
   turnSeconds,
+  dealDelays,
 }: {
   seat?: PokerSeat;
   position: { x: number; y: number };
   table: NonNullable<NonNullable<Game["pokerState"]>["table"]>;
   playerId: string;
   turnSeconds: number;
+  dealDelays: ReadonlyMap<string, number>;
 }) {
   if (!seat)
     return (
@@ -1065,9 +1154,6 @@ function PokerSeatView({
   const mine = seat.id === playerId;
   const active = table.activePlayerId === seat.id;
   const turnDuration = table.mode === "spin" ? 15 : 25;
-  const turnProgress = active
-    ? Math.max(0, Math.min(1, turnSeconds / turnDuration))
-    : 0;
   return (
     <div
       className={`poker-seat occupied ${mine ? "mine" : ""} ${active ? "acting" : ""} ${seat.status}`}
@@ -1075,7 +1161,7 @@ function PokerSeatView({
         {
           "--seat-x": `${position.x}%`,
           "--seat-y": `${position.y}%`,
-          "--turn-progress": `${turnProgress * 360}deg`,
+          "--turn-duration": `${turnDuration}s`,
         } as CSSProperties
       }
     >
@@ -1086,6 +1172,7 @@ function PokerSeatView({
             card={card}
             back={!!card.hidden}
             index={index}
+            dealDelay={dealDelays.get(card.id)}
           />
         ))}
       </div>
