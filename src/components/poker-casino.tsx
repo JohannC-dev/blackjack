@@ -33,12 +33,19 @@ import {
   evaluateBestPokerHand,
   getPokerCombinationCards,
 } from "@/lib/rules";
+import { casinoChipStackForAmount } from "@/lib/chips";
+import {
+  CASINO_DEAL_INTERVAL,
+  playCasinoSound,
+  preloadCasinoSounds,
+} from "@/lib/casino-audio";
 import type { PokerAction, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import type { CasinoView } from "./casino";
 import { BlackjackIcon } from "./blackjack-icon";
 import { PlayingCard } from "./playing-card";
 import { PokerLobby } from "./poker-lobby";
+import { PokerShuffleAnimation } from "./poker-shuffle";
 import { RoomArt } from "./room-art";
 
 type Game = ReturnType<typeof useGame>;
@@ -56,149 +63,6 @@ const THREE_POSITIONS = [
   { x: 50, y: 77 },
   { x: 85, y: 61 },
 ];
-const POKER_DEAL_INTERVAL = 320;
-
-type PokerSoundEffect = "card" | "chips" | "fold" | "knock";
-
-const POKER_SOUND_FILES: Record<
-  Exclude<PokerSoundEffect, "knock">,
-  string[]
-> = {
-  card: [
-    "/audio/poker/deal-1.mp3",
-    "/audio/poker/deal-2.mp3",
-    "/audio/poker/deal-3.mp3",
-    "/audio/poker/deal-4.mp3",
-  ],
-  chips: [
-    "/audio/poker/chips-1.mp3",
-    "/audio/poker/chips-2.mp3",
-    "/audio/poker/chips-3.mp3",
-  ],
-  fold: ["/audio/poker/fold-1.mp3", "/audio/poker/fold-2.mp3"],
-};
-const pokerSampleCaches = new WeakMap<
-  AudioContext,
-  Map<string, Promise<AudioBuffer>>
->();
-
-function loadPokerSample(context: AudioContext, path: string) {
-  let cache = pokerSampleCaches.get(context);
-  if (!cache) {
-    cache = new Map();
-    pokerSampleCaches.set(context, cache);
-  }
-  let sample = cache.get(path);
-  if (!sample) {
-    sample = fetch(path)
-      .then((response) => {
-        if (!response.ok) throw new Error(`Son Poker indisponible : ${path}`);
-        return response.arrayBuffer();
-      })
-      .then((data) => context.decodeAudioData(data));
-    cache.set(path, sample);
-  }
-  return sample;
-}
-
-function preloadPokerSounds(context: AudioContext) {
-  for (const path of Object.values(POKER_SOUND_FILES).flat())
-    void loadPokerSample(context, path).catch(() => undefined);
-}
-
-function playPokerSound(
-  context: AudioContext,
-  effect: PokerSoundEffect,
-  count = 1,
-) {
-  const noise = (
-    delay: number,
-    duration: number,
-    frequency: number,
-    volume: number,
-    filterType: BiquadFilterType,
-  ) => {
-    const sampleRate = context.sampleRate;
-    const buffer = context.createBuffer(
-      1,
-      Math.ceil(sampleRate * duration),
-      sampleRate,
-    );
-    const data = buffer.getChannelData(0);
-    for (let index = 0; index < data.length; index++) {
-      const envelope = 1 - index / data.length;
-      data[index] = (Math.random() * 2 - 1) * envelope;
-    }
-    const source = context.createBufferSource();
-    const filter = context.createBiquadFilter();
-    const gain = context.createGain();
-    const startsAt = context.currentTime + delay;
-    source.buffer = buffer;
-    filter.type = filterType;
-    filter.frequency.setValueAtTime(frequency, startsAt);
-    filter.Q.setValueAtTime(filterType === "bandpass" ? 5 : 0.7, startsAt);
-    gain.gain.setValueAtTime(volume, startsAt);
-    gain.gain.exponentialRampToValueAtTime(0.001, startsAt + duration);
-    source.connect(filter);
-    filter.connect(gain);
-    gain.connect(context.destination);
-    source.start(startsAt);
-    source.stop(startsAt + duration);
-  };
-
-  const tone = (
-    delay: number,
-    duration: number,
-    frequency: number,
-    volume: number,
-  ) => {
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    const startsAt = context.currentTime + delay;
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(frequency, startsAt);
-    oscillator.frequency.exponentialRampToValueAtTime(
-      frequency * 0.65,
-      startsAt + duration,
-    );
-    gain.gain.setValueAtTime(volume, startsAt);
-    gain.gain.exponentialRampToValueAtTime(0.001, startsAt + duration);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(startsAt);
-    oscillator.stop(startsAt + duration);
-  };
-
-  if (effect === "knock") {
-    for (const delay of [0, 0.14]) {
-      noise(delay, 0.07, 720, 0.13, "lowpass");
-      tone(delay, 0.085, 165, 0.075);
-    }
-    return;
-  }
-  const files = POKER_SOUND_FILES[effect];
-  const startedAt = context.currentTime;
-  const variant =
-    effect === "card" ? 0 : Math.floor(Math.random() * files.length);
-  for (let index = 0; index < count; index++) {
-    const path = files[(variant + index) % files.length];
-    const scheduledAt =
-      startedAt + (effect === "card" ? index * POKER_DEAL_INTERVAL : 0) / 1000;
-    void loadPokerSample(context, path)
-      .then((buffer) => {
-        if (context.state === "closed") return;
-        const source = context.createBufferSource();
-        const gain = context.createGain();
-        source.buffer = buffer;
-        gain.gain.value = effect === "chips" ? 0.48 : 0.58;
-        source.connect(gain);
-        gain.connect(context.destination);
-        source.start(Math.max(context.currentTime, scheduledAt));
-      })
-      .catch(() => undefined);
-  }
-}
-
 function CasinoRail({
   active,
   onNavigate,
@@ -459,6 +323,7 @@ function PokerTable({ game }: { game: Game }) {
     hand: table.hand,
     cards: table.community.length,
     active: table.activePlayerId,
+    phase: table.phase,
   });
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 250);
@@ -467,10 +332,26 @@ function PokerTable({ game }: { game: Game }) {
   const toCall = me ? Math.max(0, table.currentBet - me.bet) : 0;
   const minimumRaise = table.currentBet + table.minRaise;
   const maximum = me ? me.bet + me.stack : 0;
-  useEffect(
-    () => setRaiseTo(Math.min(maximum, Math.max(minimumRaise, table.bigBlind))),
-    [minimumRaise, maximum, table.bigBlind],
-  );
+  const raiseSteps = useMemo(() => {
+    const minimum = Math.min(minimumRaise, maximum);
+    if (maximum <= minimum) return [Math.max(0, maximum)];
+    const clamp = (value: number) =>
+      Math.min(maximum, Math.max(minimum, Math.round(value)));
+    const values = new Set<number>([
+      minimum,
+      clamp(table.pot / 2),
+      clamp((table.pot * 3) / 4),
+      clamp(table.pot),
+      maximum,
+    ]);
+    const range = maximum - minimum;
+    const increment =
+      Math.max(1, Math.ceil(range / 9 / table.bigBlind)) * table.bigBlind;
+    for (let value = minimum + increment; value < maximum; value += increment)
+      values.add(clamp(value));
+    return [...values].sort((a, b) => a - b);
+  }, [maximum, minimumRaise, table.bigBlind, table.pot]);
+  useEffect(() => setRaiseTo(raiseSteps[0] ?? 0), [raiseSteps]);
   useEffect(() => {
     setRaiseOpen(false);
   }, [table.activePlayerId, table.phase]);
@@ -488,6 +369,7 @@ function PokerTable({ game }: { game: Game }) {
       hand: table.hand,
       cards: table.community.length,
       active: table.activePlayerId,
+      phase: table.phase,
     };
     const context = audioRef.current;
     if (!sound || !context) return;
@@ -502,11 +384,13 @@ function PokerTable({ game }: { game: Game }) {
         : /^(Raise|Bet|All-in)/.test(actedSeat?.lastAction ?? "")
           ? "chips"
           : undefined;
-    if (actionEffect) playPokerSound(context, actionEffect);
+    if (table.phase === "shuffling" && previous.phase !== "shuffling")
+      playCasinoSound(context, "shuffle");
+    else if (actionEffect) playCasinoSound(context, actionEffect);
     if (table.community.length > previous.cards)
-      playPokerSound(context, "card", table.community.length - previous.cards);
+      playCasinoSound(context, "card", table.community.length - previous.cards);
     else if (table.hand > previous.hand)
-      playPokerSound(
+      playCasinoSound(
         context,
         "card",
         table.seats.reduce((total, seat) => total + seat.cards.length, 0),
@@ -516,11 +400,17 @@ function PokerTable({ game }: { game: Game }) {
     table.activePlayerId,
     table.community.length,
     table.hand,
+    table.phase,
     table.seats,
   ]);
   const seconds = table.deadline
     ? Math.max(0, Math.ceil((table.deadline - now) / 1000))
     : 0;
+  const turnDurationMs = (table.mode === "spin" ? 15 : 25) * 1_000;
+  const turnRemainingMs = table.deadline
+    ? Math.max(0, Math.min(turnDurationMs, table.deadline - now))
+    : 0;
+  const turnProgress = 100 * (1 - turnRemainingMs / turnDurationMs);
   const myTurn = table.activePlayerId === game.playerId;
   const allInContenders = table.seats.filter(
     (seat) => seat.status === "active" || seat.status === "all-in",
@@ -532,6 +422,8 @@ function PokerTable({ game }: { game: Game }) {
     allInContenders.some((seat) => seat.status === "all-in");
   const positions = table.mode === "spin" ? THREE_POSITIONS : FIVE_POSITIONS;
   const totalSeats = table.mode === "spin" ? 3 : 5;
+  const pokerMaximumBet = table.mode === "cash" ? table.bigBlind * 100 : 500;
+  const pokerMaximumPot = pokerMaximumBet * table.seats.length;
   const dealDelays = useMemo(() => {
     const dealtSeats = table.seats.filter((seat) => seat.cards.length > 0);
     const seatsInDealOrder = [...dealtSeats].sort((a, b) => {
@@ -545,7 +437,7 @@ function PokerTable({ game }: { game: Game }) {
     seatsInDealOrder.forEach((seat, seatIndex) => {
       seat.cards.forEach((card, cardIndex) => {
         const dealIndex = cardIndex * seatsInDealOrder.length + seatIndex;
-        delays.set(card.id, dealIndex * POKER_DEAL_INTERVAL);
+        delays.set(card.id, dealIndex * CASINO_DEAL_INTERVAL);
       });
     });
     return delays;
@@ -553,6 +445,12 @@ function PokerTable({ game }: { game: Game }) {
   const sendAction = (action: PokerAction, amount?: number) => {
     setRaiseOpen(false);
     return game.pokerCommand({ type: "action", action, amount });
+  };
+  const selectRaiseTarget = (target: number) => {
+    const nearest = raiseSteps.reduce((best, value) =>
+      Math.abs(value - target) < Math.abs(best - target) ? value : best,
+    );
+    setRaiseTo(nearest);
   };
   const submitChat = (event: FormEvent) => {
     event.preventDefault();
@@ -564,6 +462,11 @@ function PokerTable({ game }: { game: Game }) {
   const seatSlots = Array.from({ length: totalSeats }, (_, seat) =>
     table.seats.find((entry) => entry.seat === seat),
   );
+  const collectingBets =
+    table.seats.some((seat) => seat.bet > 0) &&
+    (table.phase === "showdown" ||
+      (!table.activePlayerId &&
+        ["preflop", "flop", "turn", "river"].includes(table.phase)));
   const handResult = table.history.find((item) => item.hand === table.hand);
   const showdownCards = useMemo(() => {
     const winning = new Set<string>();
@@ -590,6 +493,12 @@ function PokerTable({ game }: { game: Game }) {
   const myWin = handResult?.winners.find(
     (winner) => winner.playerId === game.playerId,
   );
+  const revealSeconds = table.revealDeadline
+    ? Math.max(0, Math.ceil((table.revealDeadline - now) / 1000))
+    : 0;
+  const uncontestedWin = myWin?.label === "Uncontested pot";
+  const canChooseReveal =
+    uncontestedWin && !!table.revealDeadline && table.revealDeadline > now;
   const handLabel = me
     ? (describePokerHolding(me.cards, table.community) ?? me.handLabel)
     : undefined;
@@ -633,7 +542,7 @@ function PokerTable({ game }: { game: Game }) {
           onClick={() => {
             const context = (audioRef.current ??= new AudioContext());
             void context.resume();
-            preloadPokerSounds(context);
+            preloadCasinoSounds(context);
             setSound(!sound);
           }}
         >
@@ -660,7 +569,7 @@ function PokerTable({ game }: { game: Game }) {
                     key={table.community[index].id}
                     card={table.community[index]}
                     index={index}
-                    dealDelay={index < 3 ? index * POKER_DEAL_INTERVAL : 0}
+                    dealDelay={index < 3 ? index * CASINO_DEAL_INTERVAL : 0}
                     highlighted={showdownCards.winning.has(
                       table.community[index].id,
                     )}
@@ -677,7 +586,11 @@ function PokerTable({ game }: { game: Game }) {
               )}
               <div className="pot-display">
                 <span>POT TOTAL</span>
-                <PokerChipStack amount={table.pot} pot />
+                <PokerChipStack
+                  amount={table.pot}
+                  maximum={pokerMaximumPot}
+                  pot
+                />
               </div>
             </div>
             {seatSlots.map((seat, index) => (
@@ -688,12 +601,37 @@ function PokerTable({ game }: { game: Game }) {
                 table={table}
                 playerId={game.playerId}
                 turnSeconds={seconds}
+                turnProgress={turnProgress}
                 dealDelays={dealDelays}
                 winningCardIds={showdownCards.winning}
                 winnerPlayerIds={showdownCards.winnerPlayerIds}
                 showdown={showdownCards.hasCombination}
+                collectingBet={collectingBets && !!seat?.bet}
+                maximumBet={pokerMaximumBet}
               />
             ))}
+            {collectingBets &&
+              seatSlots.map((seat, index) =>
+                seat?.bet ? (
+                  <div
+                    aria-hidden="true"
+                    className="poker-chip-flight"
+                    key={`${table.hand}-${table.phase}-${seat.id}-${seat.bet}`}
+                    style={
+                      {
+                        "--chip-from-x": `${positions[index].x}%`,
+                        "--chip-from-y": `${positions[index].y}%`,
+                        "--chip-collect-delay": `${index * 35}ms`,
+                      } as CSSProperties
+                    }
+                  >
+                    <PokerChipStack
+                      amount={seat.bet}
+                      maximum={pokerMaximumBet}
+                    />
+                  </div>
+                ) : null,
+              )}
             {table.wheelSpinning && (
               <div className="spin-wheel-overlay">
                 <div className="spin-wheel">
@@ -706,6 +644,9 @@ function PokerTable({ game }: { game: Game }) {
                 </div>
                 <p>Le prix de la nuit…</p>
               </div>
+            )}
+            {table.phase === "shuffling" && (
+              <PokerShuffleAnimation hand={table.hand} />
             )}
             {table.phase === "showdown" && handResult && (
               <div className="hand-result-banner" role="status">
@@ -728,7 +669,7 @@ function PokerTable({ game }: { game: Game }) {
                     ))}
                   </div>
                 </div>
-                {myWin && (
+                {myWin && !uncontestedWin && (
                   <button
                     type="button"
                     className="muck-hand"
@@ -771,140 +712,221 @@ function PokerTable({ game }: { game: Game }) {
               </div>
             )}
           </div>
-          <div className="poker-status">
-            <span className={myTurn ? "active" : ""} />
-            <div>
-              <b>
-                {myTurn
-                  ? "YOUR TURN"
-                  : allInRunout
-                    ? "ALL-IN · RÉVÉLATION"
-                    : table.message}
-              </b>
-              <small>
-                {table.phase === "waiting"
-                  ? "La prochaine hand démarre dès qu’un adversaire arrive."
-                  : `${table.phase.toUpperCase()} · Hand ${String(table.hand).padStart(3, "0")}`}
-              </small>
-            </div>
-          </div>
-          <div className="poker-hand-summary">
-            <div>
-              <span>YOUR HAND</span>
-              <b>{handLabel ?? "En attente des cartes"}</b>
-            </div>
-            <div>
-              <span>YOUR STACK</span>
-              <b>{credits(me?.stack ?? 0)} cr.</b>
-            </div>
-            {!!me?.bet && (
+          <div className="poker-control-bar">
+            <div className="poker-hand-summary">
               <div>
-                <span>STREET BET</span>
-                <b>{credits(me.bet)} cr.</b>
+                <span>YOUR HAND</span>
+                <b>{handLabel ?? "En attente des cartes"}</b>
               </div>
-            )}
-          </div>
-          <div className={`poker-action-zone ${myTurn ? "enabled" : ""}`}>
-            {allInRunout ? (
-              <div className="poker-runout" role="status">
-                <span>ALL-IN</span>
-                <b>Les cartes se révèlent…</b>
+              <div>
+                <span>YOUR STACK</span>
+                <b>{credits(me?.stack ?? 0)} cr.</b>
               </div>
-            ) : (
-              <>
-                <div className="poker-actions">
+              {!!me?.bet && (
+                <div>
+                  <span>STREET BET</span>
+                  <b>{credits(me.bet)} cr.</b>
+                </div>
+              )}
+            </div>
+            <div
+              className={`poker-action-zone ${myTurn || canChooseReveal ? "enabled" : ""}`}
+            >
+              {canChooseReveal ? (
+                <div
+                  className="hand-visibility-actions"
+                  role="group"
+                  aria-label="Visibilité de votre main"
+                >
                   <button
-                    disabled={!myTurn || game.pending}
-                    onClick={() => sendAction("fold")}
-                    className="fold"
+                    type="button"
+                    className="show-hand"
+                    disabled={game.pending}
+                    onClick={() => game.pokerCommand({ type: "show" })}
                   >
-                    Fold
-                  </button>
-                  <button
-                    disabled={!myTurn || game.pending}
-                    onClick={() => sendAction(toCall ? "call" : "check")}
-                  >
-                    <span>{toCall ? "Call" : "Check"}</span>
-                    {!!toCall && (
-                      <small>
-                        {credits(Math.min(toCall, me?.stack ?? 0))} cr.
-                      </small>
-                    )}
+                    <span>Montrer</span>
+                    <b>{revealSeconds}s</b>
                   </button>
                   <button
                     type="button"
-                    disabled={
-                      !myTurn || game.pending || maximum <= table.currentBet
-                    }
-                    onClick={() => setRaiseOpen(!raiseOpen)}
-                    className="raise"
-                    aria-expanded={raiseOpen}
+                    className="hide-hand"
+                    disabled={game.pending}
+                    onClick={() => game.pokerCommand({ type: "muck" })}
                   >
-                    {table.currentBet ? "Raise" : "Bet"}
+                    <span>
+                      <EyeOff size={13} /> Cacher
+                    </span>
                   </button>
                 </div>
-                {raiseOpen && (
-                  <div className="raise-drawer">
-                    <div className="raise-presets">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setRaiseTo(
-                            Math.min(
-                              maximum,
-                              Math.max(minimumRaise, Math.round(table.pot / 2)),
-                            ),
-                          )
-                        }
-                      >
-                        ½ pot
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setRaiseTo(
-                            Math.min(
-                              maximum,
-                              Math.max(minimumRaise, table.pot),
-                            ),
-                          )
-                        }
-                      >
-                        Pot
-                      </button>
-                      <button type="button" onClick={() => setRaiseTo(maximum)}>
-                        All-in
-                      </button>
-                    </div>
-                    <div className="raise-slider">
-                      <span>TOTAL BET</span>
-                      <input
-                        aria-label="Total raise amount"
-                        type="range"
-                        min={Math.min(minimumRaise, maximum)}
-                        max={maximum}
-                        value={raiseTo || 0}
-                        onChange={(event) =>
-                          setRaiseTo(Number(event.target.value))
-                        }
-                      />
-                      <b>{credits(raiseTo)} cr.</b>
-                    </div>
+              ) : uncontestedWin && table.phase === "showdown" ? (
+                <div className="hand-visibility-resolved" role="status">
+                  <EyeOff size={14} />
+                  <span>
+                    <small>VISIBILITÉ DE LA MAIN</small>
+                    <b>{me?.mucked ? "Main cachée" : "Main montrée"}</b>
+                  </span>
+                </div>
+              ) : allInRunout ? (
+                <div className="poker-runout" role="status">
+                  <span>ALL-IN</span>
+                  <b>Les cartes se révèlent…</b>
+                </div>
+              ) : (
+                <>
+                  <div className="poker-actions">
+                    <button
+                      disabled={!myTurn || game.pending}
+                      onClick={() => sendAction("fold")}
+                      className="fold"
+                    >
+                      Fold
+                    </button>
+                    <button
+                      disabled={!myTurn || game.pending}
+                      onClick={() => sendAction(toCall ? "call" : "check")}
+                    >
+                      <span>{toCall ? "Call" : "Check"}</span>
+                      {!!toCall && (
+                        <small>
+                          {credits(Math.min(toCall, me?.stack ?? 0))} cr.
+                        </small>
+                      )}
+                    </button>
                     <button
                       type="button"
-                      className="raise-confirm"
-                      onClick={() =>
-                        raiseTo >= maximum
-                          ? sendAction("all-in")
-                          : sendAction("raise", raiseTo)
+                      disabled={
+                        !myTurn || game.pending || maximum <= table.currentBet
                       }
+                      onClick={() => setRaiseOpen(!raiseOpen)}
+                      className="raise"
+                      aria-expanded={raiseOpen}
                     >
-                      {raiseTo >= maximum ? "Confirm all-in" : "Confirm raise"}
+                      {table.currentBet ? "Raise" : "Bet"}
                     </button>
                   </div>
-                )}
-              </>
-            )}
+                  {raiseOpen && (
+                    <div className="raise-drawer">
+                      <div className="raise-presets">
+                        <button
+                          type="button"
+                          onClick={() => selectRaiseTarget(table.pot / 2)}
+                        >
+                          ½ pot
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => selectRaiseTarget((table.pot * 3) / 4)}
+                        >
+                          ¾ pot
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => selectRaiseTarget(table.pot)}
+                        >
+                          Pot
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => selectRaiseTarget(maximum)}
+                        >
+                          All-in
+                        </button>
+                      </div>
+                      <div className="raise-slider">
+                        <div className="raise-slider-heading">
+                          <span>TOTAL BET</span>
+                          <b>{credits(raiseTo)} cr.</b>
+                        </div>
+                        <div
+                          className="raise-range-shell"
+                          style={
+                            {
+                              "--raise-progress": `${raiseSteps.length > 1 ? (Math.max(0, raiseSteps.indexOf(raiseTo)) / (raiseSteps.length - 1)) * 100 : 0}%`,
+                            } as CSSProperties
+                          }
+                        >
+                          <button
+                            type="button"
+                            aria-label="Palier précédent"
+                            disabled={raiseSteps.indexOf(raiseTo) <= 0}
+                            onClick={() =>
+                              setRaiseTo(
+                                raiseSteps[
+                                  Math.max(0, raiseSteps.indexOf(raiseTo) - 1)
+                                ],
+                              )
+                            }
+                          >
+                            −
+                          </button>
+                          <div className="raise-track">
+                            <input
+                              aria-label="Total raise amount"
+                              aria-valuetext={`${credits(raiseTo)} crédits`}
+                              type="range"
+                              min={0}
+                              max={Math.max(0, raiseSteps.length - 1)}
+                              step={1}
+                              value={Math.max(0, raiseSteps.indexOf(raiseTo))}
+                              onChange={(event) =>
+                                setRaiseTo(
+                                  raiseSteps[Number(event.target.value)],
+                                )
+                              }
+                            />
+                            <div className="raise-ticks" aria-hidden="true">
+                              {raiseSteps.map((value, index) => (
+                                <i
+                                  key={value}
+                                  className={value <= raiseTo ? "reached" : ""}
+                                  style={{
+                                    left: `${raiseSteps.length > 1 ? (index / (raiseSteps.length - 1)) * 100 : 0}%`,
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            aria-label="Palier suivant"
+                            disabled={
+                              raiseSteps.indexOf(raiseTo) >=
+                              raiseSteps.length - 1
+                            }
+                            onClick={() =>
+                              setRaiseTo(
+                                raiseSteps[
+                                  Math.min(
+                                    raiseSteps.length - 1,
+                                    raiseSteps.indexOf(raiseTo) + 1,
+                                  )
+                                ],
+                              )
+                            }
+                          >
+                            +
+                          </button>
+                        </div>
+                        <small>{raiseSteps.length} paliers</small>
+                      </div>
+                      <button
+                        type="button"
+                        className="raise-confirm"
+                        onClick={() =>
+                          raiseTo >= maximum
+                            ? sendAction("all-in")
+                            : sendAction("raise", raiseTo)
+                        }
+                      >
+                        {raiseTo >= maximum
+                          ? "Confirm all-in"
+                          : "Confirm raise"}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </section>
       </div>
@@ -1004,20 +1026,58 @@ function PokerTable({ game }: { game: Game }) {
   );
 }
 
-function PokerChipStack({
+export function PokerChipStack({
   amount,
+  maximum,
   pot = false,
 }: {
   amount: number;
+  maximum: number;
   pot?: boolean;
 }) {
+  const stage = casinoChipStackForAmount(amount, maximum);
+  const chipSize = pot ? 42 : 30;
+  const columnStep = pot ? 19 : 14;
+  const maximumLayers = Math.max(
+    ...stage.columns.map((column) => column.layers),
+  );
   return (
     <div
-      className={`poker-chip-stack ${pot ? "pot-chips" : "bet-chips"}`}
+      key={stage.index}
+      className={`poker-chip-stack chip-stack-stage-${stage.index} ${pot ? "pot-chips" : "bet-chips"}`}
       role="img"
       aria-label={`${credits(amount)} crédits en jetons`}
+      data-chip-stage={stage.index}
+      style={
+        {
+          "--chip-stack-width": `${chipSize + (stage.columns.length - 1) * columnStep + 14}px`,
+          "--chip-stack-height": `${chipSize + (maximumLayers - 1) * 4 + 8}px`,
+        } as CSSProperties
+      }
     >
-      <span>{credits(amount)}</span>
+      <span className="poker-chip-pile" aria-hidden="true">
+        {stage.columns.map((column, columnIndex) => (
+          <span
+            className={`poker-chip-column chip-${column.denomination}`}
+            key={`${column.denomination}-${columnIndex}`}
+            style={
+              {
+                "--chip-column-x": `${(columnIndex - (stage.columns.length - 1) / 2) * columnStep}px`,
+                "--chip-column-index": columnIndex,
+              } as CSSProperties
+            }
+          >
+            {Array.from({ length: column.layers }, (_, layer) => (
+              <i
+                className="poker-chip-disc"
+                key={layer}
+                style={{ "--chip-layer": layer } as CSSProperties}
+              />
+            ))}
+          </span>
+        ))}
+      </span>
+      <span className="poker-chip-amount">{credits(amount)}</span>
     </div>
   );
 }
@@ -1028,20 +1088,26 @@ function PokerSeatView({
   table,
   playerId,
   turnSeconds,
+  turnProgress,
   dealDelays,
   winningCardIds,
   winnerPlayerIds,
   showdown,
+  collectingBet,
+  maximumBet,
 }: {
   seat?: PokerSeat;
   position: { x: number; y: number };
   table: NonNullable<NonNullable<Game["pokerState"]>["table"]>;
   playerId: string;
   turnSeconds: number;
+  turnProgress: number;
   dealDelays: ReadonlyMap<string, number>;
   winningCardIds: ReadonlySet<string>;
   winnerPlayerIds: ReadonlySet<string>;
   showdown: boolean;
+  collectingBet: boolean;
+  maximumBet: number;
 }) {
   if (!seat)
     return (
@@ -1063,7 +1129,6 @@ function PokerSeatView({
   const mine = seat.id === playerId;
   const active = table.activePlayerId === seat.id;
   const winner = winnerPlayerIds.has(seat.id);
-  const turnDuration = table.mode === "spin" ? 15 : 25;
   return (
     <div
       className={`poker-seat occupied ${mine ? "mine" : ""} ${active ? "acting" : ""} ${winner ? "winner" : ""} ${seat.status}`}
@@ -1071,7 +1136,6 @@ function PokerSeatView({
         {
           "--seat-x": `${position.x}%`,
           "--seat-y": `${position.y}%`,
-          "--turn-duration": `${turnDuration}s`,
         } as CSSProperties
       }
     >
@@ -1089,8 +1153,8 @@ function PokerSeatView({
         ))}
       </div>
       {!!seat.bet && (
-        <div className="seat-bet">
-          <PokerChipStack amount={seat.bet} />
+        <div className={`seat-bet ${collectingBet ? "is-collecting" : ""}`}>
+          <PokerChipStack amount={seat.bet} maximum={maximumBet} />
         </div>
       )}
       {seat.seat === table.button && <span className="dealer-button">D</span>}
@@ -1124,6 +1188,7 @@ function PokerSeatView({
               height="100%"
               rx="10"
               pathLength={100}
+              style={{ strokeDashoffset: turnProgress }}
             />
           </svg>
         )}

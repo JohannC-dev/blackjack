@@ -30,6 +30,7 @@ const emptySides = () => ({ three: null, pairs: null });
 const BETTING_COUNTDOWN_MS = 12_000;
 const ALL_READY_COUNTDOWN_MS = 3_000;
 const SETTLED_COUNTDOWN_MS = 7_000;
+export const BLACKJACK_SHUFFLE_MS = 2_200;
 export function makeShoe(): Card[] {
   const cards: Card[] = [];
   for (let deck = 0; deck < 8; deck++)
@@ -50,6 +51,7 @@ export class Table {
   shoe: Card[];
   private dealQueue: (number | "dealer")[] = [];
   private nextStep = 0;
+  private startRoundAfterShuffle = false;
   private turnOrder: string[] = [];
   lastUsed = Date.now();
   constructor(
@@ -66,6 +68,7 @@ export class Table {
         index,
         playerId: null,
         bet: emptyBet(),
+        previousBet: null,
         hands: [],
         sides: emptySides(),
         committed: 0,
@@ -83,6 +86,7 @@ export class Table {
     const seats = this.state.seats.map((seat) => ({
       ...seat,
       bet: { ...seat.bet },
+      previousBet: seat.previousBet ? { ...seat.previousBet } : null,
       sides: { ...seat.sides },
       hands: seat.hands.map((hand) => {
         const concealed =
@@ -154,6 +158,16 @@ export class Table {
     if (!this.shoe.length) this.shoe = makeShoe();
     return this.draw();
   }
+  private startShuffle(now = Date.now(), startRoundAfter = false) {
+    this.shoe = makeShoe();
+    this.state.phase = "shuffling";
+    this.state.activeHandId = null;
+    this.state.deadline = null;
+    this.nextStep = now + BLACKJACK_SHUFFLE_MS;
+    this.startRoundAfterShuffle = startRoundAfter;
+    this.state.message = "Le croupier mélange le sabot…";
+    this.emit();
+  }
   add(player: Player) {
     this.players.set(player.id, player);
     if (
@@ -166,6 +180,7 @@ export class Table {
       if (seat) {
         seat.playerId = player.id;
         seat.bet = emptyBet();
+        seat.previousBet = null;
       }
     }
     this.emit();
@@ -180,6 +195,7 @@ export class Table {
       if (seat.playerId === playerId) {
         seat.playerId = null;
         seat.bet = emptyBet();
+        seat.previousBet = null;
         seat.hands = [];
         seat.sides = emptySides();
         seat.committed = 0;
@@ -196,6 +212,11 @@ export class Table {
     if (!player) throw new Error("Rejoignez une table pour jouer.");
     if (!command || typeof command !== "object")
       throw new Error("Action invalide.");
+    if (
+      this.state.phase === "shuffling" &&
+      (command.type === "gamble" || command.type === "cashout")
+    )
+      throw new Error("Le sabot est en cours de mélange.");
     if (command.type === "gamble" || command.type === "cashout") {
       const gamble = this.state.gambles.find(
         (entry) => entry.playerId === playerId && entry.status === "available",
@@ -240,7 +261,9 @@ export class Table {
         }
       }
     } else if (
-      ["claim", "release", "bet", "ready", "refill"].includes(command.type)
+      ["claim", "release", "bet", "repeat", "ready", "refill"].includes(
+        command.type,
+      )
     ) {
       if (this.state.phase !== "betting")
         throw new Error("Attendez la prochaine manche.");
@@ -259,6 +282,19 @@ export class Table {
         )
           throw new Error("Vérifiez vos mises et votre solde.");
         player.ready = command.ready;
+      } else if (command.type === "repeat") {
+        const own = this.state.seats.filter(
+          (seat) => seat.playerId === playerId && seat.previousBet,
+        );
+        const total = own.reduce(
+          (sum, seat) => sum + betTotal(seat.previousBet!),
+          0,
+        );
+        if (!total) throw new Error("Aucune mise précédente à répéter.");
+        if (total > player.balance)
+          throw new Error("Vous n’avez pas assez de crédits.");
+        for (const seat of own) seat.bet = { ...seat.previousBet! };
+        player.ready = false;
       } else if (
         command.type === "claim" ||
         command.type === "release" ||
@@ -272,12 +308,14 @@ export class Table {
           if (seat.playerId) throw new Error("Cette place est déjà occupée.");
           seat.playerId = playerId;
           seat.bet = emptyBet();
+          seat.previousBet = null;
         } else {
           if (seat.playerId !== playerId)
             throw new Error("Cette place ne vous appartient pas.");
           if (command.type === "release") {
             seat.playerId = null;
             seat.bet = emptyBet();
+            seat.previousBet = null;
             // A released seat must not retain any round-local presentation or
             // accounting state. In normal play these fields are empty during
             // betting, but clearing them here keeps release idempotent and
@@ -426,6 +464,10 @@ export class Table {
       this.state.deadline = null;
       return;
     }
+    if (this.shoe.length < 160) {
+      this.startShuffle(Date.now(), true);
+      return;
+    }
     this.state.gambles = this.state.gambles.filter(
       (entry) => entry.status === "available",
     );
@@ -435,7 +477,6 @@ export class Table {
     const dealtSeatIndexes = new Set(seats.map((seat) => seat.index));
     for (const seat of this.state.seats)
       if (!dealtSeatIndexes.has(seat.index)) seat.bet = emptyBet();
-    if (this.shoe.length < 160) this.shoe = makeShoe();
     this.state.round++;
     this.state.phase = "dealing";
     this.state.deadline = null;
@@ -443,6 +484,7 @@ export class Table {
     this.state.message = "Les jeux sont faits.";
     for (const seat of seats) {
       const player = this.players.get(seat.playerId!)!;
+      seat.previousBet = { ...seat.bet };
       seat.committed = betTotal(seat.bet);
       player.balance -= seat.committed;
       seat.hands = [
@@ -612,7 +654,18 @@ export class Table {
   }
   tick(now = Date.now()) {
     let changed = false;
-    if (this.state.phase === "betting") {
+    if (this.state.phase === "shuffling" && now >= this.nextStep) {
+      const shouldStartRound = this.startRoundAfterShuffle;
+      this.startRoundAfterShuffle = false;
+      this.nextStep = 0;
+      this.state.phase = "betting";
+      this.state.message = "À vous de jouer. Placez vos mises.";
+      if (shouldStartRound) {
+        this.startRound();
+        return;
+      }
+      changed = true;
+    } else if (this.state.phase === "betting") {
       for (const player of this.players.values())
         if (!player.connected && now - player.lastSeen > 60000) {
           this.remove(player.id);
@@ -656,23 +709,21 @@ export class Table {
       this.state.deadline &&
       now >= this.state.deadline
     ) {
-      this.state.phase = "betting";
       this.state.deadline = null;
       this.state.dealer = [];
-      this.state.message = "À vous de jouer. Placez vos mises.";
       for (const player of this.players.values()) player.ready = false;
       for (const seat of this.state.seats) {
+        seat.bet = emptyBet();
         seat.hands = [];
         seat.sides = emptySides();
         seat.committed = 0;
       }
-      for (const player of this.players.values()) {
-        const own = this.state.seats.filter((s) => s.playerId === player.id);
-        if (own.reduce((sum, s) => sum + betTotal(s.bet), 0) > player.balance)
-          own.forEach((s) => {
-            s.bet = emptyBet();
-          });
+      if (this.shoe.length < 160) {
+        this.startShuffle(now);
+        return;
       }
+      this.state.phase = "betting";
+      this.state.message = "À vous de jouer. Placez vos mises.";
       changed = true;
     }
     if (changed) this.emit();

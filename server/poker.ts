@@ -38,6 +38,8 @@ const SPIN_LEVELS = [
   [250, 500],
 ] as const;
 const ACTION_MS = { cash: 25_000, spin: 15_000 } as const;
+const UNCONTESTED_REVEAL_MS = 3_000;
+export const POKER_SHUFFLE_MS = 2_200;
 
 type Participant = {
   player: Player;
@@ -93,6 +95,7 @@ export class PokerTable {
   minRaise: number;
   activePlayerId: string | null = null;
   deadline: number | null = null;
+  revealDeadline: number | null = null;
   wheelMultiplier: number | null = null;
   wheelSpinning = false;
   history: PokerHistoryItem[] = [];
@@ -264,7 +267,42 @@ export class PokerTable {
     entry.lastAction = label;
   }
 
+  private startShuffle(now = Date.now()) {
+    const players = this.eligible();
+    if (players.length < 2) {
+      this.phase = this.mode === "spin" ? "complete" : "waiting";
+      this.setTurn(null);
+      this.nextStepAt = 0;
+      this.message = "En attente d’un adversaire.";
+      this.lonelySince ||= now;
+      this.publish();
+      return;
+    }
+    this.phase = "shuffling";
+    this.setTurn(null);
+    this.revealDeadline = null;
+    this.community = [];
+    this.deadContributions = [];
+    this.streetStepAt = 0;
+    this.currentBet = 0;
+    this.minRaise = this.bigBlind;
+    this.smallBlindSeat = -1;
+    this.bigBlindSeat = -1;
+    for (const entry of this.participants) {
+      entry.bet = 0;
+      entry.committed = 0;
+      entry.cards = [];
+      entry.mucked = false;
+      entry.lastAction = undefined;
+      entry.status = entry.stack > 0 ? "waiting" : "out";
+    }
+    this.nextStepAt = now + POKER_SHUFFLE_MS;
+    this.message = "Le croupier mélange le jeu…";
+    this.publish();
+  }
+
   startHand(now = Date.now()) {
+    this.revealDeadline = null;
     const players = this.eligible();
     if (players.length < 2) {
       this.phase = this.mode === "spin" ? "complete" : "waiting";
@@ -575,6 +613,9 @@ export class PokerTable {
   private finishHand(
     winners: { entry: Participant; amount: number; label: string }[],
   ) {
+    const finishedAt = Date.now();
+    const uncontested =
+      winners.length === 1 && winners[0].label === "Uncontested pot";
     this.phase = "showdown";
     this.setTurn(null);
     this.streetStepAt = 0;
@@ -589,27 +630,29 @@ export class PokerTable {
         name: entry.player.name,
         amount,
         label,
-        cards:
-          label === "Uncontested pot"
-            ? []
-            : entry.cards.map((card) => ({ ...card })),
-        mucked: label === "Uncontested pot",
+        cards: entry.cards.map((card) => ({ ...card })),
+        mucked: uncontested,
       })),
-      timestamp: Date.now(),
+      timestamp: finishedAt,
     });
     this.history = this.history.slice(0, 10);
     this.message = winners
       .map((winner) => `${winner.entry.player.name} gagne ${winner.amount}`)
       .join(" · ");
-    for (const { entry, label } of winners)
-      entry.mucked = label === "Uncontested pot";
+    for (const { entry } of winners) entry.mucked = uncontested;
+    this.revealDeadline = uncontested
+      ? finishedAt + UNCONTESTED_REVEAL_MS
+      : null;
     for (const entry of this.participants)
       if (entry.stack === 0) entry.status = "out";
     const remaining = this.participants.filter((entry) => entry.stack > 0);
     if (this.mode === "spin" && remaining.length === 1) {
       this.phase = "complete";
       this.nextStepAt = 0;
-    } else this.nextStepAt = Date.now() + 5_000;
+    } else
+      this.nextStepAt = uncontested
+        ? finishedAt + UNCONTESTED_REVEAL_MS
+        : finishedAt + 5_000;
     this.publish();
   }
 
@@ -625,7 +668,28 @@ export class PokerTable {
     entry.mucked = true;
     winner.mucked = true;
     winner.cards = [];
+    this.revealDeadline = null;
     entry.lastAction = "Muck";
+    this.publish();
+  }
+
+  show(playerId: string) {
+    const entry = this.find(playerId);
+    if (this.phase !== "showdown")
+      throw new Error("You can only show after the hand.");
+    if (!this.revealDeadline || Date.now() >= this.revealDeadline)
+      throw new Error("The reveal window has closed.");
+    const result = this.history.find((item) => item.hand === this.hand);
+    const winner = result?.winners.find(
+      (candidate) => candidate.playerId === playerId,
+    );
+    if (!winner || winner.label !== "Uncontested pot")
+      throw new Error("Only an uncontested winner can show their hand.");
+    entry.mucked = false;
+    winner.mucked = false;
+    winner.cards = entry.cards.map((card) => ({ ...card }));
+    this.revealDeadline = null;
+    entry.lastAction = "Show";
     this.publish();
   }
 
@@ -677,7 +741,7 @@ export class PokerTable {
       this.nextStepAt &&
       now >= this.nextStepAt
     ) {
-      this.startHand(now);
+      this.startShuffle(now);
       return;
     }
     if (
@@ -687,6 +751,14 @@ export class PokerTable {
     ) {
       this.wheelSpinning = false;
       this.levelStartedAt = now;
+      this.startShuffle(now);
+      return;
+    }
+    if (
+      this.phase === "shuffling" &&
+      this.nextStepAt &&
+      now >= this.nextStepAt
+    ) {
       this.startHand(now);
       return;
     }
@@ -712,7 +784,7 @@ export class PokerTable {
       this.phase === "showdown"
     ) {
       this.nextStepAt = 0;
-      this.startHand(now);
+      this.startShuffle(now);
     }
   }
 
@@ -721,6 +793,12 @@ export class PokerTable {
       this.phase === "showdown" ||
       this.phase === "complete" ||
       (this.inHand() && this.shouldRunoutAfterAllIn());
+    const revealChoiceWinnerId = this.revealDeadline
+      ? this.history
+          .find((item) => item.hand === this.hand)
+          ?.winners.find((winner) => winner.label === "Uncontested pot")
+          ?.playerId
+      : undefined;
     return {
       id: this.id,
       mode: this.mode,
@@ -739,7 +817,9 @@ export class PokerTable {
         connected: entry.player.connected,
         status: entry.status,
         cards:
-          !entry.mucked &&
+          (!entry.mucked ||
+            (entry.player.id === viewerId &&
+              entry.player.id === revealChoiceWinnerId)) &&
           (entry.player.id === viewerId ||
             (reveal && entry.status !== "folded"))
             ? entry.cards.map((card) => ({ ...card }))
@@ -751,7 +831,9 @@ export class PokerTable {
               })),
         mucked: entry.mucked,
         handLabel:
-          !entry.mucked &&
+          (!entry.mucked ||
+            (entry.player.id === viewerId &&
+              entry.player.id === revealChoiceWinnerId)) &&
           (entry.player.id === viewerId ||
             (reveal && entry.status !== "folded"))
             ? describePokerHolding(entry.cards, this.community)
@@ -767,6 +849,7 @@ export class PokerTable {
       bigBlindSeat: this.bigBlindSeat,
       activePlayerId: this.activePlayerId,
       deadline: this.deadline,
+      revealDeadline: this.revealDeadline,
       wheelMultiplier: this.wheelMultiplier,
       wheelSpinning: this.wheelSpinning,
       history: this.history.map((item) => ({
@@ -774,7 +857,7 @@ export class PokerTable {
         community: item.community.map((card) => ({ ...card })),
         winners: item.winners.map((winner) => ({
           ...winner,
-          cards: winner.cards.map((card) => ({ ...card })),
+          cards: winner.mucked ? [] : winner.cards.map((card) => ({ ...card })),
         })),
       })),
       chat: this.chat
@@ -861,6 +944,7 @@ export class PokerManager {
       if (!table) throw new Error("Vous n’êtes pas à une table de poker.");
       if (command.type === "chat") table.chatMessage(player.id, command.text);
       else if (command.type === "muck") table.muck(player.id);
+      else if (command.type === "show") table.show(player.id);
       else {
         table.action(player.id, command.action, command.amount);
         this.settleSpin(table);

@@ -59,12 +59,17 @@ try {
   );
 
   let guard = 0;
-  while (players[0].poker?.table?.phase !== "complete" && guard++ < 50) {
+  while (players[0].poker?.table?.phase !== "complete" && guard < 50) {
     const table = players[0].poker?.table;
-    if (!table || !["preflop", "flop", "turn", "river"].includes(table.phase)) {
+    if (
+      !table ||
+      !table.activePlayerId ||
+      !["preflop", "flop", "turn", "river"].includes(table.phase)
+    ) {
       await Bun.sleep(100);
       continue;
     }
+    guard++;
     const active = players.find(
       (player) => player.id === table.activePlayerId,
     )!;

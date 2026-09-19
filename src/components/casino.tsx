@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -26,13 +27,13 @@ import {
   LoaderCircle,
   Minus,
   Plus,
+  Repeat2,
   RotateCcw,
   ShieldCheck,
   Sparkles,
   Spade,
   Users,
   Volume2,
-  VolumeX,
   Wallet,
   X,
 } from "lucide-react";
@@ -45,6 +46,11 @@ import {
   score,
   SUITS,
 } from "@/lib/rules";
+import {
+  CASINO_CHIP_DENOMINATIONS,
+  casinoChipStackForAmount,
+} from "@/lib/chips";
+import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
 import { DEFAULT_PUBLIC_TABLE_ID, PUBLIC_TABLES } from "@/lib/table-config";
 import type {
   Bet,
@@ -59,7 +65,7 @@ import { useGame } from "@/lib/use-game";
 import { BlackjackIcon } from "./blackjack-icon";
 import { PlayingCard } from "./playing-card";
 import { CasinoHome, PokerCasino } from "./poker-casino";
-import { ShoeShuffleAnimation } from "./shoe-shuffle";
+import { PokerShuffleAnimation } from "./poker-shuffle";
 
 const THREE_PAYOUTS = [
   ["Straight Flush", "9:1"],
@@ -77,6 +83,7 @@ const EMPTY_SEATS: Seat[] = Array.from({ length: 5 }, (_, index) => ({
   index,
   playerId: null,
   bet: { main: 0, three: 0, pairs: 0 },
+  previousBet: null,
   hands: [],
   sides: { three: null, pairs: null },
   committed: 0,
@@ -265,12 +272,14 @@ function HoldToConfirmButton({
   );
 }
 
-function AnimatedTableChip({
+export function AnimatedTableChip({
   amount,
+  maximum,
   className,
   placeholder,
 }: {
   amount: number;
+  maximum: number;
   className: string;
   placeholder: ReactNode;
 }) {
@@ -320,11 +329,136 @@ function AnimatedTableChip({
   }
 
   return (
+    <TableChipStack
+      amount={renderedAmount}
+      maximum={maximum}
+      className={`${className} ${exiting ? "is-exiting" : ""}`}
+    />
+  );
+}
+
+function TableChipStack({
+  amount,
+  maximum,
+  className = "",
+}: {
+  amount: number;
+  maximum: number;
+  className?: string;
+}) {
+  const stage = casinoChipStackForAmount(amount, maximum);
+  return (
     <span
-      key={renderedAmount}
-      className={`table-chip ${className} ${exiting ? "is-exiting" : ""}`}
+      key={stage.index}
+      className={`table-chip chip-stack-stage-${stage.index} ${className}`}
+      data-chip-stage={stage.index}
     >
-      {credits(renderedAmount)}
+      <span className="table-chip-pile" aria-hidden="true">
+        {stage.columns.map((column, columnIndex) => (
+          <span
+            className={`table-chip-column chip-${column.denomination}`}
+            key={`${column.denomination}-${columnIndex}`}
+            style={
+              {
+                "--chip-column-left": `${((columnIndex + 1) / (stage.columns.length + 1)) * 100}%`,
+                "--chip-column-index": columnIndex,
+              } as CSSProperties
+            }
+          >
+            {Array.from({ length: column.layers }, (_, layer) => (
+              <i
+                className="table-chip-disc"
+                key={layer}
+                style={{ "--chip-layer": layer } as CSSProperties}
+              />
+            ))}
+          </span>
+        ))}
+      </span>
+      <span className="table-chip-amount">{credits(amount)}</span>
+    </span>
+  );
+}
+
+export function SettlementChipAnimation({
+  stake,
+  payout,
+  maximum,
+  side = false,
+}: {
+  stake: number;
+  payout: number;
+  maximum: number;
+  side?: boolean;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const profit = Math.max(0, payout - stake);
+  const chipClass = `settlement-chip ${side ? "side-chip" : ""}`;
+
+  useLayoutEffect(() => {
+    const root = ref.current;
+    const table = root?.closest(".table-stage");
+    const seat = root?.closest(".seat");
+    const bank = table?.querySelector(".dealer-cards");
+    const player = seat?.querySelector(".seat-name");
+    if (!root || !bank || !player) return;
+
+    const origin = root.getBoundingClientRect();
+    const bankRect = bank.getBoundingClientRect();
+    const playerRect = player.getBoundingClientRect();
+    const centerX = origin.left + origin.width / 2;
+    const centerY = origin.top + origin.height / 2;
+    root.style.setProperty(
+      "--settlement-bank-x",
+      `${bankRect.left + bankRect.width / 2 - centerX}px`,
+    );
+    root.style.setProperty(
+      "--settlement-bank-y",
+      `${bankRect.top + bankRect.height / 2 - centerY}px`,
+    );
+    root.style.setProperty(
+      "--settlement-player-x",
+      side ? `${playerRect.left + playerRect.width / 2 - centerX}px` : "0px",
+    );
+    root.style.setProperty(
+      "--settlement-player-y",
+      `${playerRect.top + playerRect.height / 2 - centerY}px`,
+    );
+  }, [payout, side, stake]);
+
+  return (
+    <span
+      ref={ref}
+      className={`settlement-chips ${side ? "side-settlement" : ""}`}
+      aria-hidden="true"
+    >
+      {profit > 0 && (
+        <TableChipStack
+          amount={profit}
+          maximum={maximum}
+          className={`${chipClass} settlement-incoming`}
+        />
+      )}
+      {payout > 0 ? (
+        <>
+          <TableChipStack
+            amount={stake}
+            maximum={maximum}
+            className={`${chipClass} settlement-stake`}
+          />
+          <TableChipStack
+            amount={payout}
+            maximum={maximum}
+            className={`${chipClass} settlement-return`}
+          />
+        </>
+      ) : (
+        <TableChipStack
+          amount={stake}
+          maximum={maximum}
+          className={`${chipClass} settlement-loss`}
+        />
+      )}
     </span>
   );
 }
@@ -483,6 +617,9 @@ function SeatView({
     mine && state?.phase === "betting" && !owner?.ready && !disabled;
   const sideBetsResolved =
     !!state && state.phase !== "betting" && state.phase !== "dealing";
+  const mainStake = seat.hands.length
+    ? seat.hands.reduce((sum, hand) => sum + hand.bet, 0)
+    : seat.bet.main;
   return (
     <div
       className={`seat seat-${seat.index} ${owner ? "occupied" : "empty"} ${mine ? "my-seat" : ""} ${selected && mine ? "selected-seat" : ""} ${active ? "current-seat" : ""} ${hasCards ? "has-cards" : ""}`}
@@ -514,17 +651,36 @@ function SeatView({
                   : null;
             const resolvedSideBet =
               type !== "main" && sideBetsResolved && seat.bet[type] > 0;
+            const stake = type === "main" ? mainStake : seat.bet[type];
+            const payout =
+              type === "main"
+                ? seat.hands.reduce((sum, hand) => sum + (hand.payout ?? 0), 0)
+                : (sideResult?.payout ?? 0);
+            const settling =
+              stake > 0 &&
+              ((type === "main" && state?.phase === "settled") ||
+                (type !== "main" && state?.phase === "bonuses"));
+            const hideResolvedSide =
+              resolvedSideBet && state?.phase !== "bonuses";
+            const placeholder =
+              type === "main" ? (
+                <Plus size={19} strokeWidth={1.4} />
+              ) : type === "three" ? (
+                <Diamond size={13} />
+              ) : (
+                <Layers2 size={13} />
+              );
             return (
               <button
                 key={type}
-                className={`table-bet-spot spot-${type} ${seat.bet[type] ? "has-chips" : ""} ${resolvedSideBet ? (sideResult ? "side-bet-won" : "side-bet-lost") : ""}`}
+                className={`table-bet-spot spot-${type} ${stake > 0 && !hideResolvedSide ? "has-chips" : ""}`}
                 onClick={() => onBet(type)}
                 disabled={!canBet}
                 aria-label={`Miser ${chip} crédits sur ${labels[type]}, main ${seat.index + 1}`}
                 title={
                   canBet
                     ? `+${chip} crédits · ${labels[type]}`
-                    : `${labels[type]} : ${seat.bet[type]} crédits`
+                    : `${labels[type]} : ${stake} crédits`
                 }
               >
                 <span className="spot-label">
@@ -534,31 +690,22 @@ function SeatView({
                       ? "21 + 3"
                       : "SUPER PAIRS"}
                 </span>
-                <AnimatedTableChip
-                  amount={seat.bet[type]}
-                  className={`${type !== "main" ? "side-chip" : ""} ${resolvedSideBet ? (sideResult ? "winning-side-chip" : "losing-side-chip") : ""}`}
-                  placeholder={
-                    type === "main" ? (
-                      <Plus size={19} strokeWidth={1.4} />
-                    ) : type === "three" ? (
-                      <Diamond size={13} />
-                    ) : (
-                      <Layers2 size={13} />
-                    )
-                  }
-                />
-                {state?.phase === "bonuses" && sideResult && (
-                  <span className="bonus-chip-flight" aria-hidden="true">
-                    <span className="bonus-chip-stack">
-                      <span className="bonus-chip-amount">
-                        {credits(sideResult.payout)}
-                      </span>
-                    </span>
-                    <span className="bonus-chip-caption">
-                      +{credits(sideResult.payout)}
-                      <small>{sideResult.label}</small>
-                    </span>
-                  </span>
+                {settling ? (
+                  <SettlementChipAnimation
+                    stake={stake}
+                    payout={payout}
+                    maximum={type === "main" ? 500 : 100}
+                    side={type !== "main"}
+                  />
+                ) : hideResolvedSide ? (
+                  <span className="spot-placeholder">{placeholder}</span>
+                ) : (
+                  <AnimatedTableChip
+                    amount={stake}
+                    maximum={type === "main" ? 500 : 100}
+                    className={type !== "main" ? "side-chip" : ""}
+                    placeholder={placeholder}
+                  />
                 )}
                 {canBet && <span className="spot-hover">+{chip}</span>}
               </button>
@@ -859,13 +1006,87 @@ export type CasinoView = "home" | "blackjack" | "poker";
 export function Casino() {
   const game = useGame();
   const [view, setView] = useState<CasinoView>("home");
-  const navigate = (next: CasinoView) => setView(next);
+  const [confirmPokerLeave, setConfirmPokerLeave] = useState(false);
+  const [leavingPoker, setLeavingPoker] = useState(false);
+  const navigate = (next: CasinoView) => {
+    if (
+      next === "blackjack" &&
+      game.pokerState &&
+      game.pokerState.status !== "lobby"
+    ) {
+      setConfirmPokerLeave(true);
+      return;
+    }
+    setView(next);
+  };
   if (!game.profile)
     return <BlackjackCasino game={game} onNavigate={navigate} />;
-  if (view === "home") return <CasinoHome game={game} onNavigate={navigate} />;
-  if (view === "poker")
-    return <PokerCasino game={game} onNavigate={navigate} />;
-  return <BlackjackCasino game={game} onNavigate={navigate} />;
+  const content =
+    view === "home" ? (
+      <CasinoHome game={game} onNavigate={navigate} />
+    ) : view === "poker" ? (
+      <PokerCasino game={game} onNavigate={navigate} />
+    ) : (
+      <BlackjackCasino game={game} onNavigate={navigate} />
+    );
+  const pokerExitMessage = game.pokerState?.queue
+    ? "Votre recherche sera annulée et votre buy-in sera récupéré."
+    : game.pokerState?.table?.mode === "cash"
+      ? "Votre place sera libérée et votre stack restant sera recrédité."
+      : "Vous abandonnerez le tournoi et votre buy-in ne sera pas récupéré.";
+
+  return (
+    <>
+      {content}
+      {confirmPokerLeave && (
+        <Modal
+          title="Quitter la partie de poker ?"
+          className="leave-poker-modal"
+          onClose={leavingPoker ? undefined : () => setConfirmPokerLeave(false)}
+        >
+          <span className="modal-emblem">
+            <Spade size={26} fill="currentColor" />
+          </span>
+          <span className="section-kicker">PARTIE EN COURS</span>
+          <h2>Quitter la partie de poker ?</h2>
+          <p className="modal-intro">
+            {pokerExitMessage} Voulez-vous vraiment rejoindre le Blackjack ?
+          </p>
+          <div className="leave-poker-actions">
+            <button
+              type="button"
+              className="button secondary"
+              autoFocus
+              disabled={leavingPoker}
+              onClick={() => setConfirmPokerLeave(false)}
+            >
+              Rester au poker
+            </button>
+            <button
+              type="button"
+              className="button primary"
+              disabled={leavingPoker}
+              onClick={async () => {
+                setLeavingPoker(true);
+                const left = await game.pokerCommand({ type: "leave" });
+                setLeavingPoker(false);
+                if (!left) return;
+                setConfirmPokerLeave(false);
+                setView("blackjack");
+              }}
+            >
+              {leavingPoker ? (
+                <LoaderCircle size={16} className="spinner" />
+              ) : (
+                <BlackjackIcon />
+              )}
+              Quitter et jouer au Blackjack
+            </button>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
 }
 
 function BlackjackCasino({
@@ -899,12 +1120,8 @@ function BlackjackCasino({
   const [doubleChoiceClosing, setDoubleChoiceClosing] = useState(false);
   const [gambleOpen, setGambleOpen] = useState(false);
   const [gamblePromptFeatured, setGamblePromptFeatured] = useState(false);
-  const [shoeShuffling, setShoeShuffling] = useState(false);
   const audioRef = useRef<AudioContext | null>(null);
   const previousCards = useRef(0);
-  const previousShoe = useRef<{ tableId: string; remaining: number } | null>(
-    null,
-  );
   const doubleCloseTimer = useRef<number | null>(null);
   const noticeCloseTimer = useRef<number | null>(null);
   const me = state?.players.find((p) => p.id === playerId);
@@ -914,6 +1131,10 @@ function BlackjackCasino({
   const betting = !state || state.phase === "betting";
   const canChangeTable = betting || ownSeats.length === 0;
   const totalBet = ownSeats.reduce((sum, s) => sum + betTotal(s.bet), 0);
+  const previousBetTotal = ownSeats.reduce(
+    (sum, s) => sum + (s.previousBet ? betTotal(s.previousBet) : 0),
+    0,
+  );
   const activeSeat = state?.seats.find((s) =>
     s.hands.some((h) => h.id === state.activeHandId),
   );
@@ -941,7 +1162,7 @@ function BlackjackCasino({
   const seconds = state?.deadline
     ? Math.max(0, Math.ceil((state.deadline - now) / 1000))
     : null;
-  const disabled = !connected || pending;
+  const disabled = !connected || pending || state?.phase === "shuffling";
   const cardCount =
     (state?.dealer.length ?? 0) +
     (state?.seats
@@ -975,6 +1196,9 @@ function BlackjackCasino({
   useEffect(() => {
     setGambleOpen(false);
   }, [state?.id]);
+  useEffect(() => {
+    if (state?.phase === "shuffling") setGambleOpen(false);
+  }, [state?.phase]);
   useEffect(() => {
     if (ownGamble?.status !== "available") {
       setGamblePromptFeatured(false);
@@ -1050,43 +1274,18 @@ function BlackjackCasino({
     };
   }, [game.error, notification]);
   useEffect(() => {
-    if (!state) {
-      previousShoe.current = null;
-      setShoeShuffling(false);
-      return;
-    }
-    const previous = previousShoe.current;
-    previousShoe.current = {
-      tableId: state.id,
-      remaining: state.shoeRemaining,
-    };
-    if (!previous || previous.tableId !== state.id) {
-      setShoeShuffling(false);
-      return;
-    }
-    if (state.shoeRemaining <= previous.remaining + 20) return;
-
-    setShoeShuffling(true);
-    const timer = window.setTimeout(() => setShoeShuffling(false), 2600);
-    return () => window.clearTimeout(timer);
-  }, [state?.id, state?.shoeRemaining]);
-  useEffect(() => {
-    if (sound && cardCount > previousCards.current && audioRef.current) {
-      const ctx = audioRef.current;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(680, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.055);
-      gain.gain.setValueAtTime(0.045, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.1);
-    }
+    if (sound && cardCount > previousCards.current && audioRef.current)
+      playCasinoSound(
+        audioRef.current,
+        "card",
+        cardCount - previousCards.current,
+      );
     previousCards.current = cardCount;
   }, [cardCount, sound]);
+  useEffect(() => {
+    if (sound && state?.phase === "shuffling" && audioRef.current)
+      playCasinoSound(audioRef.current, "shuffle");
+  }, [state?.phase, sound]);
 
   const selectSeat = (s: Seat) => {
     if (!profile) return;
@@ -1130,6 +1329,15 @@ function BlackjackCasino({
       },
     );
   };
+  const repeatBet = () => {
+    if (!previousBetTotal || totalBet) return;
+    const before = ownSeats
+      .filter((target) => target.previousBet)
+      .map((target) => ({ seat: target.index, before: { ...target.bet } }));
+    void command({ type: "repeat" }).then((ok) => {
+      if (ok) setBetHistory(before);
+    });
+  };
   const clearBets = async () => {
     for (const target of ownSeats)
       if (betTotal(target.bet)) {
@@ -1168,28 +1376,31 @@ function BlackjackCasino({
   };
   const toggleSound = () => {
     if (!sound) {
-      audioRef.current ??= new AudioContext();
-      void audioRef.current.resume();
+      const context = (audioRef.current ??= new AudioContext());
+      void context.resume();
+      preloadCasinoSounds(context);
     }
     setSound(!sound);
   };
   const subtitle = myTurn
     ? "C’est à vous de jouer"
-    : state?.phase === "dealing"
-      ? "Distribution en cours"
-      : state?.phase === "bonuses"
-        ? "Les paris annexes sont réglés"
-        : state?.phase === "dealer"
-          ? "Au tour du croupier"
-          : state?.phase === "settled"
-            ? ownGamble?.status === "available" && gambleOpen
-              ? "Double ou rien"
-              : ownGamble?.status === "available"
-                ? "Tentez vos gains"
-                : "Les jeux sont faits"
-            : me?.ready
-              ? "Vous êtes prêt"
-              : "Faites vos jeux";
+    : state?.phase === "shuffling"
+      ? "Mélange du sabot"
+      : state?.phase === "dealing"
+        ? "Distribution en cours"
+        : state?.phase === "bonuses"
+          ? "Les paris annexes sont réglés"
+          : state?.phase === "dealer"
+            ? "Au tour du croupier"
+            : state?.phase === "settled"
+              ? ownGamble?.status === "available" && gambleOpen
+                ? "Double ou rien"
+                : ownGamble?.status === "available"
+                  ? "Tentez vos gains"
+                  : "Les jeux sont faits"
+              : me?.ready
+                ? "Vous êtes prêt"
+                : "Faites vos jeux";
 
   return (
     <div className="casino-shell">
@@ -1312,15 +1523,30 @@ function BlackjackCasino({
                     <span className="table-separator">/</span>
                     <span>5 – 500 crédits</span>
                   </div>
-                  <button
-                    className="text-button"
-                    onClick={() => setModal("tables")}
-                  >
-                    <Users size={14} />
-                    {state?.players.filter((p) => p.connected).length ?? 0}
-                    <span>/ 5 places</span>
-                    <ChevronDown size={13} />
-                  </button>
+                  <div className="table-toolbar-actions">
+                    <button
+                      type="button"
+                      className={`poker-sound ${sound ? "active" : ""}`}
+                      aria-label={
+                        sound
+                          ? "Couper les sons Blackjack"
+                          : "Activer les sons Blackjack"
+                      }
+                      aria-pressed={sound}
+                      onClick={toggleSound}
+                    >
+                      <Volume2 size={15} />
+                    </button>
+                    <button
+                      className="text-button"
+                      onClick={() => setModal("tables")}
+                    >
+                      <Users size={14} />
+                      {state?.players.filter((p) => p.connected).length ?? 0}
+                      <span>/ 5 places</span>
+                      <ChevronDown size={13} />
+                    </button>
+                  </div>
                 </div>
                 <div className="table-stage">
                   <div className="ambient-glow" />
@@ -1362,9 +1588,16 @@ function BlackjackCasino({
                     <div />
                     <div />
                     <PlayingCard back decorative />
-                    <ShoeShuffleAnimation active={shoeShuffling} />
                     <span>8 JEUX</span>
                   </div>
+                  {state?.phase === "shuffling" && (
+                    <PokerShuffleAnimation
+                      hand={state.round}
+                      eyebrow={`MANCHE ${String(state.round + 1).padStart(3, "0")} · 8 JEUX`}
+                      title="Mélange du sabot"
+                      ariaLabel={`Mélange du sabot avant la manche ${state.round + 1}`}
+                    />
+                  )}
                   <div className="felt-brand">
                     <span className="felt-diamond">✧</span>
                     <h2>MINUIT</h2>
@@ -1403,7 +1636,8 @@ function BlackjackCasino({
                       ))}
                     </div>
                   )}
-                  {ownGamble &&
+                  {state?.phase !== "shuffling" &&
+                    ownGamble &&
                     (gambleOpen ? (
                       <div className="table-gamble-overlay">
                         <GamblePanel
@@ -1453,9 +1687,11 @@ function BlackjackCasino({
                       <span className="section-kicker">
                         {betting
                           ? "À VOUS DE MISER"
-                          : myTurn
-                            ? `MAIN ${(activeSeat?.index ?? 0) + 1} · ${activeHand ? score(activeHand.cards).total : ""} POINTS`
-                            : "LA PARTIE CONTINUE"}
+                          : state?.phase === "shuffling"
+                            ? "MÉLANGE EN COURS"
+                            : myTurn
+                              ? `MAIN ${(activeSeat?.index ?? 0) + 1} · ${activeHand ? score(activeHand.cards).total : ""} POINTS`
+                              : "LA PARTIE CONTINUE"}
                       </span>
                       <h2>
                         {subtitle}
@@ -1489,7 +1725,7 @@ function BlackjackCasino({
                       <>
                         <div className="chip-rack">
                           <div className="chip-picker">
-                            {[5, 25, 50, 100].map((amount) => (
+                            {CASINO_CHIP_DENOMINATIONS.map((amount) => (
                               <Chip
                                 key={amount}
                                 amount={amount}
@@ -1499,6 +1735,26 @@ function BlackjackCasino({
                               />
                             ))}
                             <span className="rack-divider" />
+                            <button
+                              className="icon-button repeat-bet"
+                              disabled={
+                                disabled ||
+                                !previousBetTotal ||
+                                totalBet > 0 ||
+                                previousBetTotal > balance ||
+                                !!me?.ready
+                              }
+                              onClick={repeatBet}
+                              title={
+                                previousBetTotal
+                                  ? `Répéter la mise précédente (${credits(previousBetTotal)} crédits)`
+                                  : "Aucune mise précédente"
+                              }
+                              aria-label="Répéter la mise précédente"
+                            >
+                              <Repeat2 size={16} />
+                              <span>Répéter</span>
+                            </button>
                             <button
                               className="icon-button undo-bet"
                               disabled={
@@ -1754,20 +2010,24 @@ function BlackjackCasino({
                             <b>
                               {state?.phase === "playing"
                                 ? `${state.players.find((p) => p.id === activeSeat?.playerId)?.name ?? "Un joueur"} prend sa décision.`
-                                : state?.phase === "bonuses"
-                                  ? myBonus > 0
-                                    ? `+${credits(myBonus)} crédits versés sur votre solde.`
-                                    : "Pas de combinaison gagnante cette fois-ci."
-                                  : state?.phase === "dealer"
-                                    ? "Le croupier révèle sa main."
-                                    : "Un peu de suspense…"}
+                                : state?.phase === "shuffling"
+                                  ? "Le croupier mélange le sabot."
+                                  : state?.phase === "bonuses"
+                                    ? myBonus > 0
+                                      ? `+${credits(myBonus)} crédits versés sur votre solde.`
+                                      : "Pas de combinaison gagnante cette fois-ci."
+                                    : state?.phase === "dealer"
+                                      ? "Le croupier révèle sa main."
+                                      : "Un peu de suspense…"}
                             </b>
                             <p>
-                              {state?.phase === "bonuses"
-                                ? "Les gains annexes sont payés avant de jouer vos mains."
-                                : ownSeats.length
-                                  ? "Toutes vos mains se jouent l’une après l’autre."
-                                  : "Vous pourrez prendre une place à la prochaine manche."}
+                              {state?.phase === "shuffling"
+                                ? "Les mises et les actions reprennent une fois le mélange terminé."
+                                : state?.phase === "bonuses"
+                                  ? "Les gains annexes sont payés avant de jouer vos mains."
+                                  : ownSeats.length
+                                    ? "Toutes vos mains se jouent l’une après l’autre."
+                                    : "Vous pourrez prendre une place à la prochaine manche."}
                             </p>
                           </div>
                         </>

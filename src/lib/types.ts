@@ -44,6 +44,8 @@ export type Seat = {
   index: number;
   playerId: string | null;
   bet: Bet;
+  /** Last wager that actually entered a round, used by the rebet action. */
+  previousBet: Bet | null;
   hands: Hand[];
   sides: { three: SideResult | null; pairs: SideResult | null };
   committed: number;
@@ -84,7 +86,14 @@ export type HistoryItem = {
 };
 export type TableState = {
   id: string;
-  phase: "betting" | "dealing" | "bonuses" | "playing" | "dealer" | "settled";
+  phase:
+    | "shuffling"
+    | "betting"
+    | "dealing"
+    | "bonuses"
+    | "playing"
+    | "dealer"
+    | "settled";
   round: number;
   players: PublicPlayer[];
   seats: Seat[];
@@ -101,6 +110,7 @@ export type Command =
   | { type: "claim"; seat: number }
   | { type: "release"; seat: number }
   | { type: "bet"; seat: number; bet: Bet }
+  | { type: "repeat" }
   | { type: "ready"; ready: boolean }
   | { type: "hit" | "stand" | "split"; handId: string }
   | { type: "double"; handId: string; reveal?: "now" | "dealer" }
@@ -115,6 +125,7 @@ export type PokerMode = "cash" | "spin";
 export type PokerPhase =
   | "waiting"
   | "spinning"
+  | "shuffling"
   | "preflop"
   | "flop"
   | "turn"
@@ -180,6 +191,8 @@ export type PokerTableState = {
   bigBlindSeat: number;
   activePlayerId: string | null;
   deadline: number | null;
+  /** End of the short window where an uncontested winner may show their cards. */
+  revealDeadline: number | null;
   wheelMultiplier: number | null;
   wheelSpinning: boolean;
   history: PokerHistoryItem[];
@@ -199,4 +212,5 @@ export type PokerCommand =
   | { type: "leave" }
   | { type: "action"; action: PokerAction; amount?: number }
   | { type: "muck" }
+  | { type: "show" }
   | { type: "chat"; text: string };
