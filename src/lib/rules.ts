@@ -63,19 +63,34 @@ export type PokerHandValue = { score: number[]; label: string };
 export type BestPokerHand = PokerHandValue & { cards: Card[] };
 
 const POKER_RANKS: Record<number, string> = {
-  14: "As",
-  13: "Rois",
-  12: "Dames",
-  11: "Valets",
-  10: "Dix",
-  9: "Neufs",
-  8: "Huits",
-  7: "Septs",
+  14: "Aces",
+  13: "Kings",
+  12: "Queens",
+  11: "Jacks",
+  10: "Tens",
+  9: "Nines",
+  8: "Eights",
+  7: "Sevens",
+  6: "Sixes",
+  5: "Fives",
+  4: "Fours",
+  3: "Threes",
+  2: "Twos",
+};
+const POKER_HIGH_RANKS: Record<number, string> = {
+  14: "Ace",
+  13: "King",
+  12: "Queen",
+  11: "Jack",
+  10: "Ten",
+  9: "Nine",
+  8: "Eight",
+  7: "Seven",
   6: "Six",
-  5: "Cinq",
-  4: "Quatre",
-  3: "Trois",
-  2: "Deux",
+  5: "Five",
+  4: "Four",
+  3: "Three",
+  2: "Two",
 };
 
 export function comparePokerScore(a: number[], b: number[]) {
@@ -104,17 +119,17 @@ function fiveCardPokerValue(cards: Card[]): PokerHandValue {
     }
   }
   if (flush && straightHigh)
-    return { score: [8, straightHigh], label: "Quinte flush" };
+    return { score: [8, straightHigh], label: "Straight flush" };
   if (groups[0][1] === 4)
     return {
       score: [7, groups[0][0], groups.find((group) => group[1] === 1)![0]],
-      label: "Carré",
+      label: "Four of a kind",
     };
   if (groups[0][1] === 3 && groups[1]?.[1] === 2)
-    return { score: [6, groups[0][0], groups[1][0]], label: "Full" };
+    return { score: [6, groups[0][0], groups[1][0]], label: "Full house" };
   if (flush)
-    return { score: [5, ...ranks.sort((a, b) => b - a)], label: "Couleur" };
-  if (straightHigh) return { score: [4, straightHigh], label: "Quinte" };
+    return { score: [5, ...ranks.sort((a, b) => b - a)], label: "Flush" };
+  if (straightHigh) return { score: [4, straightHigh], label: "Straight" };
   if (groups[0][1] === 3)
     return {
       score: [
@@ -122,7 +137,7 @@ function fiveCardPokerValue(cards: Card[]): PokerHandValue {
         groups[0][0],
         ...groups.filter((group) => group[1] === 1).map((group) => group[0]),
       ],
-      label: "Brelan",
+      label: "Three of a kind",
     };
   const pairs = groups.filter((group) => group[1] === 2);
   if (pairs.length >= 2)
@@ -133,7 +148,7 @@ function fiveCardPokerValue(cards: Card[]): PokerHandValue {
         pairs[1][0],
         groups.find((group) => group[1] === 1)![0],
       ],
-      label: "Deux paires",
+      label: "Two pair",
     };
   if (pairs.length === 1)
     return {
@@ -142,9 +157,9 @@ function fiveCardPokerValue(cards: Card[]): PokerHandValue {
         pairs[0][0],
         ...groups.filter((group) => group[1] === 1).map((group) => group[0]),
       ],
-      label: "Paire",
+      label: "Pair",
     };
-  return { score: [0, ...ranks.sort((a, b) => b - a)], label: "Carte haute" };
+  return { score: [0, ...ranks.sort((a, b) => b - a)], label: "High card" };
 }
 
 export function evaluateBestPokerHand(cards: Card[]): BestPokerHand {
@@ -163,6 +178,23 @@ export function evaluateBestPokerHand(cards: Card[]): BestPokerHand {
   return best!;
 }
 
+/** Cards that visually explain the made hand, without unrelated kickers. */
+export function getPokerCombinationCards(hand: BestPokerHand) {
+  const category = hand.score[0];
+  if ([4, 5, 6, 8].includes(category)) return hand.cards;
+
+  const combinationRanks =
+    category === 7 || category === 3 || category === 1
+      ? [hand.score[1]]
+      : category === 2
+        ? [hand.score[1], hand.score[2]]
+        : [hand.score[1]];
+
+  return hand.cards.filter((card) =>
+    combinationRanks.includes(card.rank === 1 ? 14 : card.rank),
+  );
+}
+
 export function evaluatePokerHand(cards: Card[]): PokerHandValue {
   const { cards: _cards, ...value } = evaluateBestPokerHand(cards);
   return value;
@@ -170,25 +202,27 @@ export function evaluatePokerHand(cards: Card[]): PokerHandValue {
 
 export function describePokerHand(value: PokerHandValue) {
   const rank = (number: number) => POKER_RANKS[number] ?? String(number);
+  const highRank = (number: number) =>
+    POKER_HIGH_RANKS[number] ?? String(number);
   switch (value.score[0]) {
     case 8:
-      return `Quinte flush, ${rank(value.score[1])} haut`;
+      return `Straight flush, ${highRank(value.score[1])} high`;
     case 7:
-      return `Carré de ${rank(value.score[1])}`;
+      return `Four of a kind, ${rank(value.score[1])}`;
     case 6:
-      return `Full, ${rank(value.score[1])} par les ${rank(value.score[2])}`;
+      return `Full house, ${rank(value.score[1])} over ${rank(value.score[2])}`;
     case 5:
-      return `Couleur, ${rank(value.score[1])} haut`;
+      return `Flush, ${highRank(value.score[1])} high`;
     case 4:
-      return `Quinte, ${rank(value.score[1])} haut`;
+      return `Straight, ${highRank(value.score[1])} high`;
     case 3:
-      return `Brelan de ${rank(value.score[1])}`;
+      return `Three of a kind, ${rank(value.score[1])}`;
     case 2:
-      return `Deux paires, ${rank(value.score[1])} et ${rank(value.score[2])}`;
+      return `Two pair, ${rank(value.score[1])} and ${rank(value.score[2])}`;
     case 1:
-      return `Paire de ${rank(value.score[1])}`;
+      return `Pair of ${rank(value.score[1])}`;
     default:
-      return `${rank(value.score[1])} haut`;
+      return `${highRank(value.score[1])} high`;
   }
 }
 
@@ -200,8 +234,8 @@ export function describePokerHolding(cards: Card[], community: Card[]) {
     return describePokerHand(evaluatePokerHand(allCards));
   const first = cards[0].rank === 1 ? 14 : cards[0].rank;
   const second = cards[1].rank === 1 ? 14 : cards[1].rank;
-  if (first === second) return `Paire de ${POKER_RANKS[first]}`;
+  if (first === second) return `Pair of ${POKER_RANKS[first]}`;
   const short = (rank: number) =>
     ({ 14: "A", 13: "K", 12: "Q", 11: "J" })[rank] ?? String(rank);
-  return `${short(Math.max(first, second))} ${short(Math.min(first, second))}${cards[0].suit === cards[1].suit ? " assortis" : ""}`;
+  return `${short(Math.max(first, second))} ${short(Math.min(first, second))}${cards[0].suit === cards[1].suit ? " suited" : " offsuit"}`;
 }

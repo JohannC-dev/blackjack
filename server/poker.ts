@@ -47,6 +47,7 @@ type Participant = {
   committed: number;
   status: PokerSeat["status"];
   cards: Card[];
+  mucked: boolean;
   lastAction?: string;
   lastManualAction: number;
   disconnectedAt: number | null;
@@ -144,6 +145,7 @@ export class PokerTable {
       committed: 0,
       status: "waiting",
       cards: [],
+      mucked: false,
       lastManualAction: Date.now(),
       disconnectedAt: null,
       pendingLeave: false,
@@ -288,6 +290,7 @@ export class PokerTable {
       entry.bet = 0;
       entry.committed = 0;
       entry.cards = [];
+      entry.mucked = false;
       entry.lastAction = undefined;
       entry.status = entry.stack > 0 ? "active" : "out";
     }
@@ -306,8 +309,8 @@ export class PokerTable {
     )!;
     this.smallBlindSeat = small.seat;
     this.bigBlindSeat = big.seat;
-    this.postBlind(small, this.currentSmallBlind, "Petite blind");
-    this.postBlind(big, this.bigBlind, "Grosse blind");
+    this.postBlind(small, this.currentSmallBlind, "Small blind");
+    this.postBlind(big, this.bigBlind, "Big blind");
     this.currentBet = Math.max(small.bet, big.bet);
     for (let round = 0; round < 2; round++)
       for (let offset = 1; offset <= this.maxSeats; offset++) {
@@ -321,7 +324,7 @@ export class PokerTable {
       ? small
       : this.nextSeat(big.seat, (entry) => entry.status === "active")!;
     this.setTurn(first, now);
-    this.message = `Main ${this.hand} · ${this.currentSmallBlind}/${this.bigBlind}.`;
+    this.message = `Hand ${this.hand} · ${this.currentSmallBlind}/${this.bigBlind}.`;
     this.nextStepAt = 0;
     this.publish();
   }
@@ -335,16 +338,16 @@ export class PokerTable {
     const entry = this.find(playerId);
     if (entry.player.id !== this.activePlayerId)
       throw new Error("Ce n’est pas à vous de jouer.");
-    if (entry.status !== "active") throw new Error("Cette main est terminée.");
+    if (entry.status !== "active") throw new Error("Cette hand est terminée.");
     const toCall = Math.max(0, this.currentBet - entry.bet);
     if (action === "fold") {
       entry.status = "folded";
       entry.lastAction = "Fold";
     } else if (action === "check") {
-      if (toCall) throw new Error("Vous devez suivre ou vous coucher.");
+      if (toCall) throw new Error("Vous devez call ou fold.");
       entry.lastAction = "Check";
     } else if (action === "call") {
-      if (!toCall) throw new Error("Rien à suivre.");
+      if (!toCall) throw new Error("Aucun call nécessaire.");
       const paid = this.commit(entry, toCall);
       entry.lastAction = paid < toCall ? "All-in" : `Call ${paid}`;
     } else if (action === "all-in") {
@@ -355,7 +358,7 @@ export class PokerTable {
       entry.lastAction = "All-in";
       if (target > previous) {
         if (this.raiseClosedFor.has(entry.player.id))
-          throw new Error("Cette relance incomplète ne rouvre pas l’action.");
+          throw new Error("Cette incomplete raise ne rouvre pas l’action.");
         this.currentBet = target;
         if (increase >= this.minRaise) {
           this.minRaise = increase;
@@ -367,20 +370,18 @@ export class PokerTable {
       }
     } else {
       if (this.raiseClosedFor.has(entry.player.id))
-        throw new Error("Cette relance incomplète ne rouvre pas l’action.");
+        throw new Error("Cette incomplete raise ne rouvre pas l’action.");
       const target = Math.round(amount ?? 0);
       const maximum = entry.bet + entry.stack;
       if (target <= this.currentBet)
-        throw new Error("La relance est trop faible.");
-      if (target > maximum) throw new Error("Votre tapis est insuffisant.");
+        throw new Error("Le raise est trop faible.");
+      if (target > maximum) throw new Error("Votre stack est insuffisant.");
       const increase = target - this.currentBet;
       if (target !== maximum && increase < this.minRaise)
-        throw new Error(
-          `Relance minimale : ${this.currentBet + this.minRaise}.`,
-        );
+        throw new Error(`Minimum raise : ${this.currentBet + this.minRaise}.`);
       this.commit(entry, target - entry.bet);
       this.currentBet = target;
-      entry.lastAction = `${this.phase === "preflop" ? "Raise" : "Mise"} ${target}`;
+      entry.lastAction = `${this.phase === "preflop" ? "Raise" : "Bet"} ${target}`;
       if (increase >= this.minRaise) {
         this.minRaise = increase;
         this.acted.clear();
@@ -486,7 +487,7 @@ export class PokerTable {
   private awardUncontested(winner: Participant) {
     const amount = this.totalPot();
     winner.stack += amount;
-    this.finishHand([{ entry: winner, amount, label: "Pot non contesté" }]);
+    this.finishHand([{ entry: winner, amount, label: "Uncontested pot" }]);
   }
 
   private showdown() {
@@ -552,18 +553,21 @@ export class PokerTable {
     this.setTurn(null);
     this.streetStepAt = 0;
     const pot = winners.reduce((sum, winner) => sum + winner.amount, 0);
+    for (const entry of this.participants) entry.mucked = false;
     this.history.unshift({
       hand: this.hand,
       community: this.community.map((card) => ({ ...card })),
       pot,
       winners: winners.map(({ entry, amount, label }) => ({
+        playerId: entry.player.id,
         name: entry.player.name,
         amount,
         label,
         cards:
-          label === "Pot non contesté"
+          label === "Uncontested pot"
             ? []
             : entry.cards.map((card) => ({ ...card })),
+        mucked: label === "Uncontested pot",
       })),
       timestamp: Date.now(),
     });
@@ -571,6 +575,8 @@ export class PokerTable {
     this.message = winners
       .map((winner) => `${winner.entry.player.name} gagne ${winner.amount}`)
       .join(" · ");
+    for (const { entry, label } of winners)
+      entry.mucked = label === "Uncontested pot";
     for (const entry of this.participants)
       if (entry.stack === 0) entry.status = "out";
     const remaining = this.participants.filter((entry) => entry.stack > 0);
@@ -578,6 +584,22 @@ export class PokerTable {
       this.phase = "complete";
       this.nextStepAt = 0;
     } else this.nextStepAt = Date.now() + 5_000;
+    this.publish();
+  }
+
+  muck(playerId: string) {
+    const entry = this.find(playerId);
+    if (this.phase !== "showdown")
+      throw new Error("You can only muck after the showdown.");
+    const result = this.history.find((item) => item.hand === this.hand);
+    const winner = result?.winners.find(
+      (candidate) => candidate.playerId === playerId,
+    );
+    if (!winner) throw new Error("Only a winner can muck their hand.");
+    entry.mucked = true;
+    winner.mucked = true;
+    winner.cards = [];
+    entry.lastAction = "Muck";
     this.publish();
   }
 
@@ -688,7 +710,9 @@ export class PokerTable {
         connected: entry.player.connected,
         status: entry.status,
         cards:
-          entry.player.id === viewerId || (reveal && entry.status !== "folded")
+          !entry.mucked &&
+          (entry.player.id === viewerId ||
+            (reveal && entry.status !== "folded"))
             ? entry.cards.map((card) => ({ ...card }))
             : entry.cards.map((card) => ({
                 id: card.id,
@@ -696,8 +720,11 @@ export class PokerTable {
                 suit: "spades",
                 hidden: true,
               })),
+        mucked: entry.mucked,
         handLabel:
-          entry.player.id === viewerId || (reveal && entry.status !== "folded")
+          !entry.mucked &&
+          (entry.player.id === viewerId ||
+            (reveal && entry.status !== "folded"))
             ? describePokerHolding(entry.cards, this.community)
             : undefined,
         lastAction: entry.lastAction,
@@ -804,6 +831,7 @@ export class PokerManager {
       const table = this.tables.get(this.membership.get(player.id) ?? "");
       if (!table) throw new Error("Vous n’êtes pas à une table de poker.");
       if (command.type === "chat") table.chatMessage(player.id, command.text);
+      else if (command.type === "muck") table.muck(player.id);
       else {
         table.action(player.id, command.action, command.amount);
         this.settleSpin(table);

@@ -1399,44 +1399,40 @@
   }
 }
 
-/* The active-seat outline is the turn timer: it drains clockwise. */
-@property --turn-progress {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
+/* The SVG follows the real perimeter, keeping the countdown speed uniform. */
 .poker-seat.acting .poker-player-card {
   box-shadow: 0 9px 22px rgba(0, 0, 0, 0.35);
 }
-.poker-seat.acting .poker-player-card::before {
-  content: "";
+.poker-turn-outline {
   position: absolute;
   inset: -3px;
-  z-index: -1;
-  padding: 2px;
+  z-index: 2;
+  width: calc(100% + 6px);
+  height: calc(100% + 6px);
+  overflow: visible;
   border-radius: 10px;
-  --turn-progress: 360deg;
-  background: conic-gradient(
-    from -90deg,
-    var(--purple) 0deg var(--turn-progress),
-    rgba(183, 154, 250, 0.12) var(--turn-progress) 360deg
-  );
   pointer-events: none;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+}
+.poker-turn-outline rect {
+  fill: none;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+.poker-turn-track {
+  stroke: rgba(183, 154, 250, 0.12);
+}
+.poker-turn-progress {
+  stroke: var(--purple);
+  stroke-dasharray: 100 100;
+  stroke-dashoffset: 0;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 5px #b79afa70);
   animation: poker-turn-countdown var(--turn-duration) linear forwards;
 }
 
 @keyframes poker-turn-countdown {
-  from {
-    --turn-progress: 360deg;
-  }
   to {
-    --turn-progress: 0deg;
+    stroke-dashoffset: 100;
   }
 }
 .poker-seat.acting .poker-player-card::after {
@@ -7707,79 +7703,135 @@ h1 > span:not(.live-tag) {
 }
 .hand-result-banner {
   position: absolute;
-  top: 22px;
+  top: 26px;
   left: 50%;
   z-index: 14;
-  width: min(520px, calc(100% - 220px));
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  padding: 11px 13px;
+  width: min(610px, calc(100% - 210px));
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  padding: 10px 14px 10px 10px;
   transform: translateX(-50%);
-  color: var(--purple);
-  background: #15101ee8;
-  border: 1px solid #b79afa55;
-  border-radius: 12px;
-  box-shadow: 0 16px 38px #0008;
-  backdrop-filter: blur(7px);
+  color: #ead39a;
+  background: linear-gradient(90deg, #120e1ad9, #21172bd9, #120e1ad9);
+  border-top: 1px solid #ead39a75;
+  border-bottom: 1px solid #b79afa4d;
+  box-shadow: 0 18px 42px #08050c80;
+  backdrop-filter: blur(12px);
   animation: poker-result-in 220ms var(--ease) both;
 }
-.hand-result-banner > div {
+.result-medallion {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  color: #24182e;
+  border-radius: 50%;
+  background: repeating-conic-gradient(#fff1bd 0deg 12deg, #b98b44 12deg 45deg);
+  box-shadow:
+    inset 0 0 0 5px #d8b46b,
+    inset 0 0 0 6px #fff0b0a6,
+    0 6px 15px #0008;
+}
+.hand-result-banner .result-copy {
   flex: 1;
   min-width: 0;
 }
-.hand-result-banner span {
+.hand-result-banner .result-kicker {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 3px;
   color: #91879c;
   font-size: 7px;
-  letter-spacing: 0.14em;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+}
+.result-winners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 18px;
 }
 .hand-result-banner p {
-  display: grid;
-  grid-template-columns: minmax(70px, auto) 1fr auto;
-  gap: 9px;
+  min-width: 170px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0;
+}
+.hand-result-banner p > span {
+  min-width: 0;
+  display: flex;
   align-items: baseline;
-  margin: 3px 0 0;
+  gap: 7px;
 }
 .hand-result-banner b {
   color: var(--text);
-  font-size: 10px;
+  font-family: Georgia, serif;
+  font-size: 13px;
+  font-weight: 500;
 }
 .hand-result-banner small {
   min-width: 0;
   overflow: hidden;
   color: #aba2b5;
-  font-size: 9px;
+  font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .hand-result-banner strong {
-  color: #d8c3f2;
-  font-size: 11px;
+  color: #ead39a;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.muck-hand {
+  min-height: 31px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  color: #c7b7d8;
+  border: 1px solid #b79afa45;
+  border-radius: 999px;
+  background: #b79afa0d;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.muck-hand:hover:not(:disabled) {
+  color: #f1e9f7;
+  border-color: #d4bef5;
+  background: #b79afa1a;
+}
+.muck-hand:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 .poker-chat-backdrop {
   position: fixed;
   inset: 0;
   z-index: 80;
   display: grid;
-  place-items: center;
-  padding: 24px;
-  background: #08060db8;
-  backdrop-filter: blur(4px);
+  place-items: start end;
+  padding: 70px 24px 24px 92px;
+  background: #08060d2b;
   animation: poker-backdrop-in 160ms var(--ease) both;
 }
 .poker-chat-backdrop .poker-chat {
-  width: min(430px, calc(100vw - 32px));
-  height: min(650px, calc(100vh - 48px));
+  width: min(370px, calc(100vw - 116px));
+  height: min(510px, calc(100vh - 94px));
   display: flex;
-  border-color: #b79afa3d;
-  border-radius: 12px;
-  box-shadow: 0 28px 90px #000b;
+  border-color: #b79afa52;
+  border-radius: 16px;
+  box-shadow:
+    0 28px 80px #000c,
+    0 0 0 1px #ffffff08;
   animation: poker-modal-in 200ms var(--ease) both;
+  transform-origin: top right;
 }
 .poker-chat-backdrop .chat-heading {
-  min-height: 58px;
+  min-height: 52px;
 }
 .community-cards .playing-card {
   animation: deal-in 0.4s var(--ease) both;
@@ -7817,12 +7869,20 @@ h1 > span:not(.live-tag) {
 @keyframes poker-modal-in {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.985);
+    transform: translateY(-6px) scale(0.97);
   }
 }
 @media (max-width: 980px) {
+  .poker-chat-backdrop {
+    place-items: end center;
+    padding: 18px;
+    background: #08060d80;
+  }
   .poker-chat-backdrop .poker-chat {
+    width: min(430px, calc(100vw - 36px));
+    height: min(540px, calc(100vh - 36px));
     display: flex;
+    transform-origin: bottom center;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -7832,7 +7892,7 @@ h1 > span:not(.live-tag) {
   .raise-drawer,
   .poker-chat-backdrop,
   .poker-chat-backdrop .poker-chat,
-  .poker-seat.acting .poker-player-card::before {
+  .poker-turn-progress {
     animation-duration: 1ms !important;
     animation-delay: 0ms !important;
   }
@@ -7843,9 +7903,6 @@ h1 > span:not(.live-tag) {
   border-color: #ffffff16;
   box-shadow: 0 9px 22px rgba(0, 0, 0, 0.35);
 }
-.poker-shell .poker-seat.acting .poker-player-card::before {
-  z-index: 2;
-}
 .poker-shell .poker-seat.acting .poker-player-card::after {
   top: 50%;
   right: 6px;
@@ -7853,7 +7910,7 @@ h1 > span:not(.live-tag) {
   transform: translateY(-50%);
 }
 
-/* Showdown: the five cards that actually make the hand read as one unit. */
+/* Showdown: emphasize only the cards that explain the made hand. */
 .poker-felt .playing-card.dimmed-card {
   opacity: 0.32;
   filter: grayscale(0.72) brightness(0.72);
@@ -7863,88 +7920,98 @@ h1 > span:not(.live-tag) {
   opacity: 1;
   filter: none;
   box-shadow:
-    0 0 0 2px #ead39a,
-    0 0 0 5px #b79afa70,
-    0 0 24px 7px #d7bdf55c,
+    0 0 25px 7px #d7bdf55c,
     1px 5px 8px #0a061c99;
   animation:
     deal-in 0.4s var(--ease) both,
     winning-card-glow 1.7s ease-in-out 0.4s infinite alternate;
 }
-.poker-felt .playing-card.winning-card::after {
-  content: "";
-  position: absolute;
-  inset: -5px;
-  border: 1px solid #f1dda780;
-  border-radius: 8px;
-  pointer-events: none;
-}
 .poker-seat.winner .poker-player-card {
   border-color: #e4ca8a;
   box-shadow:
-    0 0 0 2px #b79afa7a,
+    0 0 0 1px #ead39a80,
+    0 0 24px #d8bb7252,
     0 8px 28px #07040c99;
 }
-.poker-seat.winner .poker-player-card::after {
-  content: "GAGNANT";
+.winner-seal {
   position: absolute;
-  top: -17px;
-  right: 5px;
-  height: 17px;
+  right: -8px;
+  bottom: 31px;
+  z-index: 8;
+  width: 25px;
+  height: 25px;
   display: grid;
   place-items: center;
-  padding: 0 7px;
   color: #291b39;
-  background: #ead39a;
-  border-radius: 6px 6px 0 0;
-  font-size: 7px;
-  font-weight: 900;
-  letter-spacing: 0.11em;
+  border: 2px solid #f4dfaa;
+  border-radius: 50%;
+  background: #d8b66e;
+  box-shadow: 0 5px 14px #08050c99;
 }
 
-/* Physical chips keep every live wager and the central pot visible on felt. */
+/* Poker uses the same top-down, inlaid chips as the blackjack rack. */
 .poker-chip-stack {
   position: relative;
-  width: 34px;
-  height: 27px;
+  width: 50px;
+  height: 30px;
   flex: 0 0 auto;
-  filter: drop-shadow(0 5px 5px #09050d99);
+  --chip-edge: #ded5ee;
+  --chip-base: #aaa0b7;
+  --chip-border: #dcd5e7;
+  --chip-shadow: #786d88;
+  filter: drop-shadow(0 5px 5px #09050d80);
 }
 .poker-chip-stack > span {
   position: absolute;
-  left: 2px;
-  bottom: calc(var(--chip-level, 0) * 4px);
+  left: calc(var(--chip-level, 0) * 9px);
+  top: calc(var(--chip-level, 0) * -1px);
   width: 29px;
-  height: 11px;
-  border: 1px solid #e7d6f0aa;
+  height: 29px;
+  padding: 3px;
+  border: 1px solid var(--chip-border);
   border-radius: 50%;
-  background:
-    radial-gradient(ellipse at 50% 44%, #5d3977 0 35%, transparent 37%),
-    repeating-conic-gradient(from 8deg, #e7d9ef 0 10deg, #7d4e9b 10deg 42deg);
+  background: repeating-conic-gradient(
+    var(--chip-edge) 0deg 12deg,
+    var(--chip-base) 12deg 45deg
+  );
   box-shadow:
-    inset 0 -3px #422753,
-    0 2px 0 #2b1837;
+    0 2px 0 var(--chip-shadow),
+    0 4px 7px #0004;
+}
+.poker-chip-stack > span > i {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 1px solid var(--chip-border);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--chip-base), var(--chip-shadow));
 }
 .poker-chip-stack > span:nth-child(1) {
   --chip-level: 0;
 }
 .poker-chip-stack > span:nth-child(2) {
   --chip-level: 1;
-  left: 3px;
 }
 .poker-chip-stack > span:nth-child(3) {
   --chip-level: 2;
-  left: 1px;
-  background:
-    radial-gradient(ellipse at 50% 44%, #835f2f 0 35%, transparent 37%),
-    repeating-conic-gradient(from 8deg, #f0dfb0 0 10deg, #b88a43 10deg 42deg);
-  box-shadow:
-    inset 0 -3px #6b4a25,
-    0 2px 0 #3f2c1c;
 }
-.poker-chip-stack > span:nth-child(4) {
-  --chip-level: 3;
-  left: 2px;
+.poker-chip-25 {
+  --chip-edge: #d2b5ff;
+  --chip-base: #8c5ebe;
+  --chip-border: #c3a2e7;
+  --chip-shadow: #67418d;
+}
+.poker-chip-50 {
+  --chip-edge: #b7dce0;
+  --chip-base: #4e9299;
+  --chip-border: #7cbec6;
+  --chip-shadow: #34616a;
+}
+.poker-chip-100 {
+  --chip-edge: #e4c28b;
+  --chip-base: #af8550;
+  --chip-border: #daba8c;
+  --chip-shadow: #785638;
 }
 .pot-display {
   top: -59px;
@@ -7961,13 +8028,13 @@ h1 > span:not(.live-tag) {
   gap: 1px;
 }
 .pot-display .pot-chips {
-  transform: scale(1.08);
+  transform: scale(1.04);
 }
 .seat-bet {
   top: -31px;
   z-index: 9;
-  min-width: 64px;
-  min-height: 31px;
+  min-width: 74px;
+  min-height: 34px;
   justify-content: center;
   gap: 1px;
   padding: 2px 6px 2px 3px;
@@ -7985,15 +8052,11 @@ h1 > span:not(.live-tag) {
 @keyframes winning-card-glow {
   from {
     box-shadow:
-      0 0 0 2px #ead39a,
-      0 0 0 5px #b79afa55,
       0 0 17px 4px #d7bdf53d,
       1px 5px 8px #0a061c99;
   }
   to {
     box-shadow:
-      0 0 0 2px #f5e5b9,
-      0 0 0 5px #b79afa8c,
       0 0 29px 9px #d7bdf575,
       1px 5px 8px #0a061c99;
   }

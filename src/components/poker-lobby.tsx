@@ -273,7 +273,7 @@ export function PokerLobby({
                 key={room.stake}
                 className={`${styles.limitCard} ${styles[room.theme]} ${locked ? styles.locked : ""}`}
                 disabled={locked || busy || !game.connected}
-                aria-label={`${room.name}, plafond ${credits(room.max)} crédits, blindes ${room.blinds}${locked ? `, ${credits(room.min - balance)} crédits manquants` : `, entrer avec ${credits(buyIn)} crédits`}`}
+                aria-label={`${room.name}, plafond ${credits(room.max)} crédits, blinds ${room.blinds}${locked ? `, ${credits(room.min - balance)} crédits manquants` : `, entrer avec ${credits(buyIn)} crédits`}`}
                 onClick={() =>
                   void enter(`cash-${room.stake}`, {
                     type: "match",
@@ -290,11 +290,9 @@ export function PokerLobby({
                 <strong>
                   {credits(room.max)} <small>cr.</small>
                 </strong>
-                <span className={styles.limitCaption}>
-                  PLAFOND DU TAPIS À L’ENTRÉE
-                </span>
+                <span className={styles.limitCaption}>MAXIMUM BUY-IN</span>
                 <div className={styles.limitBlinds}>
-                  <span>Blindes</span>
+                  <span>Blinds</span>
                   <b>{room.blinds}</b>
                 </div>
                 <div className={styles.roomFooter}>
@@ -321,12 +319,10 @@ export function PokerLobby({
         </div>
         <details className={styles.customBuyIn}>
           <summary>
-            Personnaliser mon tapis <span>{buyInBB} BB</span>
+            Personnaliser mon buy-in <span>{buyInBB} BB</span>
           </summary>
           <div>
-            <label htmlFor="poker-buyin">
-              Tapis de départ en grandes blindes
-            </label>
+            <label htmlFor="poker-buyin">Starting stack in big blinds</label>
             <input
               id="poker-buyin"
               type="range"
@@ -344,7 +340,7 @@ export function PokerLobby({
           </div>
         </details>
         <p className={styles.dialogFootnote}>
-          <Coins size={13} /> L’entrée s’adapte à votre solde. Votre tapis vous
+          <Coins size={13} /> L’entrée s’adapte à votre solde. Votre stack vous
           est rendu en quittant la table.
         </p>
         {game.error && (

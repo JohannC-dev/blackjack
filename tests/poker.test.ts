@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { evaluatePokerHand, makePokerDeck, PokerTable } from "../server/poker";
-import { describePokerHolding, evaluateBestPokerHand } from "../src/lib/rules";
+import {
+  describePokerHolding,
+  evaluateBestPokerHand,
+  getPokerCombinationCards,
+} from "../src/lib/rules";
 import type { Player } from "../server/engine";
 import type { Card, Suit } from "../src/lib/types";
 
@@ -72,6 +76,22 @@ describe("Poker hand evaluator", () => {
     ]);
   });
 
+  test("highlights the made combination without unrelated kickers", () => {
+    const best = evaluateBestPokerHand(cards(8, 8, 13, 11, 6, 4, 2));
+    expect(getPokerCombinationCards(best).map((card) => card.id)).toEqual([
+      "8-0",
+      "8-1",
+    ]);
+
+    const twoPair = evaluateBestPokerHand(cards(9, 9, 5, 5, 13, 7, 2));
+    expect(getPokerCombinationCards(twoPair).map((card) => card.id)).toEqual([
+      "9-0",
+      "9-1",
+      "5-2",
+      "5-3",
+    ]);
+  });
+
   test("builds one cryptographically shuffled 52-card deck", () => {
     const deck = makePokerDeck();
     expect(deck).toHaveLength(52);
@@ -93,7 +113,9 @@ describe("Poker hand evaluator", () => {
       { id: "seven-hearts", rank: 7, suit: "hearts" },
       { id: "six-clubs", rank: 6, suit: "clubs" },
     ];
-    expect(describePokerHolding(holeCards, board)).toBe("Brelan de Six");
+    expect(describePokerHolding(holeCards, board)).toBe(
+      "Three of a kind, Sixes",
+    );
   });
 });
 
@@ -234,5 +256,44 @@ describe("Poker table authority", () => {
       table.participants.reduce((sum, entry) => sum + entry.stack, 0),
     ).toBe(600);
     expect(table.history[0].pot).toBe(600);
+  });
+
+  test("lets a winner muck their cards for every viewer", () => {
+    const table = new PokerTable("cash", 20, 10, 20, () => {});
+    const one = player("1");
+    const two = player("2");
+    table.add(one, 2_000);
+    table.add(two, 2_000);
+    table.tick(Date.now() + 2_000);
+
+    let guard = 0;
+    while (table.phase !== "showdown" && guard++ < 24) {
+      if (!table.activePlayerId) {
+        table.tick(Date.now() + 1_000);
+        continue;
+      }
+      const active = table.participants.find(
+        (entry) => entry.player.id === table.activePlayerId,
+      )!;
+      table.action(
+        active.player.id,
+        table.currentBet > active.bet ? "call" : "check",
+      );
+    }
+
+    const winnerId = table.history[0].winners[0].playerId;
+    const otherId = winnerId === one.id ? two.id : one.id;
+    table.muck(winnerId);
+
+    for (const viewerId of [winnerId, otherId]) {
+      const winner = table
+        .snapshot(viewerId)
+        .seats.find((seat) => seat.id === winnerId)!;
+      expect(winner.mucked).toBe(true);
+      expect(winner.cards.every((card) => card.hidden && card.rank === 0)).toBe(
+        true,
+      );
+    }
+    expect(table.history[0].winners[0].cards).toHaveLength(0);
   });
 });
