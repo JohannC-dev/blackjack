@@ -84,7 +84,22 @@ try {
     seatTimer: document
       .querySelector(".poker-seat.acting .poker-player-card")
       ?.getAttribute("data-turn-seconds"),
+    turnOutline: (() => {
+      const outline = document.querySelector<SVGRectElement>(
+        ".poker-seat.acting .poker-turn-progress",
+      );
+      return outline
+        ? {
+            pathLength: outline.getAttribute("pathLength"),
+            timing: getComputedStyle(outline).animationTimingFunction,
+          }
+        : null;
+    })(),
     duplicateStatusTimer: !!document.querySelector(".poker-status > strong"),
+    redundantBlindActions: Array.from(
+      document.querySelectorAll(".last-action"),
+    ).filter((element) => /^(Small|Big) blind$/.test(element.textContent ?? ""))
+      .length,
     chipStacks: document.querySelectorAll(".poker-chip-stack").length,
     overflow: document.documentElement.scrollWidth > window.innerWidth,
   }));
@@ -98,20 +113,37 @@ try {
     throw new Error(`Trois actions attendues, reçu ${result.primaryActions}`);
   if (!result.raiseClosedByDefault)
     throw new Error("Le réglage de relance doit être fermé par défaut");
-  if (!result.handSummary?.includes("VOTRE TAPIS"))
-    throw new Error("Le tapis du joueur doit être clairement visible");
+  if (!result.handSummary?.includes("YOUR STACK"))
+    throw new Error("Le stack du joueur doit être clairement visible");
   if (!result.seatTimer?.endsWith("s"))
     throw new Error("Le temps de parole doit apparaître sur le siège actif");
+  if (
+    result.turnOutline?.pathLength !== "100" ||
+    result.turnOutline.timing !== "linear"
+  )
+    throw new Error(
+      "Le contour du temps de parole doit progresser uniformément",
+    );
   if (result.duplicateStatusTimer)
     throw new Error(
       "Le temps de parole ne doit plus être dupliqué sous la table",
     );
+  if (result.redundantBlindActions)
+    throw new Error("Les pastilles SB/BB ne doivent pas être dupliquées");
   if (result.chipStacks < 3)
     throw new Error(
       `Le pot et les deux blinds doivent afficher des jetons, reçu ${result.chipStacks}`,
     );
   await page.getByRole("button", { name: "Ouvrir la discussion" }).click();
-  await page.getByRole("dialog", { name: "Discussion" }).waitFor();
+  const chatDialog = page.getByRole("dialog", { name: "Table chat" });
+  await chatDialog.waitFor();
+  const chatBox = await chatDialog.boundingBox();
+  if (!chatBox || chatBox.width > 430 || chatBox.x < 900)
+    throw new Error("Le chat desktop doit s’ouvrir comme un popup compact");
+  await page.screenshot({
+    path: "/tmp/minuit-poker-chat.png",
+    fullPage: true,
+  });
   await page.getByRole("button", { name: "Fermer la discussion" }).click();
   if (result.overflow)
     throw new Error("La table Poker déborde horizontalement sur desktop");
@@ -147,9 +179,9 @@ try {
     centralPotChips: document.querySelectorAll(".pot-display .poker-chip-stack")
       .length,
   }));
-  if (showdown.winningCards < 5)
+  if (showdown.winningCards < 1 || showdown.winningCards > 5)
     throw new Error(
-      `La combinaison gagnante doit mettre au moins cinq cartes en évidence, reçu ${showdown.winningCards}`,
+      `Seules les cartes utiles à la combinaison doivent être mises en évidence, reçu ${showdown.winningCards}`,
     );
   if (showdown.winners < 1)
     throw new Error("Le siège gagnant doit être mis en évidence");
@@ -157,6 +189,30 @@ try {
     throw new Error("Les jetons du pot doivent rester visibles au showdown");
   await page.screenshot({
     path: "/tmp/minuit-poker-showdown.png",
+    fullPage: true,
+  });
+  const winner = botState!.table!.history[0].winners[0];
+  if (winner.name === "Victoria") {
+    await page.getByRole("button", { name: "Muck hand" }).click();
+  } else {
+    const muck: Ack = await bot
+      .timeout(5_000)
+      .emitWithAck("poker:command", { type: "muck" });
+    if (!muck.ok) throw new Error(muck.error);
+  }
+  await page
+    .locator(".poker-seat.winner .playing-card.card-back")
+    .first()
+    .waitFor();
+  const muckedCards = await page
+    .locator(".poker-seat.winner .playing-card.card-back")
+    .count();
+  if (muckedCards !== 2)
+    throw new Error(
+      `La main gagnante muckée doit afficher deux dos, reçu ${muckedCards}`,
+    );
+  await page.screenshot({
+    path: "/tmp/minuit-poker-mucked.png",
     fullPage: true,
   });
   console.log(JSON.stringify(result));

@@ -133,6 +133,8 @@ export type PokerSeat = {
   connected: boolean;
   status: "waiting" | "active" | "folded" | "all-in" | "out";
   cards: Card[];
+  /** The player chose not to keep their winning hole cards face up. */
+  mucked?: boolean;
   handLabel?: string;
   lastAction?: string;
 };
@@ -141,7 +143,14 @@ export type PokerHistoryItem = {
   hand: number;
   community: Card[];
   pot: number;
-  winners: { name: string; amount: number; label: string; cards: Card[] }[];
+  winners: {
+    playerId: string;
+    name: string;
+    amount: number;
+    label: string;
+    cards: Card[];
+    mucked?: boolean;
+  }[];
   timestamp: number;
 };
 
@@ -189,4 +198,5 @@ export type PokerCommand =
   | { type: "match"; mode: PokerMode; stake: number; buyIn?: number }
   | { type: "leave" }
   | { type: "action"; action: PokerAction; amount?: number }
+  | { type: "muck" }
   | { type: "chat"; text: string };

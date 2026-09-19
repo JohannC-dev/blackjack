@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Check,
   Coins,
+  EyeOff,
   House,
   LoaderCircle,
   MessageCircle,
@@ -30,6 +31,7 @@ import {
   credits,
   describePokerHolding,
   evaluateBestPokerHand,
+  getPokerCombinationCards,
 } from "@/lib/rules";
 import type { PokerAction, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
@@ -497,7 +499,7 @@ function PokerTable({ game }: { game: Game }) {
       ? "knock"
       : actedSeat?.lastAction?.startsWith("Fold")
         ? "fold"
-        : /^(Raise|Mise|All-in)/.test(actedSeat?.lastAction ?? "")
+        : /^(Raise|Bet|All-in)/.test(actedSeat?.lastAction ?? "")
           ? "chips"
           : undefined;
     if (actionEffect) playPokerSound(context, actionEffect);
@@ -520,6 +522,14 @@ function PokerTable({ game }: { game: Game }) {
     ? Math.max(0, Math.ceil((table.deadline - now) / 1000))
     : 0;
   const myTurn = table.activePlayerId === game.playerId;
+  const allInContenders = table.seats.filter(
+    (seat) => seat.status === "active" || seat.status === "all-in",
+  );
+  const allInRunout =
+    !table.activePlayerId &&
+    ["preflop", "flop", "turn", "river"].includes(table.phase) &&
+    allInContenders.length === 2 &&
+    allInContenders.some((seat) => seat.status === "all-in");
   const positions = table.mode === "spin" ? THREE_POSITIONS : FIVE_POSITIONS;
   const totalSeats = table.mode === "spin" ? 3 : 5;
   const dealDelays = useMemo(() => {
@@ -557,21 +567,29 @@ function PokerTable({ game }: { game: Game }) {
   const handResult = table.history.find((item) => item.hand === table.hand);
   const showdownCards = useMemo(() => {
     const winning = new Set<string>();
-    const winners = new Set<string>();
+    const winnerPlayerIds = new Set<string>();
     if (table.phase !== "showdown" || !handResult)
-      return { winning, winners, hasCombination: false };
+      return { winning, winnerPlayerIds, hasCombination: false };
     for (const winner of handResult.winners) {
-      for (const card of winner.cards) winners.add(card.id);
+      winnerPlayerIds.add(winner.playerId);
+      if (winner.mucked || winner.cards.length !== 2) continue;
       if (winner.cards.length + handResult.community.length < 5) continue;
       // Community cards come first so a board that plays is represented as such.
       const best = evaluateBestPokerHand([
         ...handResult.community,
         ...winner.cards,
       ]);
-      for (const card of best.cards) winning.add(card.id);
+      for (const card of getPokerCombinationCards(best)) winning.add(card.id);
     }
-    return { winning, winners, hasCombination: winning.size > 0 };
+    return {
+      winning,
+      winnerPlayerIds,
+      hasCombination: winning.size > 0,
+    };
   }, [handResult, table.phase]);
+  const myWin = handResult?.winners.find(
+    (winner) => winner.playerId === game.playerId,
+  );
   const handLabel = me
     ? (describePokerHolding(me.cards, table.community) ?? me.handLabel)
     : undefined;
@@ -658,11 +676,8 @@ function PokerTable({ game }: { game: Game }) {
                 ),
               )}
               <div className="pot-display">
+                <span>POT TOTAL</span>
                 <PokerChipStack amount={table.pot} pot />
-                <div>
-                  <span>POT TOTAL</span>
-                  <b>{credits(table.pot)} cr.</b>
-                </div>
               </div>
             </div>
             {seatSlots.map((seat, index) => (
@@ -675,7 +690,7 @@ function PokerTable({ game }: { game: Game }) {
                 turnSeconds={seconds}
                 dealDelays={dealDelays}
                 winningCardIds={showdownCards.winning}
-                winnerHoleCardIds={showdownCards.winners}
+                winnerPlayerIds={showdownCards.winnerPlayerIds}
                 showdown={showdownCards.hasCombination}
               />
             ))}
@@ -694,19 +709,36 @@ function PokerTable({ game }: { game: Game }) {
             )}
             {table.phase === "showdown" && handResult && (
               <div className="hand-result-banner" role="status">
-                <Trophy size={20} />
-                <div>
-                  <span>
-                    RÉSULTAT · MAIN {String(table.hand).padStart(3, "0")}
+                <span className="result-medallion">
+                  <Trophy size={19} />
+                </span>
+                <div className="result-copy">
+                  <span className="result-kicker">
+                    HAND {String(table.hand).padStart(3, "0")} · SHOWDOWN
                   </span>
-                  {handResult.winners.map((winner) => (
-                    <p key={`${winner.name}-${winner.amount}`}>
-                      <b>{winner.name}</b>
-                      <small>{winner.label}</small>
-                      <strong>+{credits(winner.amount)} cr.</strong>
-                    </p>
-                  ))}
+                  <div className="result-winners">
+                    {handResult.winners.map((winner) => (
+                      <p key={`${winner.name}-${winner.amount}`}>
+                        <span>
+                          <b>{winner.name}</b>
+                          <small>{winner.label}</small>
+                        </span>
+                        <strong>+{credits(winner.amount)} cr.</strong>
+                      </p>
+                    ))}
+                  </div>
                 </div>
+                {myWin && (
+                  <button
+                    type="button"
+                    className="muck-hand"
+                    disabled={!!me?.mucked || game.pending}
+                    onClick={() => game.pokerCommand({ type: "muck" })}
+                  >
+                    <EyeOff size={14} />
+                    {me?.mucked ? "Hand mucked" : "Muck hand"}
+                  </button>
+                )}
               </div>
             )}
             {table.phase === "complete" && (
@@ -742,114 +774,136 @@ function PokerTable({ game }: { game: Game }) {
           <div className="poker-status">
             <span className={myTurn ? "active" : ""} />
             <div>
-              <b>{myTurn ? "À vous de parler" : table.message}</b>
+              <b>
+                {myTurn
+                  ? "YOUR TURN"
+                  : allInRunout
+                    ? "ALL-IN · RÉVÉLATION"
+                    : table.message}
+              </b>
               <small>
                 {table.phase === "waiting"
-                  ? "La main démarre dès qu’un adversaire arrive."
-                  : `${table.phase.toUpperCase()} · Main ${String(table.hand).padStart(3, "0")}`}
+                  ? "La prochaine hand démarre dès qu’un adversaire arrive."
+                  : `${table.phase.toUpperCase()} · Hand ${String(table.hand).padStart(3, "0")}`}
               </small>
             </div>
           </div>
           <div className="poker-hand-summary">
             <div>
-              <span>VOTRE MAIN</span>
+              <span>YOUR HAND</span>
               <b>{handLabel ?? "En attente des cartes"}</b>
             </div>
             <div>
-              <span>VOTRE TAPIS</span>
+              <span>YOUR STACK</span>
               <b>{credits(me?.stack ?? 0)} cr.</b>
             </div>
             {!!me?.bet && (
               <div>
-                <span>ENGAGÉ CE TOUR</span>
+                <span>STREET BET</span>
                 <b>{credits(me.bet)} cr.</b>
               </div>
             )}
           </div>
           <div className={`poker-action-zone ${myTurn ? "enabled" : ""}`}>
-            <div className="poker-actions">
-              <button
-                disabled={!myTurn || game.pending}
-                onClick={() => sendAction("fold")}
-                className="fold"
-              >
-                Fold
-              </button>
-              <button
-                disabled={!myTurn || game.pending}
-                onClick={() => sendAction(toCall ? "call" : "check")}
-              >
-                <span>{toCall ? "Call" : "Check"}</span>
-                {!!toCall && (
-                  <small>{credits(Math.min(toCall, me?.stack ?? 0))} cr.</small>
-                )}
-              </button>
-              <button
-                type="button"
-                disabled={
-                  !myTurn || game.pending || maximum <= table.currentBet
-                }
-                onClick={() => setRaiseOpen(!raiseOpen)}
-                className="raise"
-                aria-expanded={raiseOpen}
-              >
-                {table.currentBet ? "Raise" : "Miser"}
-              </button>
-            </div>
-            {raiseOpen && (
-              <div className="raise-drawer">
-                <div className="raise-presets">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setRaiseTo(
-                        Math.min(
-                          maximum,
-                          Math.max(minimumRaise, Math.round(table.pot / 2)),
-                        ),
-                      )
-                    }
-                  >
-                    ½ pot
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setRaiseTo(
-                        Math.min(maximum, Math.max(minimumRaise, table.pot)),
-                      )
-                    }
-                  >
-                    Pot
-                  </button>
-                  <button type="button" onClick={() => setRaiseTo(maximum)}>
-                    All-in
-                  </button>
-                </div>
-                <div className="raise-slider">
-                  <span>MISE TOTALE</span>
-                  <input
-                    aria-label="Montant total de la relance"
-                    type="range"
-                    min={Math.min(minimumRaise, maximum)}
-                    max={maximum}
-                    value={raiseTo || 0}
-                    onChange={(event) => setRaiseTo(Number(event.target.value))}
-                  />
-                  <b>{credits(raiseTo)} cr.</b>
-                </div>
-                <button
-                  type="button"
-                  className="raise-confirm"
-                  onClick={() =>
-                    raiseTo >= maximum
-                      ? sendAction("all-in")
-                      : sendAction("raise", raiseTo)
-                  }
-                >
-                  Confirmer {raiseTo >= maximum ? "le all-in" : "la relance"}
-                </button>
+            {allInRunout ? (
+              <div className="poker-runout" role="status">
+                <span>ALL-IN</span>
+                <b>Les cartes se révèlent…</b>
               </div>
+            ) : (
+              <>
+                <div className="poker-actions">
+                  <button
+                    disabled={!myTurn || game.pending}
+                    onClick={() => sendAction("fold")}
+                    className="fold"
+                  >
+                    Fold
+                  </button>
+                  <button
+                    disabled={!myTurn || game.pending}
+                    onClick={() => sendAction(toCall ? "call" : "check")}
+                  >
+                    <span>{toCall ? "Call" : "Check"}</span>
+                    {!!toCall && (
+                      <small>
+                        {credits(Math.min(toCall, me?.stack ?? 0))} cr.
+                      </small>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      !myTurn || game.pending || maximum <= table.currentBet
+                    }
+                    onClick={() => setRaiseOpen(!raiseOpen)}
+                    className="raise"
+                    aria-expanded={raiseOpen}
+                  >
+                    {table.currentBet ? "Raise" : "Bet"}
+                  </button>
+                </div>
+                {raiseOpen && (
+                  <div className="raise-drawer">
+                    <div className="raise-presets">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRaiseTo(
+                            Math.min(
+                              maximum,
+                              Math.max(minimumRaise, Math.round(table.pot / 2)),
+                            ),
+                          )
+                        }
+                      >
+                        ½ pot
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRaiseTo(
+                            Math.min(
+                              maximum,
+                              Math.max(minimumRaise, table.pot),
+                            ),
+                          )
+                        }
+                      >
+                        Pot
+                      </button>
+                      <button type="button" onClick={() => setRaiseTo(maximum)}>
+                        All-in
+                      </button>
+                    </div>
+                    <div className="raise-slider">
+                      <span>TOTAL BET</span>
+                      <input
+                        aria-label="Total raise amount"
+                        type="range"
+                        min={Math.min(minimumRaise, maximum)}
+                        max={maximum}
+                        value={raiseTo || 0}
+                        onChange={(event) =>
+                          setRaiseTo(Number(event.target.value))
+                        }
+                      />
+                      <b>{credits(raiseTo)} cr.</b>
+                    </div>
+                    <button
+                      type="button"
+                      className="raise-confirm"
+                      onClick={() =>
+                        raiseTo >= maximum
+                          ? sendAction("all-in")
+                          : sendAction("raise", raiseTo)
+                      }
+                    >
+                      {raiseTo >= maximum ? "Confirm all-in" : "Confirm raise"}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </section>
@@ -871,8 +925,8 @@ function PokerTable({ game }: { game: Game }) {
               <div>
                 <MessageCircle size={17} />
                 <span>
-                  <b id="poker-chat-title">Discussion</b>
-                  <small>Table uniquement</small>
+                  <b id="poker-chat-title">Table chat</b>
+                  <small>Cette table uniquement</small>
                 </span>
               </div>
               <button
@@ -929,7 +983,7 @@ function PokerTable({ game }: { game: Game }) {
             </p>
             {!!table.history.length && (
               <div className="table-history-mini">
-                <span>DERNIÈRES MAINS</span>
+                <span>RECENT HANDS</span>
                 {table.history.slice(0, 3).map((item) => (
                   <div key={item.hand}>
                     <b>#{String(item.hand).padStart(3, "0")}</b>
@@ -963,10 +1017,7 @@ function PokerChipStack({
       role="img"
       aria-label={`${credits(amount)} crédits en jetons`}
     >
-      <span />
-      <span />
-      <span />
-      <span />
+      <span>{credits(amount)}</span>
     </div>
   );
 }
@@ -979,7 +1030,7 @@ function PokerSeatView({
   turnSeconds,
   dealDelays,
   winningCardIds,
-  winnerHoleCardIds,
+  winnerPlayerIds,
   showdown,
 }: {
   seat?: PokerSeat;
@@ -989,7 +1040,7 @@ function PokerSeatView({
   turnSeconds: number;
   dealDelays: ReadonlyMap<string, number>;
   winningCardIds: ReadonlySet<string>;
-  winnerHoleCardIds: ReadonlySet<string>;
+  winnerPlayerIds: ReadonlySet<string>;
   showdown: boolean;
 }) {
   if (!seat)
@@ -1011,7 +1062,7 @@ function PokerSeatView({
     );
   const mine = seat.id === playerId;
   const active = table.activePlayerId === seat.id;
-  const winner = seat.cards.some((card) => winnerHoleCardIds.has(card.id));
+  const winner = winnerPlayerIds.has(seat.id);
   const turnDuration = table.mode === "spin" ? 15 : 25;
   return (
     <div
@@ -1027,7 +1078,7 @@ function PokerSeatView({
       <div className="poker-hole-cards">
         {seat.cards.map((card, index) => (
           <PlayingCard
-            key={card.id}
+            key={`${card.id}-${card.hidden ? "hidden" : "revealed"}`}
             card={card}
             back={!!card.hidden}
             index={index}
@@ -1040,7 +1091,6 @@ function PokerSeatView({
       {!!seat.bet && (
         <div className="seat-bet">
           <PokerChipStack amount={seat.bet} />
-          <b>{credits(seat.bet)}</b>
         </div>
       )}
       {seat.seat === table.button && <span className="dealer-button">D</span>}
@@ -1050,10 +1100,33 @@ function PokerSeatView({
       {seat.seat === table.bigBlindSeat && (
         <span className="blind-badge bb">BB</span>
       )}
+      {winner && (
+        <span className="winner-seal" aria-label="Winner">
+          <Trophy size={11} />
+        </span>
+      )}
       <div
         className="poker-player-card"
         data-turn-seconds={active ? `${turnSeconds}s` : undefined}
       >
+        {active && (
+          <svg className="poker-turn-outline" aria-hidden="true">
+            <rect
+              className="poker-turn-track"
+              width="100%"
+              height="100%"
+              rx="10"
+              pathLength={100}
+            />
+            <rect
+              className="poker-turn-progress"
+              width="100%"
+              height="100%"
+              rx="10"
+              pathLength={100}
+            />
+          </svg>
+        )}
         <span className="avatar tiny">
           {seat.name.slice(0, 1).toUpperCase()}
         </span>
@@ -1063,14 +1136,16 @@ function PokerSeatView({
             {mine ? " · Vous" : ""}
           </b>
           <strong>
-            <small>Tapis</small> {credits(seat.stack)} cr.
+            <small>Stack</small> {credits(seat.stack)} cr.
           </strong>
         </div>
         {!seat.connected && <i className="offline-dot" />}
       </div>
-      {seat.lastAction && (
-        <span className="last-action">{seat.lastAction}</span>
-      )}
+      {seat.lastAction &&
+        seat.lastAction !== "Small blind" &&
+        seat.lastAction !== "Big blind" && (
+          <span className="last-action">{seat.lastAction}</span>
+        )}
     </div>
   );
 }
