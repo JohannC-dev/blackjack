@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -26,6 +27,7 @@ import {
   LoaderCircle,
   Minus,
   Plus,
+  Repeat2,
   RotateCcw,
   ShieldCheck,
   Sparkles,
@@ -47,7 +49,7 @@ import {
 } from "@/lib/rules";
 import {
   CASINO_CHIP_DENOMINATIONS,
-  chipDenominationForAmount,
+  casinoChipStackForAmount,
 } from "@/lib/chips";
 import { DEFAULT_PUBLIC_TABLE_ID, PUBLIC_TABLES } from "@/lib/table-config";
 import type {
@@ -81,6 +83,7 @@ const EMPTY_SEATS: Seat[] = Array.from({ length: 5 }, (_, index) => ({
   index,
   playerId: null,
   bet: { main: 0, three: 0, pairs: 0 },
+  previousBet: null,
   hands: [],
   sides: { three: null, pairs: null },
   committed: 0,
@@ -269,12 +272,14 @@ function HoldToConfirmButton({
   );
 }
 
-function AnimatedTableChip({
+export function AnimatedTableChip({
   amount,
+  maximum,
   className,
   placeholder,
 }: {
   amount: number;
+  maximum: number;
   className: string;
   placeholder: ReactNode;
 }) {
@@ -324,11 +329,136 @@ function AnimatedTableChip({
   }
 
   return (
+    <TableChipStack
+      amount={renderedAmount}
+      maximum={maximum}
+      className={`${className} ${exiting ? "is-exiting" : ""}`}
+    />
+  );
+}
+
+function TableChipStack({
+  amount,
+  maximum,
+  className = "",
+}: {
+  amount: number;
+  maximum: number;
+  className?: string;
+}) {
+  const stage = casinoChipStackForAmount(amount, maximum);
+  return (
     <span
-      key={renderedAmount}
-      className={`table-chip chip-${chipDenominationForAmount(renderedAmount)} ${className} ${exiting ? "is-exiting" : ""}`}
+      key={stage.index}
+      className={`table-chip chip-stack-stage-${stage.index} ${className}`}
+      data-chip-stage={stage.index}
     >
-      {credits(renderedAmount)}
+      <span className="table-chip-pile" aria-hidden="true">
+        {stage.columns.map((column, columnIndex) => (
+          <span
+            className={`table-chip-column chip-${column.denomination}`}
+            key={`${column.denomination}-${columnIndex}`}
+            style={
+              {
+                "--chip-column-left": `${((columnIndex + 1) / (stage.columns.length + 1)) * 100}%`,
+                "--chip-column-index": columnIndex,
+              } as CSSProperties
+            }
+          >
+            {Array.from({ length: column.layers }, (_, layer) => (
+              <i
+                className="table-chip-disc"
+                key={layer}
+                style={{ "--chip-layer": layer } as CSSProperties}
+              />
+            ))}
+          </span>
+        ))}
+      </span>
+      <span className="table-chip-amount">{credits(amount)}</span>
+    </span>
+  );
+}
+
+export function SettlementChipAnimation({
+  stake,
+  payout,
+  maximum,
+  side = false,
+}: {
+  stake: number;
+  payout: number;
+  maximum: number;
+  side?: boolean;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const profit = Math.max(0, payout - stake);
+  const chipClass = `settlement-chip ${side ? "side-chip" : ""}`;
+
+  useLayoutEffect(() => {
+    const root = ref.current;
+    const table = root?.closest(".table-stage");
+    const seat = root?.closest(".seat");
+    const bank = table?.querySelector(".dealer-cards");
+    const player = seat?.querySelector(".seat-name");
+    if (!root || !bank || !player) return;
+
+    const origin = root.getBoundingClientRect();
+    const bankRect = bank.getBoundingClientRect();
+    const playerRect = player.getBoundingClientRect();
+    const centerX = origin.left + origin.width / 2;
+    const centerY = origin.top + origin.height / 2;
+    root.style.setProperty(
+      "--settlement-bank-x",
+      `${bankRect.left + bankRect.width / 2 - centerX}px`,
+    );
+    root.style.setProperty(
+      "--settlement-bank-y",
+      `${bankRect.top + bankRect.height / 2 - centerY}px`,
+    );
+    root.style.setProperty(
+      "--settlement-player-x",
+      side ? `${playerRect.left + playerRect.width / 2 - centerX}px` : "0px",
+    );
+    root.style.setProperty(
+      "--settlement-player-y",
+      `${playerRect.top + playerRect.height / 2 - centerY}px`,
+    );
+  }, [payout, side, stake]);
+
+  return (
+    <span
+      ref={ref}
+      className={`settlement-chips ${side ? "side-settlement" : ""}`}
+      aria-hidden="true"
+    >
+      {profit > 0 && (
+        <TableChipStack
+          amount={profit}
+          maximum={maximum}
+          className={`${chipClass} settlement-incoming`}
+        />
+      )}
+      {payout > 0 ? (
+        <>
+          <TableChipStack
+            amount={stake}
+            maximum={maximum}
+            className={`${chipClass} settlement-stake`}
+          />
+          <TableChipStack
+            amount={payout}
+            maximum={maximum}
+            className={`${chipClass} settlement-return`}
+          />
+        </>
+      ) : (
+        <TableChipStack
+          amount={stake}
+          maximum={maximum}
+          className={`${chipClass} settlement-loss`}
+        />
+      )}
     </span>
   );
 }
@@ -487,6 +617,9 @@ function SeatView({
     mine && state?.phase === "betting" && !owner?.ready && !disabled;
   const sideBetsResolved =
     !!state && state.phase !== "betting" && state.phase !== "dealing";
+  const mainStake = seat.hands.length
+    ? seat.hands.reduce((sum, hand) => sum + hand.bet, 0)
+    : seat.bet.main;
   return (
     <div
       className={`seat seat-${seat.index} ${owner ? "occupied" : "empty"} ${mine ? "my-seat" : ""} ${selected && mine ? "selected-seat" : ""} ${active ? "current-seat" : ""} ${hasCards ? "has-cards" : ""}`}
@@ -518,17 +651,36 @@ function SeatView({
                   : null;
             const resolvedSideBet =
               type !== "main" && sideBetsResolved && seat.bet[type] > 0;
+            const stake = type === "main" ? mainStake : seat.bet[type];
+            const payout =
+              type === "main"
+                ? seat.hands.reduce((sum, hand) => sum + (hand.payout ?? 0), 0)
+                : (sideResult?.payout ?? 0);
+            const settling =
+              stake > 0 &&
+              ((type === "main" && state?.phase === "settled") ||
+                (type !== "main" && state?.phase === "bonuses"));
+            const hideResolvedSide =
+              resolvedSideBet && state?.phase !== "bonuses";
+            const placeholder =
+              type === "main" ? (
+                <Plus size={19} strokeWidth={1.4} />
+              ) : type === "three" ? (
+                <Diamond size={13} />
+              ) : (
+                <Layers2 size={13} />
+              );
             return (
               <button
                 key={type}
-                className={`table-bet-spot spot-${type} ${seat.bet[type] ? "has-chips" : ""} ${resolvedSideBet ? (sideResult ? "side-bet-won" : "side-bet-lost") : ""}`}
+                className={`table-bet-spot spot-${type} ${stake > 0 && !hideResolvedSide ? "has-chips" : ""}`}
                 onClick={() => onBet(type)}
                 disabled={!canBet}
                 aria-label={`Miser ${chip} crédits sur ${labels[type]}, main ${seat.index + 1}`}
                 title={
                   canBet
                     ? `+${chip} crédits · ${labels[type]}`
-                    : `${labels[type]} : ${seat.bet[type]} crédits`
+                    : `${labels[type]} : ${stake} crédits`
                 }
               >
                 <span className="spot-label">
@@ -538,31 +690,22 @@ function SeatView({
                       ? "21 + 3"
                       : "SUPER PAIRS"}
                 </span>
-                <AnimatedTableChip
-                  amount={seat.bet[type]}
-                  className={`${type !== "main" ? "side-chip" : ""} ${resolvedSideBet ? (sideResult ? "winning-side-chip" : "losing-side-chip") : ""}`}
-                  placeholder={
-                    type === "main" ? (
-                      <Plus size={19} strokeWidth={1.4} />
-                    ) : type === "three" ? (
-                      <Diamond size={13} />
-                    ) : (
-                      <Layers2 size={13} />
-                    )
-                  }
-                />
-                {state?.phase === "bonuses" && sideResult && (
-                  <span className="bonus-chip-flight" aria-hidden="true">
-                    <span className="bonus-chip-stack">
-                      <span className="bonus-chip-amount">
-                        {credits(sideResult.payout)}
-                      </span>
-                    </span>
-                    <span className="bonus-chip-caption">
-                      +{credits(sideResult.payout)}
-                      <small>{sideResult.label}</small>
-                    </span>
-                  </span>
+                {settling ? (
+                  <SettlementChipAnimation
+                    stake={stake}
+                    payout={payout}
+                    maximum={type === "main" ? 500 : 100}
+                    side={type !== "main"}
+                  />
+                ) : hideResolvedSide ? (
+                  <span className="spot-placeholder">{placeholder}</span>
+                ) : (
+                  <AnimatedTableChip
+                    amount={stake}
+                    maximum={type === "main" ? 500 : 100}
+                    className={type !== "main" ? "side-chip" : ""}
+                    placeholder={placeholder}
+                  />
                 )}
                 {canBet && <span className="spot-hover">+{chip}</span>}
               </button>
@@ -992,6 +1135,10 @@ function BlackjackCasino({
   const betting = !state || state.phase === "betting";
   const canChangeTable = betting || ownSeats.length === 0;
   const totalBet = ownSeats.reduce((sum, s) => sum + betTotal(s.bet), 0);
+  const previousBetTotal = ownSeats.reduce(
+    (sum, s) => sum + (s.previousBet ? betTotal(s.previousBet) : 0),
+    0,
+  );
   const activeSeat = state?.seats.find((s) =>
     s.hands.some((h) => h.id === state.activeHandId),
   );
@@ -1207,6 +1354,15 @@ function BlackjackCasino({
         if (ok) setBetHistory((history) => history.slice(0, -1));
       },
     );
+  };
+  const repeatBet = () => {
+    if (!previousBetTotal || totalBet) return;
+    const before = ownSeats
+      .filter((target) => target.previousBet)
+      .map((target) => ({ seat: target.index, before: { ...target.bet } }));
+    void command({ type: "repeat" }).then((ok) => {
+      if (ok) setBetHistory(before);
+    });
   };
   const clearBets = async () => {
     for (const target of ownSeats)
@@ -1577,6 +1733,26 @@ function BlackjackCasino({
                               />
                             ))}
                             <span className="rack-divider" />
+                            <button
+                              className="icon-button repeat-bet"
+                              disabled={
+                                disabled ||
+                                !previousBetTotal ||
+                                totalBet > 0 ||
+                                previousBetTotal > balance ||
+                                !!me?.ready
+                              }
+                              onClick={repeatBet}
+                              title={
+                                previousBetTotal
+                                  ? `Répéter la mise précédente (${credits(previousBetTotal)} crédits)`
+                                  : "Aucune mise précédente"
+                              }
+                              aria-label="Répéter la mise précédente"
+                            >
+                              <Repeat2 size={16} />
+                              <span>Répéter</span>
+                            </button>
                             <button
                               className="icon-button undo-bet"
                               disabled={

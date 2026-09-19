@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { makeShoe, Table, type Player } from "../server/engine";
-import { chipDenominationForAmount } from "../src/lib/chips";
+import { casinoChipStackForAmount } from "../src/lib/chips";
 import {
   evaluate21Plus3,
   evaluateSuperPairs,
@@ -66,16 +66,21 @@ function ownHand(table: Table, p: Player) {
   return table.state.seats.find((s) => s.playerId === p.id)!.hands[0];
 }
 
-describe("Casino chip denominations", () => {
-  test("uses the blackjack chip tiers for every wager amount", () => {
-    expect(chipDenominationForAmount(5)).toBe(5);
-    expect(chipDenominationForAmount(24)).toBe(5);
-    expect(chipDenominationForAmount(25)).toBe(25);
-    expect(chipDenominationForAmount(49)).toBe(25);
-    expect(chipDenominationForAmount(50)).toBe(50);
-    expect(chipDenominationForAmount(99)).toBe(50);
-    expect(chipDenominationForAmount(100)).toBe(100);
-    expect(chipDenominationForAmount(25_000)).toBe(100);
+describe("Contextual casino chip stacks", () => {
+  test("selects a pile stage from the amount relative to the maximum bet", () => {
+    expect(casinoChipStackForAmount(50, 500).index).toBe(1);
+    expect(casinoChipStackForAmount(51, 500).index).toBe(2);
+    expect(casinoChipStackForAmount(150, 500).index).toBe(2);
+    expect(casinoChipStackForAmount(151, 500).index).toBe(3);
+    expect(casinoChipStackForAmount(325, 500).index).toBe(3);
+    expect(casinoChipStackForAmount(326, 500).index).toBe(4);
+    expect(casinoChipStackForAmount(100, 100).index).toBe(4);
+
+    expect(
+      casinoChipStackForAmount(500, 500).columns.map(
+        (column) => column.denomination,
+      ),
+    ).toEqual([100, 50, 25]);
   });
 });
 
@@ -151,6 +156,9 @@ describe("European blackjack and credit accounting", () => {
     table.tick(table.state.deadline!);
     expect(table.state.phase).toBe("betting");
     expect(gamble.status).toBe("available");
+    expect(table.state.seats[2].bet).toEqual({ main: 0, three: 0, pairs: 0 });
+    table.command(p.id, { type: "repeat" });
+    expect(table.state.seats[2].bet).toEqual({ main: 25, three: 0, pairs: 0 });
     table.command(p.id, { type: "ready", ready: true });
     table.startRound();
     expect(table.state.phase).toBe("dealing");
@@ -710,8 +718,43 @@ describe("Multiplayer authority and lifecycle", () => {
     expect(table.state.dealer).toHaveLength(0);
     expect(p.ready).toBe(false);
     expect(table.state.seats[2].hands).toHaveLength(0);
+    expect(table.state.seats[2].bet).toEqual({ main: 0, three: 0, pairs: 0 });
+    expect(table.state.seats[2].previousBet).toEqual({
+      main: 25,
+      three: 0,
+      pairs: 0,
+    });
     p.balance = 0;
     table.command(p.id, { type: "refill" });
     expect(p.balance).toBe(2000);
+  });
+  test("repeat restores every previous seat wager atomically", () => {
+    const { table, p } = tableWith([card(10), card(10), card(8), card(7)]);
+    table.command(p.id, {
+      type: "bet",
+      seat: 2,
+      bet: { main: 25, three: 5, pairs: 5 },
+    });
+    table.command(p.id, { type: "claim", seat: 1 });
+    table.command(p.id, {
+      type: "bet",
+      seat: 1,
+      bet: { main: 50, three: 0, pairs: 0 },
+    });
+    begin(table, [p]);
+    while (table.state.phase === "playing") {
+      table.command(p.id, { type: "stand", handId: table.state.activeHandId! });
+    }
+    settle(table);
+    table.tick(table.state.deadline!);
+
+    expect(table.state.seats[1].bet.main).toBe(0);
+    expect(table.state.seats[2].bet.main).toBe(0);
+    table.command(p.id, { type: "repeat" });
+    expect(table.state.seats[1].bet).toEqual({ main: 50, three: 0, pairs: 0 });
+    expect(table.state.seats[2].bet).toEqual({ main: 25, three: 5, pairs: 5 });
+
+    p.balance = 10;
+    expect(() => table.command(p.id, { type: "repeat" })).toThrow("assez");
   });
 });

@@ -44,6 +44,8 @@ export type Seat = {
   index: number;
   playerId: string | null;
   bet: Bet;
+  /** Last wager that actually entered a round, used by the rebet action. */
+  previousBet: Bet | null;
   hands: Hand[];
   sides: { three: SideResult | null; pairs: SideResult | null };
   committed: number;
@@ -101,6 +103,7 @@ export type Command =
   | { type: "claim"; seat: number }
   | { type: "release"; seat: number }
   | { type: "bet"; seat: number; bet: Bet }
+  | { type: "repeat" }
   | { type: "ready"; ready: boolean }
   | { type: "hit" | "stand" | "split"; handId: string }
   | { type: "double"; handId: string; reveal?: "now" | "dealer" }
@@ -115,6 +118,7 @@ export type PokerMode = "cash" | "spin";
 export type PokerPhase =
   | "waiting"
   | "spinning"
+  | "shuffling"
   | "preflop"
   | "flop"
   | "turn"

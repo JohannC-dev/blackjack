@@ -105,6 +105,15 @@ try {
       .length,
     chipStacks: document.querySelectorAll(".poker-chip-stack").length,
     chipDiscs: document.querySelectorAll(".poker-chip-disc").length,
+    chipStages: Array.from(
+      document.querySelectorAll<HTMLElement>(".poker-chip-stack"),
+    ).map((stack) => stack.dataset.chipStage),
+    stackTransition: getComputedStyle(
+      document.querySelector(".poker-chip-stack")!,
+    ).animationName,
+    columnTransition: getComputedStyle(
+      document.querySelector(".poker-chip-column")!,
+    ).animationName,
     overflow: document.documentElement.scrollWidth > window.innerWidth,
   }));
   if (result.seats !== 2)
@@ -143,6 +152,13 @@ try {
     );
   if (result.chipDiscs <= result.chipStacks)
     throw new Error("Chaque mise doit être représentée par une pile de jetons");
+  if (result.chipStages.some((stage) => stage !== "1"))
+    throw new Error("Les petites blinds doivent utiliser le premier stade");
+  if (
+    result.stackTransition !== "chip-stack-stage-settle" ||
+    result.columnTransition !== "chip-stack-column-rise"
+  )
+    throw new Error("Les changements de stade doivent être animés");
   await page.getByRole("button", { name: "Ouvrir la discussion" }).click();
   const chatDialog = page.getByRole("dialog", { name: "Table chat" });
   await chatDialog.waitFor();

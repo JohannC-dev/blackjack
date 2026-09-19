@@ -33,13 +33,14 @@ import {
   evaluateBestPokerHand,
   getPokerCombinationCards,
 } from "@/lib/rules";
-import { chipDenominationForAmount } from "@/lib/chips";
+import { casinoChipStackForAmount } from "@/lib/chips";
 import type { PokerAction, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import type { CasinoView } from "./casino";
 import { BlackjackIcon } from "./blackjack-icon";
 import { PlayingCard } from "./playing-card";
 import { PokerLobby } from "./poker-lobby";
+import { PokerShuffleAnimation } from "./poker-shuffle";
 import { RoomArt } from "./room-art";
 
 type Game = ReturnType<typeof useGame>;
@@ -59,7 +60,7 @@ const THREE_POSITIONS = [
 ];
 const POKER_DEAL_INTERVAL = 320;
 
-type PokerSoundEffect = "card" | "chips" | "fold" | "knock";
+type PokerSoundEffect = "card" | "chips" | "fold" | "knock" | "shuffle";
 
 const POKER_SOUND_FILES: Record<
   Exclude<PokerSoundEffect, "knock">,
@@ -77,6 +78,7 @@ const POKER_SOUND_FILES: Record<
     "/audio/poker/chips-3.mp3",
   ],
   fold: ["/audio/poker/fold-1.mp3", "/audio/poker/fold-2.mp3"],
+  shuffle: ["/audio/poker/card-fan-1.mp3", "/audio/poker/card-fan-2.mp3"],
 };
 const pokerSampleCaches = new WeakMap<
   AudioContext,
@@ -191,7 +193,8 @@ function playPokerSound(
         const source = context.createBufferSource();
         const gain = context.createGain();
         source.buffer = buffer;
-        gain.gain.value = effect === "chips" ? 0.48 : 0.58;
+        gain.gain.value =
+          effect === "chips" ? 0.48 : effect === "shuffle" ? 0.52 : 0.58;
         source.connect(gain);
         gain.connect(context.destination);
         source.start(Math.max(context.currentTime, scheduledAt));
@@ -460,6 +463,7 @@ function PokerTable({ game }: { game: Game }) {
     hand: table.hand,
     cards: table.community.length,
     active: table.activePlayerId,
+    phase: table.phase,
   });
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 250);
@@ -505,6 +509,7 @@ function PokerTable({ game }: { game: Game }) {
       hand: table.hand,
       cards: table.community.length,
       active: table.activePlayerId,
+      phase: table.phase,
     };
     const context = audioRef.current;
     if (!sound || !context) return;
@@ -519,7 +524,9 @@ function PokerTable({ game }: { game: Game }) {
         : /^(Raise|Bet|All-in)/.test(actedSeat?.lastAction ?? "")
           ? "chips"
           : undefined;
-    if (actionEffect) playPokerSound(context, actionEffect);
+    if (table.phase === "shuffling" && previous.phase !== "shuffling")
+      playPokerSound(context, "shuffle");
+    else if (actionEffect) playPokerSound(context, actionEffect);
     if (table.community.length > previous.cards)
       playPokerSound(context, "card", table.community.length - previous.cards);
     else if (table.hand > previous.hand)
@@ -533,6 +540,7 @@ function PokerTable({ game }: { game: Game }) {
     table.activePlayerId,
     table.community.length,
     table.hand,
+    table.phase,
     table.seats,
   ]);
   const seconds = table.deadline
@@ -554,6 +562,8 @@ function PokerTable({ game }: { game: Game }) {
     allInContenders.some((seat) => seat.status === "all-in");
   const positions = table.mode === "spin" ? THREE_POSITIONS : FIVE_POSITIONS;
   const totalSeats = table.mode === "spin" ? 3 : 5;
+  const pokerMaximumBet = table.mode === "cash" ? table.bigBlind * 100 : 500;
+  const pokerMaximumPot = pokerMaximumBet * table.seats.length;
   const dealDelays = useMemo(() => {
     const dealtSeats = table.seats.filter((seat) => seat.cards.length > 0);
     const seatsInDealOrder = [...dealtSeats].sort((a, b) => {
@@ -716,7 +726,11 @@ function PokerTable({ game }: { game: Game }) {
               )}
               <div className="pot-display">
                 <span>POT TOTAL</span>
-                <PokerChipStack amount={table.pot} pot />
+                <PokerChipStack
+                  amount={table.pot}
+                  maximum={pokerMaximumPot}
+                  pot
+                />
               </div>
             </div>
             {seatSlots.map((seat, index) => (
@@ -733,6 +747,7 @@ function PokerTable({ game }: { game: Game }) {
                 winnerPlayerIds={showdownCards.winnerPlayerIds}
                 showdown={showdownCards.hasCombination}
                 collectingBet={collectingBets && !!seat?.bet}
+                maximumBet={pokerMaximumBet}
               />
             ))}
             {collectingBets &&
@@ -750,7 +765,10 @@ function PokerTable({ game }: { game: Game }) {
                       } as CSSProperties
                     }
                   >
-                    <PokerChipStack amount={seat.bet} />
+                    <PokerChipStack
+                      amount={seat.bet}
+                      maximum={pokerMaximumBet}
+                    />
                   </div>
                 ) : null,
               )}
@@ -766,6 +784,9 @@ function PokerTable({ game }: { game: Game }) {
                 </div>
                 <p>Le prix de la nuit…</p>
               </div>
+            )}
+            {table.phase === "shuffling" && (
+              <PokerShuffleAnimation hand={table.hand} />
             )}
             {table.phase === "showdown" && handResult && (
               <div className="hand-result-banner" role="status">
@@ -1145,32 +1166,55 @@ function PokerTable({ game }: { game: Game }) {
   );
 }
 
-function PokerChipStack({
+export function PokerChipStack({
   amount,
+  maximum,
   pot = false,
 }: {
   amount: number;
+  maximum: number;
   pot?: boolean;
 }) {
-  const layers = Math.max(
-    3,
-    Math.min(6, Math.ceil(Math.log10(Math.max(1, amount))) + 1),
+  const stage = casinoChipStackForAmount(amount, maximum);
+  const chipSize = pot ? 42 : 30;
+  const columnStep = pot ? 19 : 14;
+  const maximumLayers = Math.max(
+    ...stage.columns.map((column) => column.layers),
   );
-  const denomination = chipDenominationForAmount(amount);
   return (
     <div
-      className={`poker-chip-stack chip-${denomination} ${pot ? "pot-chips" : "bet-chips"}`}
+      key={stage.index}
+      className={`poker-chip-stack chip-stack-stage-${stage.index} ${pot ? "pot-chips" : "bet-chips"}`}
       role="img"
       aria-label={`${credits(amount)} crédits en jetons`}
-      data-chip-layers={layers}
+      data-chip-stage={stage.index}
+      style={
+        {
+          "--chip-stack-width": `${chipSize + (stage.columns.length - 1) * columnStep + 14}px`,
+          "--chip-stack-height": `${chipSize + (maximumLayers - 1) * 4 + 8}px`,
+        } as CSSProperties
+      }
     >
       <span className="poker-chip-pile" aria-hidden="true">
-        {Array.from({ length: layers }, (_, index) => (
-          <i
-            className="poker-chip-disc"
-            key={index}
-            style={{ "--chip-layer": index } as CSSProperties}
-          />
+        {stage.columns.map((column, columnIndex) => (
+          <span
+            className={`poker-chip-column chip-${column.denomination}`}
+            key={`${column.denomination}-${columnIndex}`}
+            style={
+              {
+                "--chip-column-x": `${(columnIndex - (stage.columns.length - 1) / 2) * columnStep}px`,
+                "--chip-column-index": columnIndex,
+              } as CSSProperties
+            }
+          >
+            {Array.from({ length: column.layers }, (_, layer) => (
+              <i
+                className="poker-chip-disc"
+                key={layer}
+                style={{ "--chip-layer": layer } as CSSProperties}
+              />
+            ))}
+          </span>
         ))}
       </span>
       <span className="poker-chip-amount">{credits(amount)}</span>
@@ -1190,6 +1234,7 @@ function PokerSeatView({
   winnerPlayerIds,
   showdown,
   collectingBet,
+  maximumBet,
 }: {
   seat?: PokerSeat;
   position: { x: number; y: number };
@@ -1202,6 +1247,7 @@ function PokerSeatView({
   winnerPlayerIds: ReadonlySet<string>;
   showdown: boolean;
   collectingBet: boolean;
+  maximumBet: number;
 }) {
   if (!seat)
     return (
@@ -1248,7 +1294,7 @@ function PokerSeatView({
       </div>
       {!!seat.bet && (
         <div className={`seat-bet ${collectingBet ? "is-collecting" : ""}`}>
-          <PokerChipStack amount={seat.bet} />
+          <PokerChipStack amount={seat.bet} maximum={maximumBet} />
         </div>
       )}
       {seat.seat === table.button && <span className="dealer-button">D</span>}

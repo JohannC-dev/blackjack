@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { evaluatePokerHand, makePokerDeck, PokerTable } from "../server/poker";
+import {
+  evaluatePokerHand,
+  makePokerDeck,
+  PokerTable,
+  POKER_SHUFFLE_MS,
+} from "../server/poker";
 import {
   describePokerHolding,
   evaluateBestPokerHand,
@@ -31,6 +36,11 @@ const player = (id: string): Player => ({
   roomId: "MINUIT",
   lastSeen: Date.now(),
 });
+const startCashHand = (table: PokerTable) => {
+  const shuffleAt = Date.now() + 2_000;
+  table.tick(shuffleAt);
+  table.tick(shuffleAt + POKER_SHUFFLE_MS);
+};
 
 describe("Poker hand evaluator", () => {
   test("recognises every category in strict order", () => {
@@ -124,7 +134,11 @@ describe("Poker table authority", () => {
     const table = new PokerTable("cash", 20, 10, 20, () => {});
     table.add(player("1"), 2_000);
     table.add(player("2"), 2_000);
-    table.tick(Date.now() + 2_000);
+    const shuffleAt = Date.now() + 2_000;
+    table.tick(shuffleAt);
+    expect(table.phase).toBe("shuffling");
+    expect(table.participants.every((entry) => !entry.cards.length)).toBe(true);
+    table.tick(shuffleAt + POKER_SHUFFLE_MS);
     expect(table.phase).toBe("preflop");
     expect(
       table.participants.filter((entry) => entry.cards.length === 2),
@@ -146,7 +160,7 @@ describe("Poker table authority", () => {
     const two = player("2");
     table.add(one, 2_000);
     table.add(two, 2_000);
-    table.tick(Date.now() + 2_000);
+    startCashHand(table);
     const snapshot = table.snapshot(one.id);
     const mine = snapshot.seats.find((seat) => seat.id === one.id)!;
     const theirs = snapshot.seats.find((seat) => seat.id === two.id)!;
@@ -166,7 +180,7 @@ describe("Poker table authority", () => {
     const two = player("2");
     table.add(one, 2_000);
     table.add(two, 2_000);
-    table.tick(Date.now() + 2_000);
+    startCashHand(table);
     const leaving = table.participants.find(
       (entry) => entry.player.id === table.activePlayerId,
     )!;
@@ -186,7 +200,7 @@ describe("Poker table authority", () => {
     const table = new PokerTable("cash", 20, 10, 20, () => {});
     table.add(player("1"), 2_000);
     table.add(player("2"), 2_000);
-    table.tick(Date.now() + 2_000);
+    startCashHand(table);
     const active = table.activePlayerId!;
     const other = table.participants.find(
       (entry) => entry.player.id !== active,
@@ -204,7 +218,7 @@ describe("Poker table authority", () => {
     const two = player("2");
     table.add(one, 2_000);
     table.add(two, 2_000);
-    table.tick(Date.now() + 2_000);
+    startCashHand(table);
 
     const foldingId = table.activePlayerId!;
     const winnerId = table.participants.find(
@@ -238,11 +252,35 @@ describe("Poker table authority", () => {
     ).toBe(true);
   });
 
+  test("shuffles between hands before exposing the next cards", () => {
+    const table = new PokerTable("cash", 20, 10, 20, () => {});
+    table.add(player("1"), 2_000);
+    table.add(player("2"), 2_000);
+    startCashHand(table);
+    const finishedHand = table.hand;
+
+    table.action(table.activePlayerId!, "fold");
+    table.tick(table.nextStepAt);
+
+    expect(table.phase).toBe("shuffling");
+    expect(table.hand).toBe(finishedHand);
+    expect(table.community).toHaveLength(0);
+    expect(table.participants.every((entry) => !entry.cards.length)).toBe(true);
+    expect(table.snapshot("1").pot).toBe(0);
+
+    table.tick(table.nextStepAt);
+    expect(table.phase).toBe("preflop");
+    expect(table.hand).toBe(finishedHand + 1);
+    expect(table.participants.every((entry) => entry.cards.length === 2)).toBe(
+      true,
+    );
+  });
+
   test("waits briefly after the final check before dealing the next street", () => {
     const table = new PokerTable("cash", 20, 10, 20, () => {});
     table.add(player("1"), 2_000);
     table.add(player("2"), 2_000);
-    table.tick(Date.now() + 2_000);
+    startCashHand(table);
 
     table.action(table.activePlayerId!, "call");
     table.action(table.activePlayerId!, "check");
@@ -263,7 +301,7 @@ describe("Poker table authority", () => {
     const deep = player("deep");
     table.add(short, 100);
     table.add(deep, 200);
-    table.tick(Date.now() + 2_000);
+    startCashHand(table);
 
     let guard = 0;
     while (
@@ -328,7 +366,7 @@ describe("Poker table authority", () => {
     table.add(player("1"), 100);
     table.add(player("2"), 200);
     table.add(player("3"), 300);
-    table.tick(Date.now() + 2_000);
+    startCashHand(table);
     let guard = 0;
     while (table.phase !== "showdown" && guard++ < 24) {
       if (!table.activePlayerId) {
@@ -360,7 +398,7 @@ describe("Poker table authority", () => {
     const two = player("2");
     table.add(one, 2_000);
     table.add(two, 2_000);
-    table.tick(Date.now() + 2_000);
+    startCashHand(table);
 
     let guard = 0;
     while (table.phase !== "showdown" && guard++ < 24) {

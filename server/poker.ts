@@ -39,6 +39,7 @@ const SPIN_LEVELS = [
 ] as const;
 const ACTION_MS = { cash: 25_000, spin: 15_000 } as const;
 const UNCONTESTED_REVEAL_MS = 3_000;
+export const POKER_SHUFFLE_MS = 2_200;
 
 type Participant = {
   player: Player;
@@ -264,6 +265,40 @@ export class PokerTable {
   private postBlind(entry: Participant, amount: number, label: string) {
     this.commit(entry, amount);
     entry.lastAction = label;
+  }
+
+  private startShuffle(now = Date.now()) {
+    const players = this.eligible();
+    if (players.length < 2) {
+      this.phase = this.mode === "spin" ? "complete" : "waiting";
+      this.setTurn(null);
+      this.nextStepAt = 0;
+      this.message = "En attente d’un adversaire.";
+      this.lonelySince ||= now;
+      this.publish();
+      return;
+    }
+    this.phase = "shuffling";
+    this.setTurn(null);
+    this.revealDeadline = null;
+    this.community = [];
+    this.deadContributions = [];
+    this.streetStepAt = 0;
+    this.currentBet = 0;
+    this.minRaise = this.bigBlind;
+    this.smallBlindSeat = -1;
+    this.bigBlindSeat = -1;
+    for (const entry of this.participants) {
+      entry.bet = 0;
+      entry.committed = 0;
+      entry.cards = [];
+      entry.mucked = false;
+      entry.lastAction = undefined;
+      entry.status = entry.stack > 0 ? "waiting" : "out";
+    }
+    this.nextStepAt = now + POKER_SHUFFLE_MS;
+    this.message = "Le croupier mélange le jeu…";
+    this.publish();
   }
 
   startHand(now = Date.now()) {
@@ -706,7 +741,7 @@ export class PokerTable {
       this.nextStepAt &&
       now >= this.nextStepAt
     ) {
-      this.startHand(now);
+      this.startShuffle(now);
       return;
     }
     if (
@@ -716,6 +751,14 @@ export class PokerTable {
     ) {
       this.wheelSpinning = false;
       this.levelStartedAt = now;
+      this.startShuffle(now);
+      return;
+    }
+    if (
+      this.phase === "shuffling" &&
+      this.nextStepAt &&
+      now >= this.nextStepAt
+    ) {
       this.startHand(now);
       return;
     }
@@ -741,7 +784,7 @@ export class PokerTable {
       this.phase === "showdown"
     ) {
       this.nextStepAt = 0;
-      this.startHand(now);
+      this.startShuffle(now);
     }
   }
 
