@@ -110,3 +110,83 @@ export type Command =
 export type Ack =
   | { ok: true; playerId?: string; tableId?: string }
   | { ok: false; error: string };
+
+export type PokerMode = "cash" | "spin";
+export type PokerPhase =
+  | "waiting"
+  | "spinning"
+  | "preflop"
+  | "flop"
+  | "turn"
+  | "river"
+  | "showdown"
+  | "complete";
+export type PokerAction = "fold" | "check" | "call" | "raise" | "all-in";
+
+export type PokerSeat = {
+  id: string;
+  name: string;
+  seat: number;
+  stack: number;
+  bet: number;
+  committed: number;
+  connected: boolean;
+  status: "waiting" | "active" | "folded" | "all-in" | "out";
+  cards: Card[];
+  handLabel?: string;
+  lastAction?: string;
+};
+
+export type PokerHistoryItem = {
+  hand: number;
+  community: Card[];
+  pot: number;
+  winners: { name: string; amount: number; label: string; cards: Card[] }[];
+  timestamp: number;
+};
+
+export type PokerChatMessage = {
+  id: string;
+  playerId: string;
+  name: string;
+  text: string;
+  timestamp: number;
+};
+
+export type PokerTableState = {
+  id: string;
+  mode: PokerMode;
+  stake: number;
+  smallBlind: number;
+  bigBlind: number;
+  phase: PokerPhase;
+  hand: number;
+  seats: PokerSeat[];
+  community: Card[];
+  pot: number;
+  currentBet: number;
+  minRaise: number;
+  button: number;
+  smallBlindSeat: number;
+  bigBlindSeat: number;
+  activePlayerId: string | null;
+  deadline: number | null;
+  wheelMultiplier: number | null;
+  wheelSpinning: boolean;
+  history: PokerHistoryItem[];
+  chat: PokerChatMessage[];
+  message: string;
+};
+
+export type PokerClientState = {
+  status: "lobby" | "queue" | "table";
+  balance: number;
+  queue?: { mode: PokerMode; stake: number; waiting: number };
+  table?: PokerTableState;
+};
+
+export type PokerCommand =
+  | { type: "match"; mode: PokerMode; stake: number; buyIn?: number }
+  | { type: "leave" }
+  | { type: "action"; action: PokerAction; amount?: number }
+  | { type: "chat"; text: string };

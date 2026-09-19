@@ -27,6 +27,7 @@ try {
     { token: randomUUID(), name: "Test visuel", balance: 2000 },
   );
   await page.goto(`${baseUrl}/?table=${table}`);
+  await page.getByTitle("Blackjack").click();
   try {
     await page.locator(".my-seat").waitFor({ timeout: 10_000 });
   } catch (error) {
@@ -73,6 +74,7 @@ try {
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
+  await page.getByTitle("Blackjack").click();
   await page.locator(".my-seat").waitFor();
   const mobileOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth,
