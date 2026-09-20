@@ -18,7 +18,7 @@ const CASINO_SOUND_FILES: Record<
     "/audio/poker/chips-3.mp3",
   ],
   fold: ["/audio/poker/fold-1.mp3", "/audio/poker/fold-2.mp3"],
-  shuffle: ["/audio/poker/card-fan-1.mp3", "/audio/poker/card-fan-2.mp3"],
+  shuffle: ["/audio/poker/card-shuffle-pro.mp3"],
 };
 
 const sampleCaches = new WeakMap<
@@ -67,8 +67,7 @@ export function playCasinoSound(
 
   const files = CASINO_SOUND_FILES[effect];
   const startedAt = context.currentTime;
-  const variant =
-    effect === "card" ? 0 : Math.floor(Math.random() * files.length);
+  const variant = Math.floor(Math.random() * files.length);
 
   for (let index = 0; index < count; index++) {
     const path = files[(variant + index) % files.length];

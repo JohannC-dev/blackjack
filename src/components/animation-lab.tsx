@@ -52,7 +52,7 @@ const labSoundFiles: Record<Exclude<LabSound, "ui">, string[]> = {
   ],
   win: ["/audio/poker/chips-3.mp3", "/audio/poker/chips-2.mp3"],
   loss: ["/audio/poker/fold-1.mp3", "/audio/poker/fold-2.mp3"],
-  shuffle: ["/audio/poker/card-fan-1.mp3", "/audio/poker/card-fan-2.mp3"],
+  shuffle: ["/audio/poker/card-shuffle-pro.mp3"],
 };
 
 function useLabAudio() {

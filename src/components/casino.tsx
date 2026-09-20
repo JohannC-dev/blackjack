@@ -1122,6 +1122,10 @@ function BlackjackCasino({
   const [gamblePromptFeatured, setGamblePromptFeatured] = useState(false);
   const audioRef = useRef<AudioContext | null>(null);
   const previousCards = useRef(0);
+  const previousOwnBet = useRef(0);
+  const hasSeenOwnBet = useRef(false);
+  const previousOwnBalance = useRef(0);
+  const hasSeenOwnBalance = useRef(false);
   const doubleCloseTimer = useRef<number | null>(null);
   const noticeCloseTimer = useRef<number | null>(null);
   const me = state?.players.find((p) => p.id === playerId);
@@ -1154,11 +1158,24 @@ function BlackjackCasino({
     state?.phase === "settled"
       ? myHistory.find((h) => h.round === state.round)
       : undefined;
+  const mainWinNet =
+    state?.phase === "settled"
+      ? (roundResult?.bets.reduce(
+          (sum, bet) =>
+            sum + (bet.type === "main" && bet.net > 0 ? bet.net : 0),
+          0,
+        ) ?? 0)
+      : 0;
   const ownGambles =
     state?.gambles.filter((entry) => entry.playerId === playerId) ?? [];
   const ownGamble =
     ownGambles.find((entry) => entry.status === "available") ??
     ownGambles.at(-1);
+  const ownWinEvent =
+    (state?.phase === "bonuses" && myBonus > 0) ||
+    (state?.phase === "settled" &&
+      (mainWinNet > 0 ||
+        (ownGamble?.round === state.round && ownGamble.result === "win")));
   const seconds = state?.deadline
     ? Math.max(0, Math.ceil((state.deadline - now) / 1000))
     : null;
@@ -1282,6 +1299,26 @@ function BlackjackCasino({
       );
     previousCards.current = cardCount;
   }, [cardCount, sound]);
+  useEffect(() => {
+    const previous = previousOwnBet.current;
+    previousOwnBet.current = totalBet;
+    if (!hasSeenOwnBet.current) {
+      hasSeenOwnBet.current = true;
+      return;
+    }
+    if (sound && totalBet > previous && audioRef.current)
+      playCasinoSound(audioRef.current, "chips");
+  }, [sound, totalBet]);
+  useEffect(() => {
+    const previous = previousOwnBalance.current;
+    previousOwnBalance.current = balance;
+    if (!hasSeenOwnBalance.current) {
+      hasSeenOwnBalance.current = true;
+      return;
+    }
+    if (sound && ownWinEvent && balance > previous && audioRef.current)
+      playCasinoSound(audioRef.current, "chips");
+  }, [balance, ownWinEvent, sound]);
   useEffect(() => {
     if (sound && state?.phase === "shuffling" && audioRef.current)
       playCasinoSound(audioRef.current, "shuffle");
