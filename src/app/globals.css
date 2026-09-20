@@ -7442,17 +7442,20 @@ h1 > span:not(.live-tag) {
   display: block;
   width: 64px;
   height: 50px;
-  margin-top: 8px;
+  margin-top: 0;
   pointer-events: none;
 }
 .settlement-chips.side-settlement {
   width: 38px;
   height: 34px;
-  margin-top: 3px;
+  margin-top: 0;
 }
 .settlement-chip.table-chip {
   position: absolute;
   inset: 0;
+  --chip-seat-tilt: var(--seat-tilt, 0deg);
+  width: 100%;
+  height: 100%;
   margin: 0;
   opacity: 0;
   animation-duration: 2200ms;
@@ -7479,11 +7482,8 @@ h1 > span:not(.live-tag) {
 @keyframes settlement-incoming {
   0% {
     opacity: 0;
-    transform: translate3d(
-        var(--settlement-bank-x),
-        var(--settlement-bank-y),
-        0
-      )
+    transform: rotate(calc(var(--chip-seat-tilt) * -1))
+      translate3d(var(--settlement-bank-x), var(--settlement-bank-y), 0)
       scale(0.97);
   }
   8% {
@@ -7492,53 +7492,53 @@ h1 > span:not(.live-tag) {
   38%,
   46% {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: rotate(calc(var(--chip-seat-tilt) * -1)) translate3d(0, 0, 0)
+      scale(1);
   }
   52%,
   100% {
     opacity: 0;
-    transform: translate3d(0, 0, 0) scale(0.97);
+    transform: rotate(calc(var(--chip-seat-tilt) * -1)) translate3d(0, 0, 0)
+      scale(0.97);
   }
 }
 @keyframes settlement-stake {
   0%,
   46% {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: rotate(calc(var(--chip-seat-tilt) * -1)) translate3d(0, 0, 0)
+      scale(1);
   }
   52%,
   100% {
     opacity: 0;
-    transform: translate3d(0, 0, 0) scale(0.97);
+    transform: rotate(calc(var(--chip-seat-tilt) * -1)) translate3d(0, 0, 0)
+      scale(0.97);
   }
 }
 @keyframes settlement-return {
   0%,
   46% {
     opacity: 0;
-    transform: translate3d(0, 0, 0) scale(0.97);
+    transform: rotate(calc(var(--chip-seat-tilt) * -1)) translate3d(0, 0, 0)
+      scale(0.97);
   }
   52%,
   64% {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: rotate(calc(var(--chip-seat-tilt) * -1)) translate3d(0, 0, 0)
+      scale(1);
   }
   94% {
     opacity: 1;
-    transform: translate3d(
-        var(--settlement-player-x),
-        var(--settlement-player-y),
-        0
-      )
+    transform: rotate(calc(var(--chip-seat-tilt) * -1))
+      translate3d(var(--settlement-player-x), var(--settlement-player-y), 0)
       scale(0.97);
   }
   100% {
     opacity: 0;
-    transform: translate3d(
-        var(--settlement-player-x),
-        var(--settlement-player-y),
-        0
-      )
+    transform: rotate(calc(var(--chip-seat-tilt) * -1))
+      translate3d(var(--settlement-player-x), var(--settlement-player-y), 0)
       scale(0.97);
   }
 }
@@ -7546,25 +7546,20 @@ h1 > span:not(.live-tag) {
   0%,
   18% {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: rotate(calc(var(--chip-seat-tilt) * -1)) translate3d(0, 0, 0)
+      scale(1);
   }
   58% {
     opacity: 1;
-    transform: translate3d(
-        var(--settlement-bank-x),
-        var(--settlement-bank-y),
-        0
-      )
+    transform: rotate(calc(var(--chip-seat-tilt) * -1))
+      translate3d(var(--settlement-bank-x), var(--settlement-bank-y), 0)
       scale(0.97);
   }
   66%,
   100% {
     opacity: 0;
-    transform: translate3d(
-        var(--settlement-bank-x),
-        var(--settlement-bank-y),
-        0
-      )
+    transform: rotate(calc(var(--chip-seat-tilt) * -1))
+      translate3d(var(--settlement-bank-x), var(--settlement-bank-y), 0)
       scale(0.97);
   }
 }
