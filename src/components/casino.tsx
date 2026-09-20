@@ -557,7 +557,7 @@ function HandView({ hand, active }: { hand: Hand; active: boolean }) {
   const value = score(hand.cards.filter((card) => !card.hidden));
   return (
     <div
-      className={`hand ${active ? "active-hand" : ""} ${hand.result === "win" || hand.result === "blackjack" ? "winning-hand" : ""}`}
+      className={`hand ${hand.split ? "split-hand" : ""} ${active ? "active-hand" : ""} ${hand.result === "win" || hand.result === "blackjack" ? "winning-hand" : ""}`}
     >
       <div className="hand-cards">
         {hand.cards.map((card, index) => (
@@ -586,6 +586,69 @@ function HandView({ hand, active }: { hand: Hand; active: boolean }) {
         </span>
       )}
     </div>
+  );
+}
+
+function BlackjackMainBetChips({ seat }: { seat: Seat }) {
+  const baseBet = seat.bet.main;
+  if (baseBet <= 0) return null;
+
+  const groups = seat.hands.length
+    ? seat.hands.map((hand) => ({
+        id: hand.id,
+        amount: baseBet,
+        stacks: Math.max(1, Math.round(hand.bet / baseBet)),
+      }))
+    : [{ id: `seat-${seat.index}`, amount: baseBet, stacks: 1 }];
+
+  return (
+    <span
+      className={`blackjack-main-bet-chips ${groups.length > 1 ? "is-split" : ""}`}
+      data-hand-count={groups.length}
+      data-stack-count={groups.reduce((sum, group) => sum + group.stacks, 0)}
+      aria-hidden="true"
+    >
+      {groups.map((group, handIndex) => (
+        <span
+          className={`blackjack-bet-group ${group.stacks > 1 ? "is-doubled" : ""}`}
+          data-hand-index={handIndex}
+          data-stack-count={group.stacks}
+          key={group.id}
+        >
+          {Array.from({ length: group.stacks }, (_, stackIndex) => (
+            <AnimatedTableChip
+              amount={group.amount}
+              maximum={500}
+              className="blackjack-bet-chip"
+              placeholder={null}
+              key={`${group.id}-${stackIndex}`}
+            />
+          ))}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function BlackjackMainSettlement({ seat }: { seat: Seat }) {
+  if (!seat.hands.length) return null;
+
+  return (
+    <span
+      className={`blackjack-main-settlement ${seat.hands.length > 1 ? "is-split" : ""}`}
+      data-hand-count={seat.hands.length}
+      aria-hidden="true"
+    >
+      {seat.hands.map((hand) => (
+        <span className="blackjack-settlement-group" key={hand.id}>
+          <SettlementChipAnimation
+            stake={hand.bet}
+            payout={hand.payout ?? 0}
+            maximum={500}
+          />
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -630,6 +693,7 @@ function SeatView({
       {hasCards && (
         <div
           className={`seat-hands ${seat.hands.length > 1 ? "split-hands" : ""}`}
+          data-hand-count={seat.hands.length}
         >
           {seat.hands.map((hand) => (
             <HandView
@@ -691,19 +755,29 @@ function SeatView({
                       : "SUPER PAIRS"}
                 </span>
                 {settling ? (
-                  <SettlementChipAnimation
-                    stake={stake}
-                    payout={payout}
-                    maximum={type === "main" ? 500 : 100}
-                    side={type !== "main"}
-                  />
+                  type === "main" ? (
+                    <BlackjackMainSettlement seat={seat} />
+                  ) : (
+                    <SettlementChipAnimation
+                      stake={stake}
+                      payout={payout}
+                      maximum={100}
+                      side
+                    />
+                  )
                 ) : hideResolvedSide ? (
                   <span className="spot-placeholder">{placeholder}</span>
+                ) : type === "main" ? (
+                  stake > 0 ? (
+                    <BlackjackMainBetChips seat={seat} />
+                  ) : (
+                    <span className="spot-placeholder">{placeholder}</span>
+                  )
                 ) : (
                   <AnimatedTableChip
                     amount={stake}
-                    maximum={type === "main" ? 500 : 100}
-                    className={type !== "main" ? "side-chip" : ""}
+                    maximum={100}
+                    className="side-chip"
                     placeholder={placeholder}
                   />
                 )}

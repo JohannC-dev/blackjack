@@ -8476,3 +8476,168 @@ h1 > span:not(.live-tag) {
     animation: none !important;
   }
 }
+
+/* Keep blackjack wagers legible after a double or a split. Each hand owns
+   its base stack; a double adds a second stack instead of inflating one pot. */
+.blackjack-main-bet-chips {
+  position: absolute;
+  top: 17px;
+  left: 50%;
+  z-index: 4;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 5px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+.blackjack-bet-group {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  gap: 4px;
+}
+.blackjack-main-bet-chips.is-split[data-hand-count="2"] {
+  gap: 34px;
+}
+.blackjack-main-bet-chips.is-split[data-hand-count="3"] {
+  gap: 15px;
+}
+.blackjack-main-bet-chips.is-split[data-hand-count="4"] {
+  gap: 7px;
+}
+.blackjack-main-bet-chips .table-chip {
+  margin-top: 0;
+}
+.blackjack-main-bet-chips .table-chip-amount {
+  white-space: nowrap;
+}
+
+/* Settlement follows the same hand split, so a winning hand can pay while a
+   losing hand sends only its own wager back to the bank. */
+.blackjack-main-settlement {
+  position: absolute;
+  top: 17px;
+  left: 50%;
+  z-index: 4;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 5px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+.blackjack-settlement-group {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+}
+.blackjack-main-settlement .settlement-chips {
+  margin: 0;
+}
+.blackjack-main-settlement.is-split .settlement-chips {
+  width: 42px;
+  height: 42px;
+}
+.blackjack-main-settlement.is-split[data-hand-count="2"] {
+  gap: 34px;
+}
+.blackjack-main-settlement.is-split[data-hand-count="3"] {
+  gap: 15px;
+}
+.blackjack-main-settlement.is-split[data-hand-count="4"] {
+  gap: 7px;
+}
+
+/* A split is a row of independent hands, never a wrapped column. */
+.seat.has-cards .seat-hands.split-hands {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  width: max-content;
+  max-width: none;
+  gap: 26px;
+  top: -90px;
+  margin-bottom: 0;
+}
+.seat.has-cards .split-hands .hand {
+  flex: 0 0 auto;
+}
+.seat.has-cards .split-hands .hand + .hand::before {
+  content: "";
+  position: absolute;
+  top: 9px;
+  bottom: 5px;
+  left: -14px;
+  border-left: 1px dashed #d0b3ed35;
+  pointer-events: none;
+}
+
+@media (max-width: 700px) {
+  .blackjack-main-bet-chips.is-split[data-hand-count="2"] {
+    gap: 13px;
+  }
+  .blackjack-main-bet-chips.is-split[data-hand-count="3"] {
+    gap: 7px;
+  }
+  .blackjack-main-bet-chips.is-split[data-hand-count="4"] {
+    gap: 4px;
+  }
+  .seat.has-cards .seat-hands.split-hands {
+    gap: 18px;
+  }
+  .seat.has-cards .split-hands .hand + .hand::before {
+    left: -10px;
+  }
+}
+
+@media (max-width: 450px) {
+  .blackjack-main-bet-chips.is-split[data-hand-count="2"] {
+    gap: 8px;
+  }
+  .seat.has-cards .seat-hands.split-hands {
+    gap: 14px;
+  }
+}
+
+/* Five seats leave less horizontal breathing room. Keep larger split trees
+   on one line, but compact them before they can collide with a neighbour. */
+@media (min-width: 701px) {
+  .seat.has-cards .seat-hands.split-hands[data-hand-count="3"] {
+    gap: 14px;
+    transform: translateX(-50%) scale(0.92);
+    transform-origin: 50% 100%;
+  }
+  .seat.has-cards .seat-hands.split-hands[data-hand-count="4"] {
+    gap: 8px;
+    transform: translateX(-50%) scale(0.78);
+    transform-origin: 50% 100%;
+  }
+  .blackjack-main-bet-chips.is-split[data-hand-count="3"] {
+    gap: 14px;
+    transform: translateX(-50%) scale(0.92);
+    transform-origin: 50% 0;
+  }
+  .blackjack-main-bet-chips.is-split[data-hand-count="4"] {
+    gap: 8px;
+    transform: translateX(-50%) scale(0.78);
+    transform-origin: 50% 0;
+  }
+  .blackjack-main-bet-chips.is-split[data-hand-count="4"] .blackjack-bet-group {
+    gap: 2px;
+  }
+  .blackjack-main-bet-chips.is-split[data-hand-count="4"][data-stack-count="8"] {
+    transform: translateX(-50%) scale(0.68);
+  }
+  .blackjack-main-settlement.is-split[data-hand-count="3"] {
+    gap: 14px;
+    transform: translateX(-50%) scale(0.92);
+    transform-origin: 50% 0;
+  }
+  .blackjack-main-settlement.is-split[data-hand-count="4"] {
+    gap: 8px;
+    transform: translateX(-50%) scale(0.78);
+    transform-origin: 50% 0;
+  }
+}
