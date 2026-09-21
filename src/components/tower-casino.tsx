@@ -218,7 +218,6 @@ export function TowerCasino({
       return;
     }
     if (run.floor > previous.floor) {
-      play("card");
       sfx((context) => playTowerStep(context, run.floor));
       const card = floorsRef.current?.querySelector(
         `[data-row="${run.floor - 1}"] [data-picked]`,
@@ -250,7 +249,6 @@ export function TowerCasino({
       for (let next = run.floor + 1; next <= TOWER_FLOORS; next++) {
         later(delay, () => {
           setClimb(next);
-          play("card");
           sfx((context) => playTowerStep(context, next));
           const card = floorsRef.current?.querySelector(
             `[data-row="${next - 1}"] button`,
