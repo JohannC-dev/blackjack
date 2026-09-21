@@ -792,14 +792,6 @@
   mask-image: radial-gradient(circle, #000 20%, transparent 65%);
   animation: raysSpin 6s linear infinite;
 }
-.luckyToast {
-  border-color: #f3c96970 !important;
-  background: #2b2415 !important;
-  color: #ffe2a0 !important;
-}
-.luckyToast > svg {
-  color: var(--tower-gold) !important;
-}
 
 /* Bottom betting bar */
 .bar {

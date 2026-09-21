@@ -881,6 +881,12 @@ export class PokerManager {
     private send: (playerId: string, state: PokerClientState) => void,
   ) {}
 
+  /** Players seated at the same poker table, the player included. */
+  tableMatesOf(playerId: string) {
+    const table = this.tables.get(this.membership.get(playerId) ?? "");
+    return table?.participants.map((entry) => entry.player.id) ?? [];
+  }
+
   private lobby(player: Player): PokerClientState {
     return { status: "lobby", balance: player.balance };
   }

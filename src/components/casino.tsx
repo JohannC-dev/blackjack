@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -75,6 +76,8 @@ import { PlayingCard } from "./playing-card";
 import { CasinoHome, PokerCasino } from "./poker-casino";
 import { PokerShuffleAnimation } from "./poker-shuffle";
 import { TowerCasino } from "./tower-casino";
+import { EmoteButton, EmoteLayer, type EmotePlayer } from "./emotes";
+import type { EmoteRequest } from "@/lib/emotes";
 
 const THREE_PAYOUTS = [
   ["Straight Flush", "9:1"],
@@ -872,6 +875,7 @@ const SeatView = memo(function SeatView({
       ) : null}
       <button
         className="seat-name"
+        data-emote-player={owner?.id}
         onClick={() => onSelect(seat)}
         disabled={!!owner && !mine}
         aria-label={
@@ -1304,15 +1308,21 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
   sound,
   isFullscreen,
   seatCount,
+  playerId,
+  emotePlayers,
   onToggleSound,
   onToggleFullscreen,
   onOpenTables,
+  onSendEmote,
 }: {
   connected: boolean;
   tableId: string;
   sound: boolean;
   isFullscreen: boolean;
   seatCount: number;
+  playerId: string;
+  emotePlayers: EmotePlayer[];
+  onSendEmote: (request: EmoteRequest) => void;
   onToggleSound: () => void;
   onToggleFullscreen: () => void;
   onOpenTables: () => void;
@@ -1326,6 +1336,13 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
         <span>5 – 500 crédits</span>
       </div>
       <div className="table-toolbar-actions">
+        <EmoteButton
+          game="blackjack"
+          players={emotePlayers}
+          playerId={playerId}
+          seated={emotePlayers.some((player) => player.id === playerId)}
+          onSend={onSendEmote}
+        />
         <button
           type="button"
           className={`poker-sound ${sound ? "active" : ""}`}
@@ -1502,6 +1519,19 @@ function BlackjackCasino({
   const doubleCloseTimer = useRef<number | null>(null);
   const noticeCloseTimer = useRef<number | null>(null);
   const me = state?.players.find((p) => p.id === playerId);
+  // Seated players, keyed by a signature so the memoised toolbar stays stable.
+  const emoteSignature = JSON.stringify(
+    [...new Set(state?.seats.map((s) => s.playerId))]
+      .filter((id): id is string => !!id)
+      .map((id) => ({
+        id,
+        name: state?.players.find((p) => p.id === id)?.name ?? "",
+      })),
+  );
+  const emotePlayers = useMemo<EmotePlayer[]>(
+    () => JSON.parse(emoteSignature),
+    [emoteSignature],
+  );
   const ownSeats = state?.seats.filter((s) => s.playerId === playerId) ?? [];
   const seat = ownSeats.find((s) => s.index === selectedSeat) ?? ownSeats[0];
   const balance = game.balance ?? me?.balance ?? profile?.balance ?? 2000;
@@ -1887,6 +1917,12 @@ function BlackjackCasino({
       ref={shellRef}
       className={`casino-shell ${isFullscreen ? "is-fullscreen" : ""}`}
     >
+      <EmoteLayer
+        game="blackjack"
+        events={game.emotes}
+        playerId={playerId}
+        onDone={game.dismissEmote}
+      />
       <BlackjackSidebar
         onHome={goHome}
         onBlackjack={goBlackjack}
@@ -1917,6 +1953,9 @@ function BlackjackCasino({
                   seatCount={
                     state?.seats.filter((seat) => seat.playerId).length ?? 0
                   }
+                  playerId={playerId}
+                  emotePlayers={emotePlayers}
+                  onSendEmote={game.sendEmote}
                   onToggleSound={toggleSound}
                   onToggleFullscreen={toggleFullscreen}
                   onOpenTables={openTables}

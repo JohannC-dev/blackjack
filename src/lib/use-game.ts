@@ -15,6 +15,7 @@ import type {
   Wallet,
 } from "./types";
 import { newToken } from "./identity";
+import type { EmoteEvent, EmoteRequest, ReceivedEmote } from "./emotes";
 
 const STORAGE_KEY = "minuit.profile.v1";
 export function useGame() {
@@ -29,6 +30,8 @@ export function useGame() {
   const [playerId, setPlayerId] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  /** Emotes received and not yet animated. */
+  const [emotes, setEmotes] = useState<ReceivedEmote[]>([]);
   const socketRef = useRef<Socket | null>(null);
   const profileRef = useRef<Profile | null>(null);
   const idRef = useRef("");
@@ -140,6 +143,13 @@ export function useGame() {
         current ? { ...current, ...snapshot } : current,
       );
     });
+    socket.on("emote", (event: EmoteEvent) => {
+      if (!event?.id) return;
+      setEmotes((current) => [
+        ...current.slice(-11),
+        { ...event, receivedAt: Date.now() },
+      ]);
+    });
     socket.on("disconnect", () => {
       setConnected(false);
       setPending(false);
@@ -234,6 +244,12 @@ export function useGame() {
         });
     });
   }, []);
+  const sendEmote = useCallback((request: EmoteRequest) => {
+    socketRef.current?.emit("emote", request);
+  }, []);
+  const dismissEmote = useCallback((id: string) => {
+    setEmotes((current) => current.filter((event) => event.id !== id));
+  }, []);
   /** Opens the Tower: joins a room and restores the climb in progress. */
   const enterTower = useCallback(() => {
     towerOpen.current = true;
@@ -284,6 +300,9 @@ export function useGame() {
     playerId,
     error,
     pending,
+    emotes,
+    sendEmote,
+    dismissEmote,
     setError,
     register,
     command,

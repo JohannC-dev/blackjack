@@ -13,6 +13,11 @@ import type {
   TowerCommand,
   Wallet,
 } from "../src/lib/types";
+import {
+  EMOTE_BY_ID,
+  type EmoteEvent,
+  type EmoteRequest,
+} from "../src/lib/emotes";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number(process.env.PORT ?? 3000);
@@ -117,6 +122,8 @@ function replyError(ack: unknown, error: unknown) {
 
 io.on("connection", (socket) => {
   let player: Player | undefined;
+  /** Recent emote times, to keep the table readable. */
+  let emoteTimes: number[] = [];
   let events = 0;
   let windowStart = Date.now();
   function throttle() {
@@ -304,6 +311,61 @@ io.on("connection", (socket) => {
       if (typeof ack === "function") ack({ ok: true });
     } catch (error) {
       replyError(ack, error);
+    }
+  });
+  // Emotes are cosmetic: relayed to the table, never stored.
+  socket.on("emote", (request: EmoteRequest) => {
+    try {
+      throttle();
+      if (!player || !request || typeof request !== "object") return;
+      const definition = EMOTE_BY_ID.get(request.emote);
+      if (!definition) return;
+      const now = Date.now();
+      emoteTimes = emoteTimes.filter((time) => now - time < 10_000);
+      if (
+        emoteTimes.length >= 5 ||
+        now - (emoteTimes[emoteTimes.length - 1] ?? 0) < 700
+      )
+        return;
+      let recipients: string[];
+      if (request.game === "blackjack") {
+        const seated = new Set(
+          tables
+            .get(player.roomId)
+            ?.state.seats.map((seat) => seat.playerId)
+            .filter((id): id is string => !!id),
+        );
+        if (!seated.has(player.id)) return;
+        recipients = [...seated];
+      } else if (request.game === "poker") {
+        recipients = poker.tableMatesOf(player.id);
+        if (!recipients.includes(player.id)) return;
+      } else return;
+      const targetId =
+        definition.kind === "throw" &&
+        typeof request.targetId === "string" &&
+        request.targetId !== player.id &&
+        recipients.includes(request.targetId)
+          ? request.targetId
+          : undefined;
+      if (definition.kind === "throw" && !targetId) return;
+      emoteTimes.push(now);
+      const event: EmoteEvent = {
+        id: randomUUID(),
+        game: request.game,
+        emote: definition.id,
+        fromId: player.id,
+        fromName: player.name,
+        targetId,
+      };
+      if (request.game === "blackjack")
+        io.to(player.roomId).emit("emote", event);
+      else
+        for (const playerId of recipients)
+          for (const socketId of playerSockets.get(playerId) ?? [])
+            io.to(socketId).emit("emote", event);
+    } catch {
+      /* Dropped silently: an emote is never worth an error message. */
     }
   });
   socket.on("disconnect", () => {
