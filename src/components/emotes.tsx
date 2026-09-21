@@ -347,9 +347,7 @@ async function playReaction(
   bubble.style.top = `${at.y}px`;
   const glyph = document.createElement("b");
   glyph.textContent = emote.glyph;
-  const label = document.createElement("small");
-  label.textContent = emote.label;
-  bubble.append(glyph, label);
+  bubble.append(glyph);
   layer.appendChild(bubble);
   const wiggle = emote.id === "fuck" || emote.id === "rage";
   const frames: Keyframe[] = reduced
