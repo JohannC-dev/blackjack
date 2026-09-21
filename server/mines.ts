@@ -30,6 +30,19 @@ function validBet(value: number) {
   );
 }
 
+function validPattern(value: unknown): value is number[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.length <= MINES_GRID_SIZE &&
+    value.every(
+      (index) =>
+        Number.isSafeInteger(index) && index >= 0 && index < MINES_GRID_SIZE,
+    ) &&
+    new Set(value).size === value.length
+  );
+}
+
 export class MinesGame {
   private phase: MinesState["phase"] = "idle";
   private round = 0;
@@ -92,6 +105,9 @@ export class MinesGame {
       case "reveal":
         this.reveal(player, command.index);
         return;
+      case "playPattern":
+        this.playPattern(player, command.bet, command.target, command.indexes);
+        return;
       case "cashout":
         this.cashout(player);
         return;
@@ -100,7 +116,7 @@ export class MinesGame {
     }
   }
 
-  start(player: MinesPlayer, bet: number, target: number) {
+  start(player: MinesPlayer, bet: number, target: number, publish = true) {
     if (this.phase === "playing")
       throw new Error("Terminez la partie en cours avant de rejouer.");
     if (!validBet(bet))
@@ -131,7 +147,7 @@ export class MinesGame {
     this.payout = 0;
     this.net = null;
     this.message = "La grille est prête. Choisissez une case.";
-    this.publish();
+    if (publish) this.publish();
   }
 
   reveal(player: MinesPlayer, index: number) {
@@ -166,6 +182,55 @@ export class MinesGame {
       this.multiplier >= this.target / 100
         ? "Objectif atteint. Vous pouvez encaisser ou continuer."
         : "Diamant trouvé. À vous de choisir la prochaine case.";
+    this.publish();
+  }
+
+  playPattern(
+    player: MinesPlayer,
+    bet: number,
+    target: number,
+    indexes: unknown,
+  ) {
+    if (!validPattern(indexes))
+      throw new Error(
+        "Choisissez au moins une case différente pour le pattern.",
+      );
+    this.start(player, bet, target, false);
+    this.revealPattern(player, indexes);
+  }
+
+  private revealPattern(player: MinesPlayer, indexes: number[]) {
+    if (this.phase !== "playing")
+      throw new Error("Aucune extraction n'est en cours.");
+
+    for (const index of indexes) {
+      this.revealed.add(index);
+      if (this.grid[index] === "mine") {
+        this.phase = "lost";
+        this.payout = 0;
+        this.net = -this.bet;
+        this.message = "La mine a explosé. La mise est perdue.";
+        this.publish();
+        return;
+      }
+
+      this.multiplier = minesMultiplier(this.mineCount, this.revealed.size);
+      if (this.revealed.size === MINES_GRID_SIZE - this.mineCount) {
+        this.phase = "won";
+        this.payout = minesPayout(this.bet, this.multiplier);
+        this.net = this.payout - this.bet;
+        player.balance += this.payout;
+        this.message = "Toutes les cases sûres sont ouvertes. Gain sécurisé.";
+        this.publish();
+        return;
+      }
+    }
+
+    this.payout = minesPayout(this.bet, this.multiplier);
+    this.net = this.payout - this.bet;
+    player.balance += this.payout;
+    this.phase = "cashed";
+    this.message = "Pattern révélé. Gain encaissé.";
     this.publish();
   }
 

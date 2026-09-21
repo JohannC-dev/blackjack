@@ -64,4 +64,27 @@ describe("Jeu de la mine", () => {
     expect(state.payout).toBe(0);
     expect(state.net).toBe(-100);
   });
+
+  test("un pattern révèle toutes ses cases en une commande et encaisse", () => {
+    const player = { balance: 100_000 };
+    let game = new MinesGame();
+    let state = game.snapshot();
+    let publishes = 0;
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+      publishes = 0;
+      game = new MinesGame(() => publishes++);
+      game.playPattern(player, 100, 110, [0]);
+      state = game.snapshot();
+      if (state.phase === "cashed") {
+        expect(publishes).toBe(1);
+        break;
+      }
+    }
+
+    expect(state.phase).toBe("cashed");
+    expect(state.revealedCount).toBe(1);
+    expect(state.cells[0]?.status).toBe("diamond");
+    expect(state.payout).toBeGreaterThan(0);
+  });
 });

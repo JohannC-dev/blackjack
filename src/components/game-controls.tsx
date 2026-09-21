@@ -129,7 +129,7 @@ export function GameActionButton({
   subline,
   onClick,
 }: {
-  variant: "start" | "cashout";
+  variant: "start" | "cashout" | "stop";
   busy: boolean;
   disabled: boolean;
   icon: ReactNode;
