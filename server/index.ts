@@ -148,18 +148,42 @@ io.on("connection", (socket) => {
         socket.join(data.tableId);
         if (typeof ack === "function")
           ack({ ok: true, playerId: player.id, tableId: data.tableId });
-        table.add(player);
+        // The shared socket is also used by Poker. Joining the room only adds
+        // a Blackjack spectator; the Blackjack view explicitly reserves a
+        // seat below.
+        table.observe(player);
         poker.connect(player);
       } catch (error) {
         replyError(ack, error);
       }
     },
   );
+  socket.on("blackjack:join", (ack: (value: Ack) => void) => {
+    try {
+      throttle();
+      if (!player) throw new Error("Vous n’êtes pas connecté à la table.");
+      tables.get(player.roomId)!.add(player);
+      if (typeof ack === "function") ack({ ok: true });
+    } catch (error) {
+      replyError(ack, error);
+    }
+  });
   socket.on("command", (command: Command, ack: (value: Ack) => void) => {
     try {
       throttle();
       if (!player) throw new Error("Vous n’êtes pas connecté à la table.");
-      tables.get(player.roomId)!.command(player.id, command);
+      const blackjackTable = tables.get(player.roomId)!;
+      const blackjackPlayerId = player.id;
+      // Keep the command endpoint backwards-compatible for non-browser
+      // clients: an actual Blackjack action is also an explicit table entry.
+      if (
+        !blackjackTable.players.has(blackjackPlayerId) ||
+        !blackjackTable.state.seats.some(
+          (seat) => seat.playerId === blackjackPlayerId,
+        )
+      )
+        blackjackTable.add(player);
+      blackjackTable.command(blackjackPlayerId, command);
       if (typeof ack === "function") ack({ ok: true });
     } catch (error) {
       replyError(ack, error);

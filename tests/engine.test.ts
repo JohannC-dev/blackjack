@@ -512,6 +512,17 @@ describe("European blackjack and credit accounting", () => {
 });
 
 describe("Multiplayer authority and lifecycle", () => {
+  test("a Blackjack spectator does not reserve a seat", () => {
+    const table = new Table("TEST");
+    const spectator = player("Poker only");
+
+    table.observe(spectator);
+
+    expect(table.players.has(spectator.id)).toBe(true);
+    expect(
+      table.state.seats.some((seat) => seat.playerId === spectator.id),
+    ).toBe(false);
+  });
   test("a fresh shoe is shuffled in an exclusive phase before dealing", () => {
     const { table, p } = tableWith([]);
     const seat = table.state.seats.find((entry) => entry.playerId === p.id)!;
@@ -656,6 +667,42 @@ describe("Multiplayer authority and lifecycle", () => {
     const bobSeat = table.state.seats.find((s) => s.playerId === bob.id)!;
     expect(bobSeat.hands).toHaveLength(0);
     expect(bobSeat.bet).toEqual({ main: 0, three: 0, pairs: 0 });
+  });
+  test("releases a seat after two rounds without a dealt hand", () => {
+    const active = player(),
+      idle = player("Idle");
+    const { table } = tableWith([], [active]);
+    table.add(idle);
+    const activeSeat = table.state.seats.find(
+      (seat) => seat.playerId === active.id,
+    )!;
+    const idleSeat = table.state.seats.find(
+      (seat) => seat.playerId === idle.id,
+    )!;
+
+    for (let round = 0; round < 2; round++) {
+      table.command(active.id, {
+        type: "bet",
+        seat: activeSeat.index,
+        bet: { main: 25, three: 0, pairs: 0 },
+      });
+      table.command(active.id, { type: "ready", ready: true });
+      table.startRound();
+      let now = Date.now() + 1000;
+      while (table.state.phase === "dealing") {
+        table.tick(now);
+        now += 1000;
+      }
+      while (table.state.phase === "playing")
+        table.command(active.id, {
+          type: "stand",
+          handId: table.state.activeHandId!,
+        });
+      settle(table);
+      table.tick(table.state.deadline!);
+    }
+
+    expect(table.state.seats[idleSeat.index].playerId).toBeNull();
   });
   test("a timed-out hand stands; disconnect cannot freeze the game", () => {
     const { table, p } = tableWith([card(10), card(10), card(8), card(7)]);
