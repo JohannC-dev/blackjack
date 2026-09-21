@@ -207,6 +207,30 @@ export type PokerClientState = {
   table?: PokerTableState;
 };
 
+export type MinesCell = {
+  index: number;
+  status: "hidden" | "diamond" | "mine";
+};
+export type MinesState = {
+  phase: "idle" | "playing" | "won" | "lost" | "cashed";
+  round: number;
+  bet: number;
+  target: number;
+  mineCount: number;
+  cells: MinesCell[];
+  revealedCount: number;
+  multiplier: number;
+  payout: number;
+  nextMultiplier: number | null;
+  nextPayout: number | null;
+  net: number | null;
+  message: string;
+};
+export type MinesCommand =
+  | { type: "start"; bet: number; target: number }
+  | { type: "reveal"; index: number }
+  | { type: "cashout" };
+
 export type PokerCommand =
   | { type: "match"; mode: PokerMode; stake: number; buyIn?: number }
   | { type: "leave" }
