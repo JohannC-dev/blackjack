@@ -1427,10 +1427,9 @@
   stroke-dashoffset: 0;
   stroke-linecap: round;
   filter: drop-shadow(0 0 5px #b79afa70);
-  transition: stroke-dashoffset 250ms linear;
+  transition: stroke-dashoffset 1s linear;
 }
-.poker-seat.acting .poker-player-card::after {
-  content: attr(data-turn-seconds);
+.poker-seat.acting .poker-turn-seconds {
   position: absolute;
   top: -15px;
   right: -4px;
@@ -8196,7 +8195,7 @@ h1 > span:not(.live-tag) {
   border-color: #ffffff16;
   box-shadow: 0 9px 22px rgba(0, 0, 0, 0.35);
 }
-.poker-shell .poker-seat.acting .poker-player-card::after {
+.poker-shell .poker-seat.acting .poker-turn-seconds {
   top: 50%;
   right: 10px;
   z-index: 3;
