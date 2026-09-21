@@ -1,13 +1,13 @@
 .root {
   position: relative;
-  z-index: 70;
+  z-index: 1;
 }
 
 .picker {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 60;
+  z-index: 100;
   width: min(340px, calc(100vw - 32px));
   max-height: min(520px, 70vh);
   overflow-y: auto;
@@ -80,6 +80,8 @@
 }
 
 .emote {
+  min-width: 52px;
+  min-height: 52px;
   display: grid;
   justify-items: center;
   gap: 2px;
@@ -89,6 +91,7 @@
   background: #181915;
   border: 1px solid rgba(255, 255, 255, 0.06);
   cursor: pointer;
+  touch-action: manipulation;
   transition:
     transform 0.12s ease,
     border-color 0.12s ease,
