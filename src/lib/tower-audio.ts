@@ -414,24 +414,6 @@ export function playTowerCashout(context: AudioContext, floor: number) {
   kick(context, 0, 0.35, 50);
 }
 
-/** Top floor reached: fanfare chord and a short ring of bells. */
-export function playTowerTopped(context: AudioContext) {
-  for (const semitones of [0, 4, 7, 12])
-    tone(context, {
-      at: 0,
-      frequency: ROOT * 2 * 2 ** (semitones / 12),
-      duration: 1.6,
-      gain: 0.1,
-      type: "sawtooth",
-      cutoff: 2_800,
-      attack: 0.02,
-      send: 0.4,
-    });
-  kick(context, 0, 0.8, 35);
-  for (let ring = 0; ring < 16; ring++)
-    bell(context, 0.1 + ring * 0.08, ring % 2 ? 1_760 : 1_320, 0.1);
-}
-
 /** Lucky Tower revealed: a deep "Lucky!" drowned in reverb, over a golden shimmer. */
 export function playTowerLucky(context: AudioContext) {
   for (let step = 0; step < 10; step++)

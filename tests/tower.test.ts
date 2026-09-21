@@ -69,7 +69,9 @@ describe("Tower multipliers", () => {
     expect(towerMultipliers("hard").slice(0, 4)).toEqual([
       1.37, 2.04, 3.05, 4.57,
     ]);
-    expect(towerMultipliers("normal").slice(0, 4)).toEqual([1.2, 1.6, 2.12, 2.82]);
+    expect(towerMultipliers("normal").slice(0, 4)).toEqual([
+      1.2, 1.6, 2.12, 2.82,
+    ]);
     expect(towerMultipliers("normal").slice(6, 9)).toEqual([6.63, 8.82, 11.7]);
   });
 

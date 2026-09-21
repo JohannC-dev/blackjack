@@ -46,7 +46,6 @@ import {
   playTowerLucky,
   playTowerStart,
   playTowerStep,
-  playTowerTopped,
   preloadTowerSounds,
 } from "@/lib/tower-audio";
 import type {
@@ -110,7 +109,6 @@ export function TowerCasino({
   const [climb, setClimb] = useState<number | null>(null);
   const [pendingPick, setPendingPick] = useState<number | null>(null);
   const [sound, setSound] = useState(false);
-  const [notice, setNotice] = useState("");
   const [rulesOpen, setRulesOpen] = useState(false);
   const [metrics, setMetrics] = useState({ view: 0, tower: 0, pitch: 0 });
   const audioRef = useRef<AudioContext | null>(null);
@@ -119,7 +117,6 @@ export function TowerCasino({
   const timers = useRef<number[]>([]);
   const previousRun = useRef<TowerRun | null>(null);
   const initialized = useRef(false);
-  const seenFeed = useRef(new Set<string>());
   const fxRef = useRef<TowerFxHandle>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const towerRef = useRef<HTMLDivElement>(null);
@@ -272,14 +269,12 @@ export function TowerCasino({
       later(delay + CELEBRATE_MS, () => setPhase("done"));
     } else {
       later(120, () => play("chips", 2));
+      const bigWin = run.status === "topped";
       sfx((context) =>
-        run.lucky
+        bigWin
           ? playTowerJackpot(context)
-          : run.status === "topped"
-            ? playTowerTopped(context)
-            : playTowerCashout(context, run.floor),
+          : playTowerCashout(context, run.floor),
       );
-      const bigWin = run.lucky || run.status === "topped";
       fxRef.current?.burst(bigWin ? "jackpot" : "win");
       // Fireworks for a win at the top, or for cashing out from floor 6 upwards.
       if (bigWin) fxRef.current?.fireworks(1);
@@ -289,30 +284,6 @@ export function TowerCasino({
       later(CELEBRATE_MS, () => setPhase("done"));
     }
   }, [tower, run, play, sfx, ascend, later, clearTimers]);
-
-  // Announce other players' big moments.
-  useEffect(() => {
-    if (!tower) return;
-    const firstLoad = seenFeed.current.size === 0;
-    for (const item of [...tower.feed].reverse()) {
-      if (seenFeed.current.has(item.id)) continue;
-      seenFeed.current.add(item.id);
-      if (firstLoad || item.name === game.profile?.name) continue;
-      if (item.lucky)
-        setNotice(
-          `${item.name} a déclenché la Lucky Tower : +${credits(item.amount)} cr. !`,
-        );
-      else if (item.status === "topped")
-        setNotice(
-          `${item.name} atteint le sommet en ${TOWER_DIFFICULTIES[item.difficulty].label} : +${credits(item.amount)} cr.`,
-        );
-    }
-  }, [tower, game.profile?.name]);
-  useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 5_000);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
 
   // Measure the stage so the camera can follow the climb when the tower does not fit.
   useLayoutEffect(() => {
@@ -642,19 +613,6 @@ export function TowerCasino({
           </footer>
         </main>
       </div>
-      {notice && (
-        <div className={`toast ${styles.luckyToast}`} role="status">
-          <Sparkles size={16} />
-          <span>{notice}</span>
-          <button
-            className="icon-button"
-            aria-label="Fermer"
-            onClick={() => setNotice("")}
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
       {game.error && (
         <div className="toast error-toast is-visible" role="alert">
           <X size={16} />
