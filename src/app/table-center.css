@@ -11,6 +11,97 @@
   --table-confirm-offset: 66px;
 }
 
+/* Give the felt a dedicated focus mode. The same class also covers browsers
+ * that refuse the native Fullscreen API, so the feature still works as an
+ * app-level mode. */
+.casino-shell .rail,
+.casino-shell .workspace {
+  transition:
+    transform 360ms var(--ease),
+    opacity 360ms var(--ease),
+    margin-left 360ms var(--ease);
+}
+
+.casino-shell.is-fullscreen {
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+.casino-shell.is-fullscreen .topbar,
+.casino-shell.is-fullscreen .page-heading {
+  display: none;
+}
+
+.casino-shell.is-fullscreen .rail {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-100%);
+}
+
+.casino-shell.is-fullscreen .workspace {
+  margin-left: 0;
+}
+
+.casino-shell.is-fullscreen main {
+  max-width: none;
+  padding: 0;
+}
+
+.casino-shell.is-fullscreen .table-panel {
+  --table-status-height: 0px;
+  --table-stage-height: 100dvh;
+  height: 100dvh;
+  min-height: 0;
+  margin-bottom: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.casino-shell.is-fullscreen .table-toolbar {
+  position: absolute;
+  inset: 0 0 auto;
+  padding-right: clamp(20px, 3.5vw, 60px);
+  padding-left: clamp(20px, 3.5vw, 60px);
+}
+
+.casino-shell.is-fullscreen .table-status,
+.casino-shell.is-fullscreen .controls-heading,
+.casino-shell.is-fullscreen .controls-footnote,
+.casino-shell.is-fullscreen .waiting-state {
+  display: none;
+}
+
+.casino-shell.is-fullscreen .controls-panel {
+  height: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.table-fullscreen-button {
+  transition:
+    color 180ms var(--ease),
+    border-color 180ms var(--ease),
+    background-color 180ms var(--ease),
+    transform 180ms var(--ease);
+}
+
+.table-fullscreen-button:hover:not(:disabled) {
+  color: #e0d4f0;
+  border-color: #806b91;
+  background: #1c1627;
+  transform: translateY(-1px);
+}
+
+.table-fullscreen-button.active {
+  color: #d1b4ff;
+  border-color: #b79afa66;
+  background: #9f79ea19;
+  box-shadow: 0 0 18px #a880f31a;
+}
+
 .table-stage {
   height: var(--table-stage-height);
 }
@@ -546,6 +637,19 @@
 
   .table-panel .play-actions small {
     font-size: 5px;
+  }
+
+  .casino-shell.is-fullscreen main {
+    padding: 0;
+  }
+
+  .casino-shell.is-fullscreen .table-panel {
+    --table-stage-height: 100dvh;
+  }
+
+  .casino-shell.is-fullscreen .table-toolbar {
+    padding-right: 12px;
+    padding-left: 12px;
   }
 }
 
