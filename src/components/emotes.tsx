@@ -237,7 +237,10 @@ function burst(layer: HTMLElement, at: Point, colors: string[], count = 14) {
           opacity: 0,
         },
       ],
-      { duration: 620 + Math.random() * 240, easing: "cubic-bezier(.2,.7,.3,1)" },
+      {
+        duration: 620 + Math.random() * 240,
+        easing: "cubic-bezier(.2,.7,.3,1)",
+      },
     );
     animations.push(animation.finished.finally(() => particle.remove()));
   }
@@ -298,12 +301,10 @@ async function playThrow(
     { duration: 420, easing: "ease-out" },
   );
   const splat = spawn(layer, styles.splat, emote.glyph, end);
-  const stain = spawn(
-    layer,
-    styles.stain,
-    emote.impact ?? emote.glyph,
-    { x: end.x + 18, y: end.y - 22 },
-  );
+  const stain = spawn(layer, styles.stain, emote.impact ?? emote.glyph, {
+    x: end.x + 18,
+    y: end.y - 22,
+  });
   await Promise.all([
     splat
       .animate(
@@ -319,9 +320,21 @@ async function playThrow(
       .animate(
         [
           { transform: "translate(-50%, -50%) scale(0)", opacity: 0 },
-          { transform: "translate(-50%, -50%) scale(1.35)", opacity: 1, offset: 0.15 },
-          { transform: "translate(-50%, -50%) scale(1)", opacity: 1, offset: 0.3 },
-          { transform: "translate(-50%, -70%) scale(1)", opacity: 1, offset: 0.8 },
+          {
+            transform: "translate(-50%, -50%) scale(1.35)",
+            opacity: 1,
+            offset: 0.15,
+          },
+          {
+            transform: "translate(-50%, -50%) scale(1)",
+            opacity: 1,
+            offset: 0.3,
+          },
+          {
+            transform: "translate(-50%, -70%) scale(1)",
+            opacity: 1,
+            offset: 0.8,
+          },
           { transform: "translate(-50%, -90%) scale(0.9)", opacity: 0 },
         ],
         { duration: 1_600, easing: "ease-out" },
@@ -429,7 +442,8 @@ export function EmoteLayer({
       if (started.current.has(event.id)) continue;
       started.current.add(event.id);
       const emote = EMOTE_BY_ID.get(event.emote);
-      const involvesMe = event.fromId === playerId || event.targetId === playerId;
+      const involvesMe =
+        event.fromId === playerId || event.targetId === playerId;
       if (
         !emote ||
         event.game !== game ||
@@ -448,7 +462,8 @@ export function EmoteLayer({
 
   useEffect(() => {
     const ids = new Set(events.map((event) => event.id));
-    for (const id of started.current) if (!ids.has(id)) started.current.delete(id);
+    for (const id of started.current)
+      if (!ids.has(id)) started.current.delete(id);
   }, [events]);
 
   if (!host) return null;

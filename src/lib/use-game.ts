@@ -5,6 +5,8 @@ import { io, type Socket } from "socket.io-client";
 import type {
   Ack,
   Command,
+  MinesCommand,
+  MinesState,
   PokerClientState,
   PokerCommand,
   Profile,
@@ -27,6 +29,7 @@ export function useGame() {
   const [towerState, setTowerState] = useState<TowerClientState | null>(null);
   /** Shared wallet: only the server's wallet event sets it, never a game snapshot. */
   const [balance, setBalance] = useState<number | null>(null);
+  const [minesState, setMinesState] = useState<MinesState | null>(null);
   const [playerId, setPlayerId] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -85,6 +88,7 @@ export function useGame() {
   const token = profile?.token;
   useEffect(() => {
     if (!token) return;
+    setBalance(null);
     const socket = io({
       transports: ["websocket", "polling"],
       reconnectionDelay: 700,
@@ -149,6 +153,9 @@ export function useGame() {
         ...current.slice(-11),
         { ...event, receivedAt: Date.now() },
       ]);
+    });
+    socket.on("mines:state", (snapshot: MinesState | null) => {
+      setMinesState(snapshot);
     });
     socket.on("disconnect", () => {
       setConnected(false);
@@ -250,6 +257,24 @@ export function useGame() {
   const dismissEmote = useCallback((id: string) => {
     setEmotes((current) => current.filter((event) => event.id !== id));
   }, []);
+  const minesCommand = useCallback((action: MinesCommand): Promise<boolean> => {
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      setError("La connexion à la mine est interrompue.");
+      return Promise.resolve(false);
+    }
+    setPending(true);
+    return new Promise((resolve) => {
+      socket
+        .timeout(6000)
+        .emit("mines:command", action, (timeout: Error | null, ack: Ack) => {
+          setPending(false);
+          if (timeout) setError("Le serveur de la mine ne répond pas.");
+          else if (!ack.ok) setError(ack.error);
+          resolve(!timeout && ack?.ok);
+        });
+    });
+  }, []);
   /** Opens the Tower: joins a room and restores the climb in progress. */
   const enterTower = useCallback(() => {
     towerOpen.current = true;
@@ -297,6 +322,7 @@ export function useGame() {
     pokerState,
     towerState,
     balance,
+    minesState,
     playerId,
     error,
     pending,
@@ -311,6 +337,7 @@ export function useGame() {
     towerCommand,
     enterTower,
     leaveTower,
+    minesCommand,
     changeTable,
   };
 }

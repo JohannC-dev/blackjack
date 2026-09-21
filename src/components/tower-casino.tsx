@@ -5,8 +5,6 @@ import {
   Castle,
   CircleHelp,
   Crown,
-  LoaderCircle,
-  RotateCcw,
   Skull,
   Sparkles,
   Users,
@@ -23,7 +21,6 @@ import {
   type RefObject,
 } from "react";
 import { credits } from "@/lib/rules";
-import { CASINO_CHIP_DENOMINATIONS } from "@/lib/chips";
 import {
   formatMultiplier,
   TOWER_DIFFICULTIES,
@@ -56,9 +53,15 @@ import type {
 } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import type { CasinoView } from "./casino";
-import { Chip } from "./chip";
 import { CasinoRail, ClubHeader, getClubBalance } from "./poker-casino";
 import { TowerFx, type TowerFxHandle } from "./tower-fx";
+import {
+  BetChipPicker,
+  GameActionButton,
+  GameControlGroup,
+  GameControlsBar,
+  GameOption,
+} from "./game-controls";
 import styles from "./tower.module.css";
 
 type Game = ReturnType<typeof useGame>;
@@ -525,20 +528,16 @@ export function TowerCasino({
             )}
           </section>
 
-          <footer className={styles.bar} aria-label="Réglages de la partie">
-            <div className={styles.barGroup}>
-              <span className={styles.label}>Difficulté</span>
-              <div className={styles.difficulties} role="radiogroup">
+          <GameControlsBar ariaLabel="Réglages de la partie">
+            <GameControlGroup label="Difficulté">
+              <div className="game-options" role="radiogroup">
                 {TOWER_DIFFICULTY_ORDER.map((key) => {
                   const cols = TOWER_DIFFICULTIES[key].cols;
                   return (
-                    <button
+                    <GameOption
                       key={key}
-                      type="button"
-                      role="radio"
-                      aria-checked={activeDifficulty === key}
-                      className={`${styles.difficulty} ${activeDifficulty === key ? styles.selected : ""}`}
-                      data-difficulty={key}
+                      tone={key}
+                      selected={activeDifficulty === key}
                       disabled={playing}
                       onClick={() => {
                         setDifficulty(key);
@@ -550,53 +549,32 @@ export function TowerCasino({
                         {cols} cartes ·{" "}
                         {formatMultiplier(towerMultiplier(key, TOWER_FLOORS))}
                       </small>
-                    </button>
+                    </GameOption>
                   );
                 })}
               </div>
-            </div>
+            </GameControlGroup>
 
-            <div className={styles.barGroup}>
-              <span className={styles.label}>
-                Mise{" "}
-                <b className={styles.betAmount}>
-                  {credits(playing && run ? run.bet : bet)} cr.
-                </b>
-              </span>
-              <div className="chip-picker">
-                {CASINO_CHIP_DENOMINATIONS.map((amount) => (
-                  <Chip
-                    key={amount}
-                    amount={amount}
-                    selected={betSteps.at(-1) === amount && !playing}
-                    disabled={playing || bet + amount > maxBet}
-                    onClick={() => addChip(amount)}
-                    label={`Ajouter ${amount} crédits à la mise`}
-                  />
-                ))}
-                <span className="rack-divider" />
-                <button
-                  type="button"
-                  className="icon-button"
-                  disabled={playing || !betSteps.length}
-                  onClick={undoChip}
-                  title="Annuler le dernier jeton"
-                  aria-label="Annuler le dernier jeton"
-                >
-                  <RotateCcw size={17} />
-                </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  disabled={playing || !bet}
-                  onClick={clearBet}
-                  title="Retirer la mise"
-                  aria-label="Retirer la mise"
-                >
-                  <X size={17} />
-                </button>
-              </div>
-            </div>
+            <GameControlGroup
+              label={
+                <>
+                  Mise{" "}
+                  <b className="game-bet-amount">
+                    {credits(playing && run ? run.bet : bet)} cr.
+                  </b>
+                </>
+              }
+            >
+              <BetChipPicker
+                bet={bet}
+                maxBet={maxBet}
+                betSteps={betSteps}
+                disabled={playing}
+                onAdd={addChip}
+                onUndo={undoChip}
+                onClear={clearBet}
+              />
+            </GameControlGroup>
 
             <ActionButton
               run={run}
@@ -608,7 +586,7 @@ export function TowerCasino({
               onStart={start}
               onCashout={cashout}
             />
-          </footer>
+          </GameControlsBar>
         </main>
       </div>
       {game.error && (
@@ -650,32 +628,27 @@ function ActionButton({
         ? towerPayout(run.bet, run.difficulty, run.floor + 1)
         : null;
     return (
-      <button
-        type="button"
-        className={`${styles.action} ${styles.cashout}`}
+      <GameActionButton
+        variant="cashout"
+        busy={busy}
         disabled={busy || run.floor < 1}
-        onClick={onCashout}
-      >
-        {busy ? (
-          <LoaderCircle size={18} className="spinner" />
-        ) : (
-          <Crown size={18} />
-        )}
-        <span>
-          <b>
-            {run.floor < 1
-              ? "Choisissez une carte"
-              : `Encaisser ${credits(current)} cr.`}
-          </b>
-          {next !== null && (
-            <small>
+        icon={<Crown size={18} />}
+        label={
+          run.floor < 1
+            ? "Choisissez une carte"
+            : `Encaisser ${credits(current)} cr.`
+        }
+        subline={
+          next !== null && (
+            <>
               Étage suivant :{" "}
               {formatMultiplier(towerMultiplier(run.difficulty, run.floor + 1))}{" "}
               · {credits(next)} cr.
-            </small>
-          )}
-        </span>
-      </button>
+            </>
+          )
+        }
+        onClick={onCashout}
+      />
     );
   }
   const reason =
@@ -685,24 +658,15 @@ function ActionButton({
         ? "Solde insuffisant"
         : `${TOWER_DIFFICULTIES[difficulty].label} · jusqu’à ${credits(towerPayout(bet, difficulty, TOWER_FLOORS))} cr.`;
   return (
-    <button
-      type="button"
-      className={`${styles.action} ${styles.start}`}
+    <GameActionButton
+      variant="start"
+      busy={busy}
       disabled={busy || bet < TOWER_MIN_BET || balance < bet}
+      icon={<ArrowUp size={18} />}
+      label={`${run ? "Rejouer" : "Jouer"} · ${credits(bet)} cr.`}
+      subline={reason}
       onClick={onStart}
-    >
-      {busy ? (
-        <LoaderCircle size={18} className="spinner" />
-      ) : (
-        <ArrowUp size={18} />
-      )}
-      <span>
-        <b>
-          {run ? "Rejouer" : "Jouer"} · {credits(bet)} cr.
-        </b>
-        <small>{reason}</small>
-      </span>
-    </button>
+    />
   );
 }
 

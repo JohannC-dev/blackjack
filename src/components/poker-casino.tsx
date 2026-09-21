@@ -2,7 +2,6 @@
 
 import {
   ArrowLeft,
-  ArrowRight,
   Castle,
   Check,
   Coins,
@@ -53,6 +52,8 @@ import { PokerLobby } from "./poker-lobby";
 import { PokerShuffleAnimation } from "./poker-shuffle";
 import { RoomArt } from "./room-art";
 import { EmoteButton, EmoteLayer, type EmotePlayer } from "./emotes";
+import { GamePoster } from "./game-poster";
+import { MineBomb, MineDiamond } from "./mine-art";
 import { TowerPosterArt } from "./tower-art";
 
 type Game = ReturnType<typeof useGame>;
@@ -101,6 +102,16 @@ export const CasinoRail = memo(function CasinoRail({
           onClick={() => onNavigate("blackjack")}
         >
           <BlackjackIcon />
+        </button>
+        <button
+          className={`rail-button ${active === "mines" ? "active" : ""}`}
+          title="Jeu de la mine"
+          aria-label="Jeu de la mine"
+          onClick={() => onNavigate("mines")}
+        >
+          <span className="rail-diamond-symbol" aria-hidden="true">
+            ◆
+          </span>
         </button>
         <button
           className={`rail-button ${active === "poker" ? "active" : ""}`}
@@ -193,8 +204,8 @@ export function CasinoHome({
                 <em>votre table.</em>
               </h1>
               <p>
-                Trois jeux, un seul portefeuille. Entrez sans attendre — les
-                cartes sont déjà prêtes.
+                Quatre jeux, un seul portefeuille. Entrez sans attendre — les
+                cartes et la grille sont déjà prêtes.
               </p>
               <div className="club-trust">
                 <ShieldCheck size={15} /> Crédits fictifs · Parties en direct
@@ -207,83 +218,100 @@ export function CasinoHome({
             </div>
           </section>
           <section className="game-selection" aria-label="Jeux disponibles">
-            <button
-              className="game-poster blackjack-poster"
-              onClick={() => onNavigate("blackjack")}
-            >
-              <div className="poster-index">01</div>
-              <div className="poster-art">
-                <span>21</span>
-                <PlayingCard
-                  card={{ id: "home-a", rank: 1, suit: "spades" }}
-                  decorative
-                />
-                <PlayingCard
-                  card={{ id: "home-k", rank: 13, suit: "hearts" }}
-                  decorative
-                />
-              </div>
-              <div className="poster-copy">
-                <span>JEU DE TABLE</span>
-                <h2>
+            <GamePoster
+              className="blackjack-poster"
+              index="01"
+              art={
+                <>
+                  <span>21</span>
+                  <PlayingCard
+                    card={{ id: "home-a", rank: 1, suit: "spades" }}
+                    decorative
+                  />
+                  <PlayingCard
+                    card={{ id: "home-k", rank: 13, suit: "hearts" }}
+                    decorative
+                  />
+                </>
+              }
+              eyebrow="JEU DE TABLE"
+              title={
+                <>
                   Blackjack
                   <br />
                   Européen
-                </h2>
-                <p>Le classique de la maison, enrichi de paris annexes.</p>
-                <strong>
-                  Rejoindre la table <ArrowRight size={17} />
-                </strong>
-              </div>
-            </button>
-            <button
-              className="game-poster poker-poster"
-              onClick={() => onNavigate("poker")}
-            >
-              <div className="poster-index">02</div>
-              <div className="poster-art poker-art">
-                <RoomArt theme="salon" poster />
-              </div>
-              <div className="poster-copy">
-                <span>NOUVEAU · MULTIJOUEUR</span>
-                <h2>
+                </>
+              }
+              description="Le classique de la maison, enrichi de paris annexes."
+              action="Rejoindre la table"
+              onClick={() => onNavigate("blackjack")}
+            />
+            <GamePoster
+              className="poker-poster"
+              index="02"
+              artClassName="poker-art"
+              art={<RoomArt theme="salon" poster />}
+              eyebrow="NOUVEAU · MULTIJOUEUR"
+              title={
+                <>
                   Texas
                   <br />
                   Hold’em
-                </h2>
-                <p>Cash Game à cinq ou Spin & Play en format éclair.</p>
-                <strong>
-                  Entrer dans le lobby <ArrowRight size={17} />
-                </strong>
-              </div>
-            </button>
-            <button
-              className="game-poster tower-poster"
+                </>
+              }
+              description="Cash Game à cinq ou Spin & Play en format éclair."
+              action="Entrer dans le lobby"
+              onClick={() => onNavigate("poker")}
+            />
+            <GamePoster
+              className="tower-poster"
+              index="03"
+              artClassName="tower-art"
+              art={<TowerPosterArt hot={towerHot} />}
+              eyebrow="NOUVEAU · SOLO & LIVE"
+              title={
+                <>
+                  La
+                  <br />
+                  Tower
+                </>
+              }
+              description="Dix étages, un piège par rangée. Encaissez avant la chute."
+              action="Grimper la tour"
               onClick={() => onNavigate("tower")}
               onMouseEnter={() => setTowerHot(true)}
               onMouseLeave={() => setTowerHot(false)}
               onFocus={() => setTowerHot(true)}
               onBlur={() => setTowerHot(false)}
-            >
-              <div className="poster-index">03</div>
-              <div className="poster-art tower-art">
-                <TowerPosterArt hot={towerHot} />
-              </div>
-              <div className="poster-copy">
-                <span>NOUVEAU · SOLO & LIVE</span>
-                <h2>
-                  La
+            />
+            <GamePoster
+              className="mines-poster"
+              index="04"
+              artClassName="mines-art"
+              art={
+                <>
+                  <div className="mines-poster-grid" aria-hidden="true">
+                    {Array.from({ length: 9 }, (_, index) => (
+                      <span key={index} className={index === 4 ? "is-gem" : ""}>
+                        {index === 4 && <MineDiamond />}
+                      </span>
+                    ))}
+                  </div>
+                  <MineBomb />
+                </>
+              }
+              eyebrow="NOUVEAU · EXTRACTION"
+              title={
+                <>
+                  Jeu de la
                   <br />
-                  Tower
-                </h2>
-                <p>
-                  Dix étages, un piège par rangée. Encaissez avant la chute.
-                </p>
-                <strong>
-                  Grimper la tour <ArrowRight size={17} />
-                </strong>
-              </div>
-            </button>
+                  Mine
+                </>
+              }
+              description="Choisissez votre objectif, trouvez les diamants, encaissez."
+              action="Commencer l’extraction"
+              onClick={() => onNavigate("mines")}
+            />
           </section>
         </main>
       </div>

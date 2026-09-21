@@ -74,6 +74,7 @@ import { CountdownText } from "./countdown";
 import { Chip } from "./chip";
 import { PlayingCard } from "./playing-card";
 import { CasinoHome, PokerCasino } from "./poker-casino";
+import { MinesCasino } from "./mines-casino";
 import { PokerShuffleAnimation } from "./poker-shuffle";
 import { TowerCasino } from "./tower-casino";
 import { EmoteButton, EmoteLayer, type EmotePlayer } from "./emotes";
@@ -1146,11 +1147,12 @@ function GamblePanel({
   );
 }
 
-export type CasinoView = "home" | "blackjack" | "poker" | "tower";
+export type CasinoView = "home" | "blackjack" | "poker" | "tower" | "mines";
 
 type BlackjackSidebarProps = {
   onHome: () => void;
   onBlackjack: () => void;
+  onMines: () => void;
   onPoker: () => void;
   onTower: () => void;
   onTables: () => void;
@@ -1161,6 +1163,7 @@ type BlackjackSidebarProps = {
 const BlackjackSidebar = memo(function BlackjackSidebar({
   onHome,
   onBlackjack,
+  onMines,
   onPoker,
   onTower,
   onTables,
@@ -1193,6 +1196,16 @@ const BlackjackSidebar = memo(function BlackjackSidebar({
           onClick={onBlackjack}
         >
           <BlackjackIcon />
+        </button>
+        <button
+          className="rail-button"
+          title="Jeu de la mine"
+          aria-label="Jeu de la mine"
+          onClick={onMines}
+        >
+          <span className="rail-diamond-symbol" aria-hidden="true">
+            ◆
+          </span>
         </button>
         <button
           className="rail-button"
@@ -1388,11 +1401,13 @@ export function Casino() {
   const [view, setView] = useState<CasinoView>("home");
   const [confirmPokerLeave, setConfirmPokerLeave] = useState(false);
   const [leavingPoker, setLeavingPoker] = useState(false);
+  const [pendingView, setPendingView] = useState<CasinoView | null>(null);
   const pokerStateRef = useRef(game.pokerState);
   pokerStateRef.current = game.pokerState;
   const navigate = useCallback((next: CasinoView) => {
     const pokerState = pokerStateRef.current;
-    if (next === "blackjack" && pokerState && pokerState.status !== "lobby") {
+    if (next !== "poker" && pokerState && pokerState.status !== "lobby") {
+      setPendingView(next);
       setConfirmPokerLeave(true);
       return;
     }
@@ -1407,6 +1422,8 @@ export function Casino() {
       <PokerCasino game={game} onNavigate={navigate} />
     ) : view === "tower" ? (
       <TowerCasino game={game} onNavigate={navigate} />
+    ) : view === "mines" ? (
+      <MinesCasino game={game} onNavigate={navigate} />
     ) : (
       <BlackjackCasino game={game} onNavigate={navigate} />
     );
@@ -1415,6 +1432,12 @@ export function Casino() {
     : game.pokerState?.table?.mode === "cash"
       ? "Votre place sera libérée et votre stack restant sera recrédité."
       : "Vous abandonnerez le tournoi et votre buy-in ne sera pas récupéré.";
+  const pokerExitDestination =
+    pendingView === "mines"
+      ? "le jeu de la Mine"
+      : pendingView === "home"
+        ? "l’accueil du club"
+        : "le Blackjack";
 
   return (
     <>
@@ -1423,7 +1446,14 @@ export function Casino() {
         <Modal
           title="Quitter la partie de poker ?"
           className="leave-poker-modal"
-          onClose={leavingPoker ? undefined : () => setConfirmPokerLeave(false)}
+          onClose={
+            leavingPoker
+              ? undefined
+              : () => {
+                  setConfirmPokerLeave(false);
+                  setPendingView(null);
+                }
+          }
         >
           <span className="modal-emblem">
             <Spade size={26} fill="currentColor" />
@@ -1431,7 +1461,8 @@ export function Casino() {
           <span className="section-kicker">PARTIE EN COURS</span>
           <h2>Quitter la partie de poker ?</h2>
           <p className="modal-intro">
-            {pokerExitMessage} Voulez-vous vraiment rejoindre le Blackjack ?
+            {pokerExitMessage} Voulez-vous vraiment rejoindre{" "}
+            {pokerExitDestination} ?
           </p>
           <div className="leave-poker-actions">
             <button
@@ -1439,7 +1470,10 @@ export function Casino() {
               className="button secondary"
               autoFocus
               disabled={leavingPoker}
-              onClick={() => setConfirmPokerLeave(false)}
+              onClick={() => {
+                setConfirmPokerLeave(false);
+                setPendingView(null);
+              }}
             >
               Rester au poker
             </button>
@@ -1453,7 +1487,8 @@ export function Casino() {
                 setLeavingPoker(false);
                 if (!left) return;
                 setConfirmPokerLeave(false);
-                setView("blackjack");
+                setView(pendingView ?? "blackjack");
+                setPendingView(null);
               }}
             >
               {leavingPoker ? (
@@ -1461,7 +1496,7 @@ export function Casino() {
               ) : (
                 <BlackjackIcon />
               )}
-              Quitter et jouer au Blackjack
+              Quitter et rejoindre {pokerExitDestination}
             </button>
           </div>
         </Modal>
@@ -1887,6 +1922,7 @@ function BlackjackCasino({
   }, [isFullscreen]);
   const goHome = useCallback(() => onNavigate("home"), [onNavigate]);
   const goBlackjack = useCallback(() => setModal(null), []);
+  const goMines = useCallback(() => onNavigate("mines"), [onNavigate]);
   const goPoker = useCallback(() => onNavigate("poker"), [onNavigate]);
   const goTower = useCallback(() => onNavigate("tower"), [onNavigate]);
   const openTables = useCallback(() => setModal("tables"), []);
@@ -1926,6 +1962,7 @@ function BlackjackCasino({
       <BlackjackSidebar
         onHome={goHome}
         onBlackjack={goBlackjack}
+        onMines={goMines}
         onPoker={goPoker}
         onTower={goTower}
         onTables={openTables}

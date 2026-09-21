@@ -5,9 +5,11 @@ import { Server } from "socket.io";
 import { Table, type Player } from "./engine";
 import { PokerManager } from "./poker";
 import { TowerManager } from "./tower";
+import { MinesGame } from "./mines";
 import type {
   Ack,
   Command,
+  MinesCommand,
   PokerCommand,
   Profile,
   TowerCommand,
@@ -49,6 +51,7 @@ const io = new Server(http, {
 });
 const tables = new Map<string, Table>();
 const profiles = new Map<string, Player>();
+const playersById = new Map<string, Player>();
 const playerSockets = new Map<string, Set<string>>();
 /** Connected players by id, for the wallet updates. */
 const online = new Map<string, Player>();
@@ -56,6 +59,20 @@ const online = new Map<string, Player>();
 const wallets = new Map<string, Wallet>();
 /** Sockets of each player currently showing the Tower. */
 const towerSockets = new Map<string, Set<string>>();
+const mines = new Map<string, MinesGame>();
+function publishMines(playerId: string) {
+  const snapshot = mines.get(playerId)?.snapshot() ?? null;
+  for (const socketId of playerSockets.get(playerId) ?? [])
+    io.to(socketId).emit("mines:state", snapshot);
+}
+function getMines(playerId: string) {
+  let game = mines.get(playerId);
+  if (!game) {
+    game = new MinesGame(() => publishMines(playerId));
+    mines.set(playerId, game);
+  }
+  return game;
+}
 const poker = new PokerManager((playerId, state) => {
   for (const socketId of playerSockets.get(playerId) ?? [])
     io.to(socketId).emit("poker:state", state);
@@ -196,6 +213,7 @@ io.on("connection", (socket) => {
             lastSeen: Date.now(),
           };
           profiles.set(profile.token, known);
+          playersById.set(known.id, known);
         }
         player = known;
         player.connected = true;
@@ -219,6 +237,7 @@ io.on("connection", (socket) => {
         syncWallets();
         if (wallet && wallets.get(player.id) === wallet)
           socket.emit("wallet", wallet);
+        publishMines(player.id);
       } catch (error) {
         replyError(ack, error);
       }
@@ -280,6 +299,20 @@ io.on("connection", (socket) => {
         throttle();
         if (!player) throw new Error("Vous n’êtes pas connecté au club.");
         tower.command(player, command);
+        syncWallets();
+        if (typeof ack === "function") ack({ ok: true });
+      } catch (error) {
+        replyError(ack, error);
+      }
+    },
+  );
+  socket.on(
+    "mines:command",
+    (command: MinesCommand, ack: (value: Ack) => void) => {
+      try {
+        throttle();
+        if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+        getMines(player.id).command(player, command);
         syncWallets();
         if (typeof ack === "function") ack({ ok: true });
       } catch (error) {
@@ -401,6 +434,8 @@ setInterval(() => {
       profiles.delete(token);
       tower.forget(player.id);
       wallets.delete(player.id);
+      playersById.delete(player.id);
+      mines.delete(player.id);
     }
 }, 100).unref();
 http.listen(port, hostname, () =>
