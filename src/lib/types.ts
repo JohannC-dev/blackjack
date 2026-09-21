@@ -229,6 +229,7 @@ export type MinesState = {
 export type MinesCommand =
   | { type: "start"; bet: number; target: number }
   | { type: "reveal"; index: number }
+  | { type: "playPattern"; bet: number; target: number; indexes: number[] }
   | { type: "cashout" };
 
 export type PokerCommand =
