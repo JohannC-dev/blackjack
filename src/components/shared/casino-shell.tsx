@@ -9,11 +9,13 @@ import {
   Settings2,
   Spade,
   Users,
+  Wallet,
 } from "lucide-react";
 import { memo, type ReactNode } from "react";
 import { credits } from "@/lib/rules";
 import type { CasinoView } from "@/lib/navigation";
 import { BlackjackIcon } from "./casino/blackjack-icon";
+import { MineBomb } from "./games/mine-art";
 
 type Navigate = (view: CasinoView) => void;
 
@@ -71,9 +73,7 @@ export const CasinoRail = memo(function CasinoRail({
         {item(
           "mines",
           "Jeu de la mine",
-          <span className="text-[21px] leading-none" aria-hidden="true">
-            ◆
-          </span>,
+          <MineBomb className="!static !h-[22px] !w-[22px]" />,
         )}
         {item("poker", "Poker", <Spade size={21} />)}
         {item("tower", "La Tower", <Castle size={21} />)}
@@ -151,46 +151,29 @@ export const ClubHeader = memo(function ClubHeader({
   href?: string;
 }) {
   const brand = (
-    <span className="text-2xl tracking-[-0.06em] text-[#f4f1fb] max-[700px]:text-[19px] max-[700px]:tracking-[-0.04em] max-[450px]:text-xl max-[450px]:tracking-[-0.05em]">
-      MINUIT<span className="text-[#b79afa]">●</span>
-    </span>
+    <>
+      MINUIT<span>&#9679;</span>
+    </>
   );
 
   return (
-    <header className="flex h-[83px] items-center gap-[25px] border-b border-white/[0.05] px-9 max-[700px]:h-[69px] max-[700px]:gap-[15px] max-[700px]:px-[19px] max-[450px]:h-16 max-[450px]:px-[17px]">
+    <header className="topbar">
       {href ? (
-        <a
-          className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b79afa]/60"
-          href={href}
-        >
+        <a className="wordmark" href={href}>
           {brand}
         </a>
       ) : (
-        brand
+        <span className="wordmark">{brand}</span>
       )}
-      <span
-        className="h-5 w-px bg-white/[0.08] max-[700px]:hidden"
-        aria-hidden="true"
-      />
-      <div className="ml-auto flex items-center gap-[25px] max-[700px]:gap-[13px] max-[450px]:gap-0">
-        <div className="wallet flex items-center gap-2 text-[#a49bad]">
-          <span className="grid h-7 w-7 place-items-center rounded-full border border-[#b79afa]/20 bg-[#b79afa]/[0.06]">
-            <Coins size={16} className="text-[#c9b2f7]" />
-          </span>
-          <b
-            key={balance}
-            className="text-sm font-semibold tabular-nums text-[#e6dff0]"
-          >
-            {credits(balance)}
-          </b>
-          <span className="text-[10px] uppercase tracking-[0.12em] text-[#777185] max-[450px]:inline">
-            crédits
-          </span>
+      <span className="topbar-divider" />
+      <div className="topbar-right">
+        <div className="wallet">
+          <Wallet size={17} />
+          <b key={balance}>{credits(balance)}</b>
+          <span>cr&#233;dits</span>
+          <Coins size={16} className="wallet-coin" />
         </div>
-        <div
-          className="grid h-9 w-9 place-items-center rounded-full border border-[#b79afa]/25 bg-[#b79afa]/10 text-sm font-semibold text-[#d7c4ff] max-[450px]:hidden"
-          title={name || "Votre profil"}
-        >
+        <div className="profile-avatar" title={name || "Votre profil"}>
           {(name || "M").slice(0, 1).toUpperCase()}
         </div>
       </div>
