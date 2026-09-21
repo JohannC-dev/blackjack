@@ -2,11 +2,9 @@ import type { TowerDifficulty } from "./types";
 
 export const TOWER_FLOORS = 10;
 /**
- * Share of each wager returned by the floor multipliers. Another 3 % goes to
- * the player's own Lucky pot, so the Tower returns 96 % in the long run.
+ * Share of each wager added to the player's own Lucky pot, on top of what the
+ * floor multipliers return.
  */
-export const TOWER_RTP = 0.93;
-/** Share of each wager added to the player's own Lucky pot. */
 export const TOWER_LUCKY_SHARE = 0.03;
 export const TOWER_MIN_BET = 5;
 export const TOWER_MAX_BET = 500;
@@ -32,24 +30,21 @@ export const TOWER_DIFFICULTIES: Record<
   impossible: { cols: 2, label: "Impossible" },
 };
 
-const MULTIPLIERS = Object.fromEntries(
-  TOWER_DIFFICULTY_ORDER.map((difficulty) => {
-    const cols = TOWER_DIFFICULTIES[difficulty].cols;
-    return [
-      difficulty,
-      Object.freeze(
-        Array.from(
-          { length: TOWER_FLOORS },
-          // The epsilon keeps exact halves such as 10.935 rounding up despite float error.
-          (_, index) =>
-            Math.round(
-              (cols / (cols - 1)) ** (index + 1) * TOWER_RTP * 100 + 1e-9,
-            ) / 100,
-        ),
-      ),
-    ];
-  }),
-) as Record<TowerDifficulty, readonly number[]>;
+/**
+ * The Tower of Chance tables of MONOPOLY Poker, cut to three significant
+ * digits like the game shows them. Normal, Difficile and Impossible are its
+ * Easy (4 cards), Medium (3) and Hard (2); the returned share slowly drops as
+ * the climb goes up. Values read in the game: Impossible floors 1-4,
+ * Difficile 1-4, Normal 1-4 and 7-9. The other floors follow the same
+ * curves. Facile (5 cards, absent from the game) returns even less, from
+ * 88 % down to 84 %.
+ */
+const MULTIPLIERS: Record<TowerDifficulty, readonly number[]> = {
+  easy: [1.1, 1.36, 1.7, 2.11, 2.63, 3.28, 4.08, 5.07, 6.31, 7.86],
+  normal: [1.2, 1.6, 2.12, 2.82, 3.74, 4.98, 6.63, 8.82, 11.7, 15.5],
+  hard: [1.37, 2.04, 3.05, 4.57, 6.83, 10.2, 15.2, 22.7, 34, 50.9],
+  impossible: [1.84, 3.67, 7.32, 14.6, 29.1, 58, 115, 231, 460, 919],
+};
 
 export function isTowerDifficulty(value: unknown): value is TowerDifficulty {
   return (
@@ -91,7 +86,6 @@ export function towerHeat(floor: number) {
 
 export function formatMultiplier(value: number) {
   return `×${new Intl.NumberFormat("fr-FR", {
-    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)}`;
 }

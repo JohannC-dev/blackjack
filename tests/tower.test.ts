@@ -10,7 +10,6 @@ import {
   TOWER_GOLD_FIRST_FLOOR,
   TOWER_GOLD_LAST_FLOOR,
   TOWER_LUCKY_SHARE,
-  TOWER_RTP,
   towerMultipliers,
   towerPayout,
 } from "../src/lib/tower";
@@ -63,35 +62,35 @@ let clock = 1_000_000;
 const tick = () => (clock += 1_000);
 
 describe("Tower multipliers", () => {
-  test("match the published table", () => {
-    expect(towerMultipliers("easy")).toEqual([
-      1.16, 1.45, 1.82, 2.27, 2.84, 3.55, 4.43, 5.54, 6.93, 8.66,
+  test("match the values read in MONOPOLY Poker", () => {
+    expect(towerMultipliers("impossible").slice(0, 4)).toEqual([
+      1.84, 3.67, 7.32, 14.6,
     ]);
-    expect(towerMultipliers("normal")).toEqual([
-      1.24, 1.65, 2.2, 2.94, 3.92, 5.23, 6.97, 9.29, 12.39, 16.51,
+    expect(towerMultipliers("hard").slice(0, 4)).toEqual([
+      1.37, 2.04, 3.05, 4.57,
     ]);
-    expect(towerMultipliers("hard")).toEqual([
-      1.4, 2.09, 3.14, 4.71, 7.06, 10.59, 15.89, 23.83, 35.75, 53.63,
-    ]);
-    expect(towerMultipliers("impossible")).toEqual([
-      1.86, 3.72, 7.44, 14.88, 29.76, 59.52, 119.04, 238.08, 476.16, 952.32,
-    ]);
+    expect(towerMultipliers("normal").slice(0, 4)).toEqual([1.2, 1.6, 2.12, 2.82]);
+    expect(towerMultipliers("normal").slice(6, 9)).toEqual([6.63, 8.82, 11.7]);
   });
 
-  test("return 96 % with the Lucky pot", () => {
-    // Every floor returns TOWER_RTP of the wager, whatever the cash-out floor.
+  test("return a bit less the higher the climb", () => {
     for (const [difficulty, cols] of [
       ["easy", 5],
       ["normal", 4],
       ["hard", 3],
       ["impossible", 2],
-    ] as const)
-      towerMultipliers(difficulty).forEach((multiplier, index) => {
-        const survival = ((cols - 1) / cols) ** (index + 1);
-        expect(Math.abs(survival * multiplier - TOWER_RTP)).toBeLessThan(0.004);
+    ] as const) {
+      const returned = towerMultipliers(difficulty).map(
+        (multiplier, index) => ((cols - 1) / cols) ** (index + 1) * multiplier,
+      );
+      expect(returned).toHaveLength(TOWER_FLOORS);
+      returned.forEach((share, index) => {
+        expect(share).toBeGreaterThan(0.84);
+        expect(share + TOWER_LUCKY_SHARE).toBeLessThan(0.96);
+        // Cutting to three digits can nudge a floor slightly above the previous one.
+        if (index) expect(share).toBeLessThan(returned[index - 1] + 0.005);
       });
-    // The pot only gives back the player's own share of the wagers.
-    expect(TOWER_RTP + TOWER_LUCKY_SHARE).toBeCloseTo(0.96, 5);
+    }
   });
 
   test("payouts round down to half credits", () => {
@@ -152,8 +151,8 @@ describe("Tower climb", () => {
     manager.command(me, { type: "cashout" }, tick());
     const run = sent.at(-1)!.run!;
     expect(run.status).toBe("cashed");
-    expect(run.payout).toBe(82.5);
-    expect(me.balance).toBe(10_000 - 50 + 82.5);
+    expect(run.payout).toBe(80);
+    expect(me.balance).toBe(10_000 - 50 + 80);
     expect(run.rows.every((row) => row.cells !== null)).toBe(true);
   });
 
@@ -188,8 +187,8 @@ describe("Tower climb", () => {
       manager.command(me, { type: "pick", column: 4 }, tick());
     const run = sent.at(-1)!.run!;
     expect(run.status).toBe("topped");
-    expect(run.payout).toBe(86.5);
-    expect(me.balance).toBe(10_000 - 10 + 86.5);
+    expect(run.payout).toBe(78.5);
+    expect(me.balance).toBe(10_000 - 10 + 78.5);
   });
 
   test("rejects invalid commands", () => {
@@ -309,7 +308,7 @@ describe("Lucky Tower", () => {
     expect(run.status).toBe("cashed");
     expect(run.floor).toBe(3);
     expect(run.payout).toBe(towerPayout(10, "easy", 3) + 300);
-    expect(me.balance).toBe(before + 18 + 300);
+    expect(me.balance).toBe(before + 17 + 300);
     expect(sent.at(-1)!.luckyPot).toBe(0);
     expect(run.rows[2].cells).toEqual(["trap", "gold", "safe", "safe", "safe"]);
     expect(run.rows[5].cells).toEqual(Array(5).fill("gold"));
@@ -375,7 +374,7 @@ describe("Tower test mode", () => {
     const run = sent.at(-1)!.run!;
     expect(run.lucky).toBe(false);
     expect(run.status).toBe("topped");
-    expect(run.payout).toBe(9_523);
+    expect(run.payout).toBe(9_190);
   });
 });
 
@@ -449,7 +448,7 @@ describe("Tower rooms", () => {
     );
     manager.leave(cashed, tick());
     manager.leave(refunded, tick());
-    expect(cashed.balance).toBe(10_000 - 100 + 124);
+    expect(cashed.balance).toBe(10_000 - 100 + 120);
     expect(refunded.balance).toBe(10_000);
     // A refunded wager feeds nothing: the pot cannot be farmed for free.
     expect(manager.state(cashed).luckyPot).toBe(3);
@@ -476,6 +475,6 @@ describe("Tower rooms", () => {
     expect(sent.at(-1)!.run?.status).toBe("playing");
     manager.leave(me, clock, { abandon: false });
     manager.tick(clock + TOWER_ABANDON_MS + 1);
-    expect(me.balance).toBe(10_000 - 100 + 124);
+    expect(me.balance).toBe(10_000 - 100 + 120);
   });
 });
