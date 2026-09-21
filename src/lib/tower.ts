@@ -1,17 +1,19 @@
 import type { TowerDifficulty } from "./types";
 
 export const TOWER_FLOORS = 10;
-/** Share of each wager returned by the floor multipliers. */
-export const TOWER_RTP = 0.96;
-/** Share of each wager added to the progressive jackpot. */
-export const TOWER_JACKPOT_RATE = 0.01;
-export const TOWER_JACKPOT_SEED = 10_000;
-export const TOWER_LUCKY_ODDS = 500;
+/**
+ * Share of each wager returned by the floor multipliers. Another 3 % goes to
+ * the player's own Lucky pot, so the Tower returns 96 % in the long run.
+ */
+export const TOWER_RTP = 0.93;
+/** Share of each wager added to the player's own Lucky pot. */
+export const TOWER_LUCKY_SHARE = 0.03;
 export const TOWER_MIN_BET = 5;
 export const TOWER_MAX_BET = 500;
 export const TOWER_BET_STEP = 5;
-/** Minimum Lucky Tower payout, as a multiple of the wager. */
-export const TOWER_LUCKY_FLOOR = 50;
+/** Rows, counted from 1, that may hide the golden card of a climb. */
+export const TOWER_GOLD_FIRST_FLOOR = 3;
+export const TOWER_GOLD_LAST_FLOOR = 6;
 
 export const TOWER_DIFFICULTY_ORDER: readonly TowerDifficulty[] = [
   "easy",
@@ -77,13 +79,9 @@ export function towerPayout(
   return halfCredit(bet * towerMultiplier(difficulty, floor));
 }
 
-export function towerLuckyPayout(bet: number, jackpot: number) {
-  return halfCredit(
-    Math.max(
-      bet * TOWER_LUCKY_FLOOR,
-      jackpot * Math.min(1, bet / TOWER_MAX_BET),
-    ),
-  );
+/** The part of a Lucky pot that can be paid out, in half credits. */
+export function towerLuckyPayout(pot: number) {
+  return halfCredit(pot);
 }
 
 /** Fire intensity from 0 (cold) to 1 (full blaze). */

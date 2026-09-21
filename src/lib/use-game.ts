@@ -12,6 +12,7 @@ import type {
   TowerClientState,
   TowerCommand,
   TowerPublicState,
+  Wallet,
 } from "./types";
 import { newToken } from "./identity";
 
@@ -23,7 +24,7 @@ export function useGame() {
   const [state, setState] = useState<TableState | null>(null);
   const [pokerState, setPokerState] = useState<PokerClientState | null>(null);
   const [towerState, setTowerState] = useState<TowerClientState | null>(null);
-  /** Shared wallet, taken from whichever game reported it last. */
+  /** Shared wallet: only the server's wallet event sets it, never a game snapshot. */
   const [balance, setBalance] = useState<number | null>(null);
   const [playerId, setPlayerId] = useState("");
   const [error, setError] = useState("");
@@ -33,6 +34,9 @@ export function useGame() {
   const idRef = useRef("");
   const roomRef = useRef("MINUIT");
   const storageWarned = useRef(false);
+  const walletSeq = useRef(0);
+  /** Whether the Tower view is open, so a reconnection re-enters its room. */
+  const towerOpen = useRef(false);
 
   const save = useCallback((p: Profile) => {
     profileRef.current = p;
@@ -85,6 +89,7 @@ export function useGame() {
     });
     socketRef.current = socket;
     socket.on("connect", () => {
+      walletSeq.current = 0;
       socket
         .timeout(8000)
         .emit(
@@ -103,6 +108,7 @@ export function useGame() {
             idRef.current = ack.playerId!;
             setPlayerId(ack.playerId!);
             setConnected(true);
+            if (towerOpen.current) socket.emit("tower:join");
           },
         );
     });
@@ -110,26 +116,26 @@ export function useGame() {
       if (!snapshot) return;
       setState(snapshot);
       const me = snapshot.players.find((p) => p.id === idRef.current);
-      if (me) setBalance(me.balance);
-      if (me && profileRef.current)
-        save({ ...profileRef.current, name: me.name, balance: me.balance });
+      if (me && profileRef.current && me.name !== profileRef.current.name)
+        save({ ...profileRef.current, name: me.name });
+    });
+    socket.on("wallet", (wallet: Wallet) => {
+      if (!wallet || wallet.seq <= walletSeq.current) return;
+      walletSeq.current = wallet.seq;
+      setBalance(wallet.balance);
+      if (profileRef.current)
+        save({ ...profileRef.current, balance: wallet.balance });
     });
     socket.on("poker:state", (snapshot: PokerClientState) => {
       if (!snapshot) return;
       setPokerState(snapshot);
-      setBalance(snapshot.balance);
-      if (profileRef.current)
-        save({ ...profileRef.current, balance: snapshot.balance });
     });
     socket.on("tower:state", (snapshot: TowerClientState) => {
-      if (!snapshot) return;
+      if (!snapshot || !towerOpen.current) return;
       setTowerState(snapshot);
-      setBalance(snapshot.balance);
-      if (profileRef.current)
-        save({ ...profileRef.current, balance: snapshot.balance });
     });
     socket.on("tower:feed", (snapshot: TowerPublicState) => {
-      if (!snapshot) return;
+      if (!snapshot || !towerOpen.current) return;
       setTowerState((current) =>
         current ? { ...current, ...snapshot } : current,
       );
@@ -228,6 +234,18 @@ export function useGame() {
         });
     });
   }, []);
+  /** Opens the Tower: joins a room and restores the climb in progress. */
+  const enterTower = useCallback(() => {
+    towerOpen.current = true;
+    const socket = socketRef.current;
+    if (socket?.connected && idRef.current) socket.emit("tower:join");
+  }, []);
+  /** Closes the Tower: the server settles any climb in progress. */
+  const leaveTower = useCallback(() => {
+    towerOpen.current = false;
+    setTowerState(null);
+    socketRef.current?.emit("tower:leave");
+  }, []);
   const changeTable = (tableId: string) => {
     const socket = socketRef.current;
     if (!socket?.connected) {
@@ -272,6 +290,8 @@ export function useGame() {
     joinBlackjack,
     pokerCommand,
     towerCommand,
+    enterTower,
+    leaveTower,
     changeTable,
   };
 }

@@ -2,12 +2,15 @@ import { describe, expect, test } from "bun:test";
 import {
   TOWER_ABANDON_MS,
   TOWER_GHOST_LINGER_MS,
+  TOWER_ROOM_SIZE,
   TowerManager,
 } from "../server/tower";
 import {
   TOWER_FLOORS,
-  TOWER_JACKPOT_SEED,
-  towerLuckyPayout,
+  TOWER_GOLD_FIRST_FLOOR,
+  TOWER_GOLD_LAST_FLOOR,
+  TOWER_LUCKY_SHARE,
+  TOWER_RTP,
   towerMultipliers,
   towerPayout,
 } from "../src/lib/tower";
@@ -25,16 +28,35 @@ const player = (id: string, balance = 10_000): Player => ({
   lastSeen: Date.now(),
 });
 
-/** A manager whose randomness is scripted: `lucky` decides the Lucky roll, traps always sit in `trapColumn`. */
-function setup({ lucky = false, trapColumn = 0 } = {}) {
+/**
+ * A manager whose randomness is scripted: traps always sit in `trapColumn`,
+ * and with `gold` the golden card sits on row 3, right after the trap.
+ */
+function setup({ gold = false, trapColumn = 0, noTraps = false } = {}) {
   const sent: TowerClientState[] = [];
-  const broadcasts: TowerPublicState[] = [];
+  const broadcasts: { roomId: string; state: TowerPublicState }[] = [];
   const manager = new TowerManager(
     (_, state) => sent.push(state),
-    (state) => broadcasts.push(state),
-    (max) => (max === 500 ? (lucky ? 0 : 1) : trapColumn % max),
+    (roomId, state) => broadcasts.push({ roomId, state }),
+    (max) =>
+      max === 10_000
+        ? gold
+          ? 0
+          : max - 1
+        : max === 4 && gold
+          ? 0
+          : trapColumn % max,
+    noTraps,
   );
-  return { manager, sent, broadcasts };
+  /** A player already inside the Tower. */
+  const climber = (id: string, balance?: number) => {
+    const entry = player(id, balance);
+    manager.enter(entry);
+    return entry;
+  };
+  const lastIn = (roomId: string) =>
+    broadcasts.findLast((item) => item.roomId === roomId)!.state;
+  return { manager, sent, broadcasts, climber, lastIn };
 }
 
 let clock = 1_000_000;
@@ -43,37 +65,52 @@ const tick = () => (clock += 1_000);
 describe("Tower multipliers", () => {
   test("match the published table", () => {
     expect(towerMultipliers("easy")).toEqual([
-      1.2, 1.5, 1.88, 2.34, 2.93, 3.66, 4.58, 5.72, 7.15, 8.94,
+      1.16, 1.45, 1.82, 2.27, 2.84, 3.55, 4.43, 5.54, 6.93, 8.66,
     ]);
     expect(towerMultipliers("normal")).toEqual([
-      1.28, 1.71, 2.28, 3.03, 4.05, 5.39, 7.19, 9.59, 12.79, 17.05,
+      1.24, 1.65, 2.2, 2.94, 3.92, 5.23, 6.97, 9.29, 12.39, 16.51,
     ]);
     expect(towerMultipliers("hard")).toEqual([
-      1.44, 2.16, 3.24, 4.86, 7.29, 10.94, 16.4, 24.6, 36.91, 55.36,
+      1.4, 2.09, 3.14, 4.71, 7.06, 10.59, 15.89, 23.83, 35.75, 53.63,
     ]);
     expect(towerMultipliers("impossible")).toEqual([
-      1.92, 3.84, 7.68, 15.36, 30.72, 61.44, 122.88, 245.76, 491.52, 983.04,
+      1.86, 3.72, 7.44, 14.88, 29.76, 59.52, 119.04, 238.08, 476.16, 952.32,
     ]);
   });
 
+  test("return 96 % with the Lucky pot", () => {
+    // Every floor returns TOWER_RTP of the wager, whatever the cash-out floor.
+    for (const [difficulty, cols] of [
+      ["easy", 5],
+      ["normal", 4],
+      ["hard", 3],
+      ["impossible", 2],
+    ] as const)
+      towerMultipliers(difficulty).forEach((multiplier, index) => {
+        const survival = ((cols - 1) / cols) ** (index + 1);
+        expect(Math.abs(survival * multiplier - TOWER_RTP)).toBeLessThan(0.004);
+      });
+    // The pot only gives back the player's own share of the wagers.
+    expect(TOWER_RTP + TOWER_LUCKY_SHARE).toBeCloseTo(0.96, 5);
+  });
+
   test("payouts round down to half credits", () => {
-    expect(towerPayout(5, "easy", 1)).toBe(6);
-    expect(towerPayout(5, "normal", 2)).toBe(8.5);
+    expect(towerPayout(5, "easy", 1)).toBe(5.5);
+    expect(towerPayout(5, "normal", 2)).toBe(8);
     expect(towerPayout(25, "hard", 0)).toBe(0);
   });
 });
 
 describe("Tower climb", () => {
-  test("debits the wager, feeds the jackpot and hides the traps", () => {
-    const { manager, sent } = setup({ trapColumn: 2 });
-    const me = player("1");
+  test("debits the wager and hides the traps", () => {
+    const { manager, sent, climber } = setup({ trapColumn: 2 });
+    const me = climber("1");
     manager.command(
       me,
       { type: "start", difficulty: "hard", bet: 100 },
       tick(),
     );
     expect(me.balance).toBe(9_900);
-    expect(manager.jackpot).toBe(TOWER_JACKPOT_SEED + 1);
     const state = sent.at(-1)!;
     expect(state.run?.cols).toBe(3);
     expect(state.run?.rows.every((row) => row.cells === null)).toBe(true);
@@ -87,6 +124,7 @@ describe("Tower climb", () => {
       () => {},
     );
     const me = player("1");
+    manager.enter(me);
     manager.command(me, { type: "start", difficulty: "easy", bet: 5 }, tick());
     const traps = manager.trapsOf(me.id)!;
     expect(traps).toHaveLength(TOWER_FLOORS);
@@ -98,8 +136,8 @@ describe("Tower climb", () => {
   });
 
   test("safe picks climb and cashing out pays the floor multiplier", () => {
-    const { manager, sent } = setup({ trapColumn: 0 });
-    const me = player("1");
+    const { manager, sent, climber } = setup({ trapColumn: 0 });
+    const me = climber("1");
     manager.command(
       me,
       { type: "start", difficulty: "normal", bet: 50 },
@@ -114,15 +152,14 @@ describe("Tower climb", () => {
     manager.command(me, { type: "cashout" }, tick());
     const run = sent.at(-1)!.run!;
     expect(run.status).toBe("cashed");
-    expect(run.payout).toBe(85.5);
-    expect(me.balance).toBe(10_000 - 50 + 85.5);
+    expect(run.payout).toBe(82.5);
+    expect(me.balance).toBe(10_000 - 50 + 82.5);
     expect(run.rows.every((row) => row.cells !== null)).toBe(true);
-    expect(sent.at(-1)!.history[0]).toMatchObject({ floor: 2, payout: 85.5 });
   });
 
   test("a trap loses the wager and reveals the whole tower", () => {
-    const { manager, sent, broadcasts } = setup({ trapColumn: 1 });
-    const me = player("1");
+    const { manager, sent, climber, lastIn } = setup({ trapColumn: 1 });
+    const me = climber("1");
     manager.command(
       me,
       { type: "start", difficulty: "impossible", bet: 20 },
@@ -136,7 +173,7 @@ describe("Tower climb", () => {
     expect(run.payout).toBe(0);
     expect(me.balance).toBe(9_980);
     expect(run.rows.every((row) => row.cells !== null)).toBe(true);
-    expect(broadcasts.at(-1)!.feed[0]).toMatchObject({
+    expect(lastIn(manager.roomIdOf(me.id)!).feed[0]).toMatchObject({
       status: "lost",
       floor: 1,
       name: "Joueur 1",
@@ -144,20 +181,28 @@ describe("Tower climb", () => {
   });
 
   test("the tenth floor is cashed automatically", () => {
-    const { manager, sent } = setup({ trapColumn: 0 });
-    const me = player("1");
+    const { manager, sent, climber } = setup({ trapColumn: 0 });
+    const me = climber("1");
     manager.command(me, { type: "start", difficulty: "easy", bet: 10 }, tick());
     for (let floor = 0; floor < TOWER_FLOORS; floor++)
       manager.command(me, { type: "pick", column: 4 }, tick());
     const run = sent.at(-1)!.run!;
     expect(run.status).toBe("topped");
-    expect(run.payout).toBe(89);
-    expect(me.balance).toBe(10_000 - 10 + 89);
+    expect(run.payout).toBe(86.5);
+    expect(me.balance).toBe(10_000 - 10 + 86.5);
   });
 
   test("rejects invalid commands", () => {
-    const { manager } = setup();
-    const me = player("1", 30);
+    const { manager, climber } = setup();
+    const outside = player("9");
+    expect(() =>
+      manager.command(
+        outside,
+        { type: "start", difficulty: "easy", bet: 5 },
+        tick(),
+      ),
+    ).toThrow("Ouvrez la Tower");
+    const me = climber("1", 30);
     const start = (bet: number, difficulty = "normal") =>
       manager.command(
         me,
@@ -189,57 +234,137 @@ describe("Tower climb", () => {
 });
 
 describe("Lucky Tower", () => {
-  test("has no traps and pays the jackpot share at the top", () => {
-    const { manager, sent } = setup({ lucky: true });
-    const me = player("1");
-    manager.jackpot = 40_000;
-    manager.command(
-      me,
-      { type: "start", difficulty: "impossible", bet: 250 },
-      tick(),
-    );
-    const jackpot = manager.jackpot;
-    expect(sent.at(-1)!.run!.lucky).toBe(true);
-    expect(() => manager.command(me, { type: "cashout" }, tick())).toThrow(
-      "Lucky",
-    );
-    for (let floor = 0; floor < TOWER_FLOORS; floor++)
-      manager.command(me, { type: "pick", column: floor % 2 }, tick());
-    const run = sent.at(-1)!.run!;
-    expect(run.status).toBe("topped");
-    expect(run.rows.flatMap((row) => row.cells)).not.toContain("trap");
-    expect(run.rows[0].cells).toEqual(["gold", "gold"]);
-    expect(run.payout).toBe(towerLuckyPayout(250, jackpot));
-    expect(run.payout).toBe(Math.floor((jackpot / 2) * 2) / 2);
-    expect(manager.jackpot).toBe(jackpot - run.payout);
+  test("a hidden golden card sits on rows 3 to 6, never on the trap", () => {
+    const { manager, sent, climber } = setup({ gold: true, trapColumn: 0 });
+    const me = climber("1");
+    manager.command(me, { type: "start", difficulty: "easy", bet: 10 }, tick());
+    expect(manager.goldOf(me.id)).toEqual({ floor: 2, column: 1 });
+    expect(JSON.stringify(sent.at(-1))).not.toContain("gold");
+    for (let draw = 0; draw < 200; draw++) {
+      const manager = new TowerManager(
+        () => {},
+        () => {},
+        (max) => (max === 10_000 ? 0 : Math.floor(Math.random() * max)),
+      );
+      const other = player("2");
+      manager.enter(other);
+      manager.command(
+        other,
+        { type: "start", difficulty: "hard", bet: 5 },
+        tick(),
+      );
+      const gold = manager.goldOf(other.id)!;
+      expect(gold.floor).toBeGreaterThanOrEqual(TOWER_GOLD_FIRST_FLOOR - 1);
+      expect(gold.floor).toBeLessThanOrEqual(TOWER_GOLD_LAST_FLOOR - 1);
+      expect(gold.column).not.toBe(manager.trapsOf(other.id)![gold.floor]);
+      expect(gold.column).toBeLessThan(3);
+    }
   });
 
-  test("never drains the jackpot below its seed and pays at least 50×", () => {
-    const { manager } = setup({ lucky: true });
-    const me = player("1");
+  test("the pot grows by 3 % of each of the player's own wagers", () => {
+    const { manager, sent, climber } = setup({ trapColumn: 0 });
+    const me = climber("1");
+    const other = climber("2");
     manager.command(
       me,
+      { type: "start", difficulty: "easy", bet: 100 },
+      tick(),
+    );
+    manager.command(me, { type: "pick", column: 0 }, tick());
+    manager.command(me, { type: "start", difficulty: "easy", bet: 50 }, tick());
+    expect(sent.at(-1)!.luckyPot).toBe(4.5);
+    manager.command(
+      other,
       { type: "start", difficulty: "easy", bet: 500 },
       tick(),
     );
-    for (let floor = 0; floor < TOWER_FLOORS; floor++)
+    expect(manager.state(me).luckyPot).toBe(4.5);
+    expect(manager.state(other).luckyPot).toBe(15);
+  });
+
+  test("the golden card cashes the floor and pays the pot, the rest is only a show", () => {
+    const { manager, sent, climber, lastIn } = setup({
+      gold: true,
+      trapColumn: 0,
+    });
+    const me = climber("1", 20_000);
+    // Charge the pot: 20 climbs of 500 lost on the first card = 300 credits.
+    for (let climb = 0; climb < 20; climb++) {
+      manager.command(
+        me,
+        { type: "start", difficulty: "easy", bet: 500 },
+        tick(),
+      );
       manager.command(me, { type: "pick", column: 0 }, tick());
-    expect(manager.jackpot).toBe(TOWER_JACKPOT_SEED);
-    expect(towerLuckyPayout(5, TOWER_JACKPOT_SEED)).toBe(250);
+    }
+    manager.command(me, { type: "start", difficulty: "easy", bet: 10 }, tick());
+    expect(sent.at(-1)!.luckyPot).toBe(300);
+    const before = me.balance;
+    manager.command(me, { type: "pick", column: 1 }, tick());
+    manager.command(me, { type: "pick", column: 1 }, tick());
+    expect(sent.at(-1)!.run!.lucky).toBe(false);
+    manager.command(me, { type: "pick", column: 1 }, tick());
+    const run = sent.at(-1)!.run!;
+    expect(run.lucky).toBe(true);
+    expect(run.status).toBe("cashed");
+    expect(run.floor).toBe(3);
+    expect(run.payout).toBe(towerPayout(10, "easy", 3) + 300);
+    expect(me.balance).toBe(before + 18 + 300);
+    expect(sent.at(-1)!.luckyPot).toBe(0);
+    expect(run.rows[2].cells).toEqual(["trap", "gold", "safe", "safe", "safe"]);
+    expect(run.rows[5].cells).toEqual(Array(5).fill("gold"));
+    expect(lastIn(manager.roomIdOf(me.id)!).ghosts[0].lucky).toBe(true);
+  });
+
+  test("a golden card left behind is revealed with its row", () => {
+    const { manager, sent, climber } = setup({ gold: true, trapColumn: 0 });
+    const me = climber("1");
+    manager.command(me, { type: "start", difficulty: "easy", bet: 10 }, tick());
+    for (let floor = 0; floor < 3; floor++)
+      manager.command(me, { type: "pick", column: 2 }, tick());
+    const run = sent.at(-1)!.run!;
+    expect(run.lucky).toBe(false);
+    expect(run.status).toBe("playing");
+    expect(run.rows[2].cells![1]).toBe("gold");
+    expect(run.rows[3].cells).toBeNull();
+  });
+
+  test("about one climb in 500 triggers it when picking at random", () => {
+    for (const [difficulty, cols] of [
+      ["easy", 5],
+      ["normal", 4],
+      ["hard", 3],
+      ["impossible", 2],
+    ] as const) {
+      const manager = new TowerManager(
+        () => {},
+        () => {},
+      );
+      const me = player("1", 1_000_000);
+      manager.enter(me);
+      const starts = 40_000;
+      const floors = new Map<number, number>();
+      for (let start = 0; start < starts; start++) {
+        manager.command(me, { type: "start", difficulty, bet: 5 }, 0);
+        const gold = manager.goldOf(me.id);
+        if (gold) floors.set(gold.floor, (floors.get(gold.floor) ?? 0) + 1);
+        manager.leave(me, 0);
+        manager.enter(me);
+      }
+      // Reaching row f takes f safe cards, then the golden one is 1 card in cols.
+      let triggered = 0;
+      for (const [floor, count] of floors)
+        triggered += ((count / starts) * ((cols - 1) / cols) ** floor) / cols;
+      expect(triggered).toBeGreaterThan(1 / 650);
+      expect(triggered).toBeLessThan(1 / 380);
+    }
   });
 });
 
 describe("Tower test mode", () => {
   test("without traps, an ordinary climb always reaches the top", () => {
-    const sent: TowerClientState[] = [];
-    const manager = new TowerManager(
-      (_, state) => sent.push(state),
-      () => {},
-      (max) => (max === 500 ? 1 : 0),
-      500,
-      true,
-    );
-    const me = player("1");
+    const { manager, sent, climber } = setup({ noTraps: true });
+    const me = climber("1");
     manager.command(
       me,
       { type: "start", difficulty: "impossible", bet: 10 },
@@ -250,17 +375,17 @@ describe("Tower test mode", () => {
     const run = sent.at(-1)!.run!;
     expect(run.lucky).toBe(false);
     expect(run.status).toBe("topped");
-    expect(run.payout).toBe(9_830);
+    expect(run.payout).toBe(9_523);
   });
 });
 
-describe("Tower ghosts and upkeep", () => {
+describe("Tower rooms", () => {
   test("other players see floors and status, never trap positions", () => {
-    const { manager, broadcasts } = setup({ trapColumn: 2 });
-    const me = player("1");
+    const { manager, climber, lastIn } = setup({ trapColumn: 2 });
+    const me = climber("1");
     manager.command(me, { type: "start", difficulty: "hard", bet: 5 }, tick());
     manager.command(me, { type: "pick", column: 0 }, tick());
-    const ghost = broadcasts.at(-1)!.ghosts[0];
+    const ghost = lastIn(manager.roomIdOf(me.id)!).ghosts[0];
     expect(ghost).toEqual({
       id: ghost.id,
       playerId: "1",
@@ -274,37 +399,80 @@ describe("Tower ghosts and upkeep", () => {
     });
   });
 
-  test("finished climbs linger briefly as ghosts", () => {
-    const { manager, broadcasts } = setup({ trapColumn: 0 });
-    const me = player("1");
-    manager.command(me, { type: "start", difficulty: "hard", bet: 5 }, tick());
-    manager.command(me, { type: "pick", column: 0 }, tick());
-    expect(broadcasts.at(-1)!.ghosts[0].status).toBe("lost");
-    manager.tick(clock + TOWER_GHOST_LINGER_MS + 1);
-    expect(broadcasts.at(-1)!.ghosts).toHaveLength(0);
+  test("public updates stay inside a room", () => {
+    const { manager, climber, broadcasts } = setup({ trapColumn: 0 });
+    const first = Array.from({ length: TOWER_ROOM_SIZE }, (_, index) =>
+      climber(`a${index}`),
+    );
+    const late = climber("b");
+    const roomA = manager.roomIdOf(first[0].id)!;
+    const roomB = manager.roomIdOf(late.id)!;
+    expect(first.every((entry) => manager.roomIdOf(entry.id) === roomA)).toBe(
+      true,
+    );
+    expect(roomB).not.toBe(roomA);
+    broadcasts.length = 0;
+    manager.command(
+      first[0],
+      { type: "start", difficulty: "easy", bet: 5 },
+      tick(),
+    );
+    expect(broadcasts.map((item) => item.roomId)).toEqual([roomA]);
+    expect(manager.state(late).ghosts).toEqual([]);
   });
 
-  test("an abandoned climb is cashed out, or refunded before the first floor", () => {
-    const { manager } = setup({ trapColumn: 0 });
-    const climber = player("1");
-    const idle = player("2");
+  test("finished climbs linger briefly as ghosts", () => {
+    const { manager, climber, lastIn } = setup({ trapColumn: 0 });
+    const me = climber("1");
+    const roomId = manager.roomIdOf(me.id)!;
+    manager.command(me, { type: "start", difficulty: "hard", bet: 5 }, tick());
+    manager.command(me, { type: "pick", column: 0 }, tick());
+    expect(lastIn(roomId).ghosts[0].status).toBe("lost");
+    manager.tick(clock + TOWER_GHOST_LINGER_MS + 1);
+    expect(lastIn(roomId).ghosts).toHaveLength(0);
+  });
+
+  test("leaving the Tower cashes out, or refunds before the first floor", () => {
+    const { manager, sent, climber } = setup({ trapColumn: 0 });
+    const cashed = climber("1");
+    const refunded = climber("2");
     manager.command(
-      climber,
+      cashed,
       { type: "start", difficulty: "normal", bet: 100 },
       tick(),
     );
-    manager.command(climber, { type: "pick", column: 1 }, tick());
+    manager.command(cashed, { type: "pick", column: 1 }, tick());
     manager.command(
-      idle,
+      refunded,
       { type: "start", difficulty: "normal", bet: 100 },
       tick(),
     );
-    for (const entry of [climber, idle]) {
-      entry.connected = false;
-      entry.lastSeen = clock;
-    }
+    manager.leave(cashed, tick());
+    manager.leave(refunded, tick());
+    expect(cashed.balance).toBe(10_000 - 100 + 124);
+    expect(refunded.balance).toBe(10_000);
+    expect(manager.roomIdOf(cashed.id)).toBeUndefined();
+    // Nothing of the settled climb comes back with the player.
+    manager.enter(cashed);
+    expect(sent.at(-1)!.run).toBeNull();
+  });
+
+  test("a lost connection keeps the climb until the abandon delay", () => {
+    const { manager, sent, climber } = setup({ trapColumn: 0 });
+    const me = climber("1");
+    manager.command(
+      me,
+      { type: "start", difficulty: "normal", bet: 100 },
+      tick(),
+    );
+    manager.command(me, { type: "pick", column: 1 }, tick());
+    manager.leave(me, clock, { abandon: false });
+    manager.tick(clock + TOWER_ABANDON_MS - 1);
+    expect(me.balance).toBe(9_900);
+    manager.enter(me);
+    expect(sent.at(-1)!.run?.status).toBe("playing");
+    manager.leave(me, clock, { abandon: false });
     manager.tick(clock + TOWER_ABANDON_MS + 1);
-    expect(climber.balance).toBe(10_000 - 100 + 128);
-    expect(idle.balance).toBe(10_000);
+    expect(me.balance).toBe(10_000 - 100 + 124);
   });
 });

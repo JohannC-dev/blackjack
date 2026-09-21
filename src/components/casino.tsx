@@ -1504,7 +1504,7 @@ function BlackjackCasino({
   const me = state?.players.find((p) => p.id === playerId);
   const ownSeats = state?.seats.filter((s) => s.playerId === playerId) ?? [];
   const seat = ownSeats.find((s) => s.index === selectedSeat) ?? ownSeats[0];
-  const balance = me?.balance ?? profile?.balance ?? 2000;
+  const balance = game.balance ?? me?.balance ?? profile?.balance ?? 2000;
   const betting = !state || state.phase === "betting";
   const canChangeTable = betting || ownSeats.length === 0;
   const totalBet = ownSeats.reduce((sum, s) => sum + betTotal(s.bet), 0);

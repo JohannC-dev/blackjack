@@ -5,13 +5,13 @@ import { Server } from "socket.io";
 import { Table, type Player } from "./engine";
 import { PokerManager } from "./poker";
 import { TowerManager } from "./tower";
-import { TOWER_LUCKY_ODDS } from "../src/lib/tower";
 import type {
   Ack,
   Command,
   PokerCommand,
   Profile,
   TowerCommand,
+  Wallet,
 } from "../src/lib/types";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -45,23 +45,24 @@ const io = new Server(http, {
 const tables = new Map<string, Table>();
 const profiles = new Map<string, Player>();
 const playerSockets = new Map<string, Set<string>>();
+/** Connected players by id, for the wallet updates. */
+const online = new Map<string, Player>();
+/** Last wallet pushed to each connected player. */
+const wallets = new Map<string, Wallet>();
+/** Sockets of each player currently showing the Tower. */
+const towerSockets = new Map<string, Set<string>>();
 const poker = new PokerManager((playerId, state) => {
   for (const socketId of playerSockets.get(playerId) ?? [])
     io.to(socketId).emit("poker:state", state);
 });
-const TOWER_ROOM = "tower:club";
 const tower = new TowerManager(
   (playerId, state) => {
-    for (const socketId of playerSockets.get(playerId) ?? [])
+    for (const socketId of towerSockets.get(playerId) ?? [])
       io.to(socketId).emit("tower:state", state);
   },
-  (state) => io.to(TOWER_ROOM).emit("tower:feed", state),
+  // Public updates only reach the climbers sharing the room.
+  (roomId, state) => io.to(roomId).emit("tower:feed", state),
   undefined,
-  // Lets a developer force a Lucky Tower, e.g. TOWER_LUCKY_ODDS=1 bun run dev.
-  Math.max(
-    1,
-    Math.floor(Number(process.env.TOWER_LUCKY_ODDS)) || TOWER_LUCKY_ODDS,
-  ),
   // Development only: TOWER_NO_TRAPS=1 bun run dev reaches the top every time.
   dev && process.env.TOWER_NO_TRAPS === "1",
 );
@@ -79,6 +80,31 @@ function getTable(id: string) {
     tables.set(id, table);
   }
   return table;
+}
+/**
+ * The balance is shared by the three games but only the wallet event carries
+ * it to the client. It is pushed after every command and every tick, from the
+ * server's current value, so snapshots of different games can no longer
+ * overwrite each other with an older balance.
+ */
+function syncWallets() {
+  for (const [playerId, player] of online) {
+    const wallet = wallets.get(playerId);
+    if (wallet?.balance === player.balance) continue;
+    const next = { balance: player.balance, seq: (wallet?.seq ?? 0) + 1 };
+    wallets.set(playerId, next);
+    for (const socketId of playerSockets.get(playerId) ?? [])
+      io.to(socketId).emit("wallet", next);
+  }
+}
+function leaveTower(socketId: string, player: Player, abandon: boolean) {
+  const sockets = towerSockets.get(player.id);
+  if (!sockets?.delete(socketId)) return;
+  const roomId = tower.roomIdOf(player.id);
+  if (roomId) io.in(socketId).socketsLeave(roomId);
+  if (sockets.size) return;
+  towerSockets.delete(player.id);
+  tower.leave(player, Date.now(), { abandon });
 }
 function replyError(ack: unknown, error: unknown) {
   if (typeof ack === "function")
@@ -171,6 +197,7 @@ io.on("connection", (socket) => {
         const connections = playerSockets.get(player.id) ?? new Set();
         connections.add(socket.id);
         playerSockets.set(player.id, connections);
+        online.set(player.id, player);
         socket.join(data.tableId);
         if (typeof ack === "function")
           ack({ ok: true, playerId: player.id, tableId: data.tableId });
@@ -179,8 +206,12 @@ io.on("connection", (socket) => {
         // seat below.
         table.observe(player);
         poker.connect(player);
-        socket.join(TOWER_ROOM);
-        tower.connect(player);
+        // A new or changed wallet reaches every socket of the player; an
+        // unchanged one is only resent to this new connection.
+        const wallet = wallets.get(player.id);
+        syncWallets();
+        if (wallet && wallets.get(player.id) === wallet)
+          socket.emit("wallet", wallet);
       } catch (error) {
         replyError(ack, error);
       }
@@ -212,6 +243,7 @@ io.on("connection", (socket) => {
       )
         blackjackTable.add(player);
       blackjackTable.command(blackjackPlayerId, command);
+      syncWallets();
       if (typeof ack === "function") ack({ ok: true });
     } catch (error) {
       replyError(ack, error);
@@ -227,6 +259,7 @@ io.on("connection", (socket) => {
         const blackjackTable = tables.get(player.roomId);
         if (blackjackTable)
           io.to(player.roomId).emit("state", blackjackTable.snapshot());
+        syncWallets();
         if (typeof ack === "function") ack({ ok: true });
       } catch (error) {
         replyError(ack, error);
@@ -240,24 +273,48 @@ io.on("connection", (socket) => {
         throttle();
         if (!player) throw new Error("Vous n’êtes pas connecté au club.");
         tower.command(player, command);
-        // The wallet is shared: refresh the other games' views of the balance.
-        for (const socketId of playerSockets.get(player.id) ?? [])
-          io.to(socketId).emit("poker:state", poker.state(player));
-        const blackjackTable = tables.get(player.roomId);
-        if (blackjackTable)
-          io.to(player.roomId).emit("state", blackjackTable.snapshot());
+        syncWallets();
         if (typeof ack === "function") ack({ ok: true });
       } catch (error) {
         replyError(ack, error);
       }
     },
   );
+  socket.on("tower:join", (ack: (value: Ack) => void) => {
+    try {
+      throttle();
+      if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+      const sockets = towerSockets.get(player.id) ?? new Set();
+      sockets.add(socket.id);
+      towerSockets.set(player.id, sockets);
+      socket.join(tower.enter(player));
+      if (typeof ack === "function") ack({ ok: true });
+    } catch (error) {
+      replyError(ack, error);
+    }
+  });
+  // Leaving the Tower view settles the climb: nothing stays at risk while the
+  // player is in another game.
+  socket.on("tower:leave", (ack: (value: Ack) => void) => {
+    try {
+      throttle();
+      if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+      leaveTower(socket.id, player, true);
+      syncWallets();
+      if (typeof ack === "function") ack({ ok: true });
+    } catch (error) {
+      replyError(ack, error);
+    }
+  });
   socket.on("disconnect", () => {
     if (!player) return;
+    // A dropped connection keeps the climb for a while so a reload resumes it.
+    leaveTower(socket.id, player, false);
     const connections = playerSockets.get(player.id);
     connections?.delete(socket.id);
     if (!connections?.size) {
       playerSockets.delete(player.id);
+      online.delete(player.id);
       player.connected = false;
       player.lastSeen = Date.now();
       poker.disconnect(player);
@@ -276,9 +333,13 @@ setInterval(() => {
   }
   poker.tick(now);
   tower.tick(now);
+  syncWallets();
   for (const [token, player] of profiles)
-    if (!player.connected && now - player.lastSeen > 24 * 60 * 60_000)
+    if (!player.connected && now - player.lastSeen > 24 * 60 * 60_000) {
       profiles.delete(token);
+      tower.forget(player.id);
+      wallets.delete(player.id);
+    }
 }, 100).unref();
 http.listen(port, hostname, () =>
   console.log(

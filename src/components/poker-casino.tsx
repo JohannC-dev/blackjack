@@ -265,10 +265,7 @@ export function CasinoHome({
             >
               <div className="poster-index">03</div>
               <div className="poster-art tower-art">
-                <TowerPosterArt
-                  hot={towerHot}
-                  jackpot={game.towerState?.jackpot}
-                />
+                <TowerPosterArt hot={towerHot} />
               </div>
               <div className="poster-copy">
                 <span>NOUVEAU · SOLO & LIVE</span>

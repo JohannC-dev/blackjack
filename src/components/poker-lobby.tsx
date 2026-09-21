@@ -66,7 +66,8 @@ export function PokerLobby({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const submitting = useRef(false);
   const cashButtonRef = useRef<HTMLButtonElement>(null);
-  const balance = game.pokerState?.balance ?? game.profile?.balance ?? 0;
+  const balance =
+    game.balance ?? game.pokerState?.balance ?? game.profile?.balance ?? 0;
   const busy = game.pending || joining !== null;
 
   useEffect(() => {

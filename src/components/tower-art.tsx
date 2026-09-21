@@ -2,19 +2,12 @@
 
 import { Crown } from "lucide-react";
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
-import { credits } from "@/lib/rules";
 import { TowerFx } from "./tower-fx";
 
 const FLOORS = 4;
 
 /** Lobby poster: an isometric tower of cards that catches fire when `hot`. */
-export function TowerPosterArt({
-  hot,
-  jackpot,
-}: {
-  hot: boolean;
-  jackpot?: number;
-}) {
+export function TowerPosterArt({ hot }: { hot: boolean }) {
   const artRef = useRef<HTMLDivElement>(null);
   const boundsRef = useRef<HTMLDivElement>(null);
   const isoRef = useRef<HTMLDivElement>(null);
@@ -58,9 +51,8 @@ export function TowerPosterArt({
       <div className="tpa-shadow" />
       <TowerFx
         targetRef={boundsRef}
-        heat={hot ? 0.7 : 0.16}
+        heat={hot ? 0.75 : 0.2}
         density={0.5}
-        brazier
         className="tpa-fx"
       />
       <div className="tpa-bounds" ref={boundsRef} />
@@ -93,11 +85,6 @@ export function TowerPosterArt({
           </span>
         </div>
       </div>
-      {jackpot !== undefined && (
-        <span className="tpa-jackpot">
-          <Crown size={12} /> Jackpot {credits(jackpot)} cr.
-        </span>
-      )}
     </div>
   );
 }

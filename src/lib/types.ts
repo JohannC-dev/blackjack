@@ -234,6 +234,7 @@ export type TowerRun = {
   /** Number of floors cleared, 0 to 10. */
   floor: number;
   status: TowerStatus;
+  /** Set when the player turned the hidden golden card of rows 3 to 6. */
   lucky: boolean;
   rows: TowerRow[];
   payout: number;
@@ -263,28 +264,20 @@ export type TowerFeedItem = {
   timestamp: number;
 };
 
-export type TowerHistoryItem = {
-  id: string;
-  difficulty: TowerDifficulty;
-  floor: number;
-  status: Exclude<TowerStatus, "playing">;
-  lucky: boolean;
-  bet: number;
-  payout: number;
-  timestamp: number;
-};
-
+/** Public view of the player's Tower room: its climbers and recent results. */
 export type TowerPublicState = {
-  jackpot: number;
   ghosts: TowerGhost[];
   feed: TowerFeedItem[];
 };
 
 export type TowerClientState = TowerPublicState & {
-  balance: number;
   run: TowerRun | null;
-  history: TowerHistoryItem[];
+  /** The player's own Lucky pot, paid by the golden card. */
+  luckyPot: number;
 };
+
+/** The shared wallet, pushed by the server whenever the balance changes. */
+export type Wallet = { balance: number; seq: number };
 
 export type TowerCommand =
   | { type: "start"; difficulty: TowerDifficulty; bet: number }

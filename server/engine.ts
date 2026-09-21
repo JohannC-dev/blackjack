@@ -482,6 +482,20 @@ export class Table {
   }
   startRound() {
     if (this.state.phase !== "betting") return;
+    // Bets are only reserved until the deal, and the wallet is shared with
+    // Poker and the Tower: a player who spent it elsewhere since confirming
+    // sits this round out instead of going negative.
+    const reserved = new Map<string, number>();
+    for (const seat of this.state.seats)
+      if (seat.playerId)
+        reserved.set(
+          seat.playerId,
+          (reserved.get(seat.playerId) ?? 0) + betTotal(seat.bet),
+        );
+    for (const [playerId, total] of reserved) {
+      const player = this.players.get(playerId);
+      if (player?.ready && total > player.balance) player.ready = false;
+    }
     const seats = this.state.seats.filter(
       (s) =>
         s.playerId &&
@@ -491,6 +505,7 @@ export class Table {
     );
     if (!seats.length) {
       this.state.deadline = null;
+      this.emit();
       return;
     }
     if (this.shoe.length < 160) {

@@ -8715,11 +8715,17 @@ h1 > span:not(.live-tag) {
   translate: -50% 0;
   z-index: 2;
   perspective: 900px;
-  transition: transform 0.5s var(--ease);
+  transition:
+    transform 0.5s var(--ease),
+    filter 0.5s var(--ease);
+}
+.tpa-scene {
+  filter: drop-shadow(0 0 0 transparent);
 }
 .tower-poster:hover .tpa-scene,
 .tower-poster:focus-visible .tpa-scene {
   transform: translateY(-5px);
+  filter: drop-shadow(0 0 16px #b79afaaa);
 }
 .tpa-iso {
   position: relative;
@@ -8789,22 +8795,6 @@ h1 > span:not(.live-tag) {
   color: #f3c969;
   filter: drop-shadow(0 0 8px #f3c96999);
   transform: translateZ(calc(4 * 24px + 30px)) rotateZ(40deg) rotateX(-60deg);
-}
-.tpa-jackpot {
-  position: absolute;
-  top: 18px;
-  right: 20px;
-  z-index: 3;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: 7px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #ffe2a0;
-  background: #1a1322cc;
-  border: 1px solid #f3c96940;
 }
 @media (prefers-reduced-motion: reduce) {
   .tpa-scene {

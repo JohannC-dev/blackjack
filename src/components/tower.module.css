@@ -127,7 +127,8 @@
   min-height: 340px;
   border-radius: 16px;
   border: 1px solid var(--border);
-  overflow: hidden;
+  /* clip, not hidden: a focused card must never scroll the stage. */
+  overflow: clip;
   isolation: isolate;
   background:
     radial-gradient(ellipse at 50% 110%, #2b1d44 0%, transparent 60%),
@@ -138,7 +139,7 @@
   inset: 0;
   background: radial-gradient(
     circle at 50% 80%,
-    color-mix(in oklab, #7b4fd6, #ff5a1f calc(var(--heat) * 100%)) 0%,
+    color-mix(in oklab, #6a3fc8, #c9adff calc(var(--heat) * 100%)) 0%,
     transparent 60%
   );
   opacity: calc(0.16 + var(--heat) * 0.34);
@@ -214,7 +215,8 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: 1;
+  /* Above the tower so the fireworks and bursts pass in front of it. */
+  z-index: 5;
   pointer-events: none;
 }
 .viewport {
@@ -236,7 +238,7 @@
   inset: 0;
   pointer-events: none;
   z-index: 4;
-  box-shadow: inset 0 0 120px #ff5a1f55;
+  box-shadow: inset 0 0 120px #b79afa44;
   opacity: clamp(0, calc(var(--heat) * 1.3 - 0.45), 0.85);
   transition: opacity 0.8s;
 }
@@ -264,6 +266,33 @@
 .tower {
   position: relative;
   padding-top: 40px;
+}
+.floors::before {
+  content: "";
+  position: absolute;
+  inset: -26px -34px;
+  z-index: -1;
+  border-radius: 40px;
+  background: radial-gradient(
+    ellipse at 50% 60%,
+    color-mix(in oklab, #b79afa, #ffffff calc(var(--ascent) * 45%)) 0%,
+    #9b74f0aa 45%,
+    transparent 72%
+  );
+  filter: blur(26px);
+  opacity: calc(var(--ascent) * 0.85);
+  transition: opacity 0.9s var(--ease);
+  animation: auraBreath 2.4s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.stage[data-golden] .floors::before {
+  background: radial-gradient(
+    ellipse at 50% 60%,
+    #fff1c2 0%,
+    #f3c969aa 45%,
+    transparent 72%
+  );
+  opacity: 0.8;
 }
 .floors {
   position: relative;
@@ -294,10 +323,10 @@
     box-shadow 0.5s;
 }
 .floor[data-cleared] {
-  border-color: #ff9a4d55;
+  border-color: #c9adff66;
   box-shadow:
     0 8px 18px #0007,
-    0 0 18px #ff6a2a22,
+    0 0 18px #b79afa2a,
     inset 0 1px 0 #ffffff12;
 }
 .stage[data-golden] .floor[data-cleared] {
@@ -334,7 +363,7 @@
   font-weight: 600;
 }
 .floor[data-cleared] .floorMultiplier {
-  color: #ffc58e;
+  color: #dccbff;
 }
 .cells {
   display: flex;
@@ -619,8 +648,8 @@
 .rubble i:nth-child(7n + 3) {
   box-shadow:
     0 4px 8px #0009,
-    0 0 12px #ff6a2a66;
-  border-color: #ff8a3d55;
+    0 0 12px #b79afa55;
+  border-color: #c9adff55;
 }
 
 /* Result banner */
@@ -631,10 +660,10 @@
   translate: -50% 0;
   z-index: 7;
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: auto auto auto;
   grid-template-areas:
-    "icon label"
-    "icon amount";
+    "icon label label"
+    "icon amount mult";
   column-gap: 12px;
   align-items: center;
   padding: 12px 22px 12px 16px;
@@ -661,10 +690,12 @@
   color: #ffe2a0;
 }
 .result > span {
-  position: absolute;
-  right: 14px;
-  top: 12px;
-  font-size: 11px;
+  grid-area: mult;
+  align-self: end;
+  margin-left: 10px;
+  padding-bottom: 5px;
+  font-size: 12px;
+  font-weight: 600;
   color: #d9c9a4;
 }
 .result[data-status="lost"] {
@@ -895,6 +926,14 @@
 }
 
 /* Keyframes */
+@keyframes auraBreath {
+  from {
+    transform: scale(0.97);
+  }
+  to {
+    transform: scale(1.04);
+  }
+}
 @keyframes beamsDrift {
   from {
     transform: rotate(-3deg);
@@ -1153,7 +1192,8 @@
   .rubble i {
     animation: none;
   }
-  .ascentLight::before {
+  .ascentLight::before,
+  .floors::before {
     animation: none;
   }
   .camera,

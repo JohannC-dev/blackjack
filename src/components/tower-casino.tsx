@@ -29,7 +29,9 @@ import {
   TOWER_DIFFICULTIES,
   TOWER_DIFFICULTY_ORDER,
   TOWER_FLOORS,
-  TOWER_LUCKY_ODDS,
+  TOWER_GOLD_FIRST_FLOOR,
+  TOWER_GOLD_LAST_FLOOR,
+  TOWER_LUCKY_SHARE,
   TOWER_MAX_BET,
   TOWER_MIN_BET,
   towerHeat,
@@ -62,11 +64,20 @@ import styles from "./tower.module.css";
 
 type Game = ReturnType<typeof useGame>;
 type Navigate = (view: CasinoView) => void;
-type Phase = "idle" | "shaking" | "falling" | "rubble" | "celebrating" | "done";
+type Phase =
+  | "idle"
+  | "shaking"
+  | "falling"
+  | "rubble"
+  | "climbing"
+  | "celebrating"
+  | "done";
 
 const SHAKE_MS = 750;
 const FALL_MS = 1_300;
 const CELEBRATE_MS = 2_600;
+/** Pace of the golden ride from the golden card to the top. */
+const LUCKY_STEP_MS = 280;
 const LUCKY_INTRO_MS = 1_900;
 const MAX_CLIMBERS_SHOWN = 3;
 
@@ -86,7 +97,8 @@ export function TowerCasino({
   const tower = game.towerState;
   const run = tower?.run ?? null;
   const playing = run?.status === "playing";
-  const balance = game.balance ?? tower?.balance ?? 0;
+  const balance = game.balance ?? 0;
+  const { enterTower, leaveTower } = game;
 
   const [difficulty, setDifficulty] = useState<TowerDifficulty>("normal");
   const [bet, setBet] = useState(25);
@@ -94,6 +106,8 @@ export function TowerCasino({
   const [previewing, setPreviewing] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [luckyIntro, setLuckyIntro] = useState(false);
+  /** Floor shown while a Lucky Tower rides to the top, for the show only. */
+  const [climb, setClimb] = useState<number | null>(null);
   const [pendingPick, setPendingPick] = useState<number | null>(null);
   const [sound, setSound] = useState(false);
   const [notice, setNotice] = useState("");
@@ -175,6 +189,13 @@ export function TowerCasino({
   }, []);
   useEffect(() => clearTimers, [clearTimers]);
 
+  // Being on this screen is being in a Tower room. Leaving it settles the
+  // climb on the server, so no run stays open while playing another game.
+  useEffect(() => {
+    enterTower();
+    return leaveTower;
+  }, [enterTower, leaveTower]);
+
   // Turn server transitions into animation phases.
   useEffect(() => {
     if (!tower) return;
@@ -185,6 +206,7 @@ export function TowerCasino({
       initialized.current = true;
       if (run?.status === "lost") setPhase("rubble");
       else if (run && run.status !== "playing") setPhase("done");
+      if (run?.lucky) setClimb(TOWER_FLOORS);
       return;
     }
     if (!run) return;
@@ -192,14 +214,10 @@ export function TowerCasino({
       clearTimers();
       setPreviewing(false);
       setPhase("idle");
+      setClimb(null);
       setDifficulty(run.difficulty);
       play("chips");
       sfx(playTowerStart);
-      if (run.lucky) {
-        sfx(playTowerLucky);
-        setLuckyIntro(true);
-        later(LUCKY_INTRO_MS, () => setLuckyIntro(false));
-      }
       return;
     }
     if (run.floor > previous.floor) {
@@ -223,6 +241,35 @@ export function TowerCasino({
         fxRef.current?.collapse();
       });
       later(SHAKE_MS + FALL_MS, () => setPhase("rubble"));
+    } else if (run.lucky) {
+      // The golden card: the tower lights up floor by floor to the top, then
+      // the celebration plays. The payout itself is already settled.
+      sfx(playTowerLucky);
+      setLuckyIntro(true);
+      setPhase("climbing");
+      setClimb(run.floor);
+      later(LUCKY_INTRO_MS, () => setLuckyIntro(false));
+      let delay = LUCKY_INTRO_MS;
+      for (let next = run.floor + 1; next <= TOWER_FLOORS; next++) {
+        later(delay, () => {
+          setClimb(next);
+          play("card");
+          sfx((context) => playTowerStep(context, next));
+          const card = floorsRef.current?.querySelector(
+            `[data-row="${next - 1}"] button`,
+          );
+          ascend(next, card?.getBoundingClientRect());
+        });
+        delay += LUCKY_STEP_MS;
+      }
+      later(delay, () => {
+        play("chips", 2);
+        sfx(playTowerJackpot);
+        fxRef.current?.burst("jackpot");
+        fxRef.current?.fireworks(1);
+        setPhase("celebrating");
+      });
+      later(delay + CELEBRATE_MS, () => setPhase("done"));
     } else {
       later(120, () => play("chips", 2));
       sfx((context) =>
@@ -232,9 +279,12 @@ export function TowerCasino({
             ? playTowerTopped(context)
             : playTowerCashout(context, run.floor),
       );
-      fxRef.current?.burst(
-        run.lucky || run.status === "topped" ? "jackpot" : "win",
-      );
+      const bigWin = run.lucky || run.status === "topped";
+      fxRef.current?.burst(bigWin ? "jackpot" : "win");
+      // Fireworks for a win at the top, or for cashing out from floor 6 upwards.
+      if (bigWin) fxRef.current?.fireworks(1);
+      else if (run.floor >= 6)
+        fxRef.current?.fireworks(0.35 + (run.floor - 6) * 0.15);
       setPhase("celebrating");
       later(CELEBRATE_MS, () => setPhase("done"));
     }
@@ -290,7 +340,11 @@ export function TowerCasino({
   const shownRun = run && (playing || !previewing) ? run : null;
   const maxBet = Math.min(TOWER_MAX_BET, Math.floor(balance));
   const busy = game.pending || pendingPick !== null;
-  const animating = phase === "shaking" || phase === "falling" || luckyIntro;
+  const animating =
+    phase === "shaking" ||
+    phase === "falling" ||
+    phase === "climbing" ||
+    luckyIntro;
   const collapsed =
     shownRun?.status === "lost" && (phase === "falling" || phase === "rubble");
 
@@ -323,7 +377,7 @@ export function TowerCasino({
     setPendingPick(null);
   };
   const cashout = () => {
-    if (!playing || !run || run.lucky || run.floor < 1 || busy) return;
+    if (!playing || !run || run.floor < 1 || busy) return;
     void game.towerCommand({ type: "cashout" });
   };
 
@@ -344,7 +398,8 @@ export function TowerCasino({
     return () => window.removeEventListener("keydown", onKey);
   }, [playing]);
 
-  const floor = shownRun?.floor ?? 0;
+  const riding = shownRun?.lucky && climb !== null;
+  const floor = riding ? climb : (shownRun?.floor ?? 0);
   const status = shownRun?.status ?? "idle";
   const golden =
     Boolean(shownRun?.lucky) ||
@@ -388,9 +443,9 @@ export function TowerCasino({
                 La <em>Tower</em>
               </h1>
             </div>
-            <JackpotCounter
-              value={tower?.jackpot ?? 0}
+            <LuckyBadge
               hot={Boolean(shownRun?.lucky)}
+              pot={tower?.luckyPot ?? 0}
             />
             <div className={styles.stripTools}>
               <span
@@ -457,7 +512,7 @@ export function TowerCasino({
                 >
                   <TowerView
                     key={shownRun?.id ?? `preview-${difficulty}`}
-                    run={shownRun}
+                    run={riding ? { ...shownRun!, floor } : shownRun}
                     cols={shownRun?.cols ?? TOWER_DIFFICULTIES[difficulty].cols}
                     difficulty={shownRun?.difficulty ?? difficulty}
                     phase={phase}
@@ -486,7 +541,8 @@ export function TowerCasino({
             {shownRun &&
               shownRun.status !== "playing" &&
               phase !== "idle" &&
-              phase !== "shaking" && (
+              phase !== "shaking" &&
+              phase !== "climbing" && (
                 <ResultBanner
                   run={shownRun}
                   celebrating={phase === "celebrating"}
@@ -632,16 +688,6 @@ function ActionButton({
   onCashout: () => void;
 }) {
   if (playing && run) {
-    if (run.lucky)
-      return (
-        <div className={`${styles.action} ${styles.luckyAction}`}>
-          <Crown size={18} />
-          <span>
-            <b>Lucky Tower</b>
-            <small>Aucun piège : grimpez jusqu’au jackpot !</small>
-          </span>
-        </div>
-      );
     const current = towerPayout(run.bet, run.difficulty, run.floor);
     const next =
       run.floor < TOWER_FLOORS
@@ -810,7 +856,11 @@ function TowerView({
                   const picked = row?.picked === column;
                   const visible =
                     Boolean(row?.cells) &&
-                    (picked || revealWholeRow || Boolean(run?.lucky));
+                    (picked ||
+                      revealWholeRow ||
+                      // A golden card shows once its row is behind the
+                      // player, even when another card was chosen.
+                      row?.cells?.[column] === "gold");
                   const cell: TowerCell | undefined = visible
                     ? row?.cells?.[column]
                     : undefined;
@@ -951,30 +1001,17 @@ function Rubble({ cols }: { cols: number }) {
   );
 }
 
-function JackpotCounter({ value, hot }: { value: number; hot: boolean }) {
-  const [shown, setShown] = useState(value);
-  const shownRef = useRef(value);
-  useEffect(() => {
-    const from = shownRef.current;
-    if (from === value) return;
-    const startedAt = performance.now();
-    let frame = 0;
-    const step = (now: number) => {
-      const progress = Math.min(1, (now - startedAt) / 900);
-      const eased = 1 - (1 - progress) ** 3;
-      shownRef.current = Math.round(from + (value - from) * eased);
-      setShown(shownRef.current);
-      if (progress < 1) frame = requestAnimationFrame(step);
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [value]);
+function LuckyBadge({ hot, pot }: { hot: boolean; pot: number }) {
   return (
-    <div className={styles.jackpot} data-hot={hot || undefined}>
+    <div
+      className={styles.jackpot}
+      data-hot={hot || undefined}
+      title={`Carte dorée cachée entre les lignes ${TOWER_GOLD_FIRST_FLOOR} et ${TOWER_GOLD_LAST_FLOOR}`}
+    >
       <Crown size={18} />
       <span>
-        <small>Jackpot Lucky Tower</small>
-        <b>{credits(shown)} cr.</b>
+        <small>Votre cagnotte Lucky</small>
+        <b>{credits(pot)} cr.</b>
       </span>
     </div>
   );
@@ -986,7 +1023,7 @@ function LuckyBanner() {
       <div className={styles.luckyRays} aria-hidden="true" />
       <Sparkles size={22} />
       <strong>LUCKY TOWER</strong>
-      <span>Tour en or · aucun piège · le jackpot vous attend</span>
+      <span>Carte dorée · votre cagnotte Lucky est à vous</span>
     </div>
   );
 }
@@ -1012,7 +1049,7 @@ function ResultBanner({
         {lost
           ? `La tour s’effondre à l’étage ${run.floor + 1}`
           : run.lucky
-            ? "Jackpot Lucky Tower"
+            ? "Lucky Tower !"
             : run.status === "topped"
               ? "Sommet atteint !"
               : `Encaissé à l’étage ${run.floor}`}
@@ -1020,7 +1057,7 @@ function ResultBanner({
       <strong>
         {lost ? `−${credits(run.bet)}` : `+${credits(run.payout)}`} cr.
       </strong>
-      {!lost && !run.lucky && (
+      {!lost && !run.lucky && run.floor > 0 && (
         <span>
           {formatMultiplier(towerMultiplier(run.difficulty, run.floor))}
         </span>
@@ -1059,15 +1096,21 @@ function TowerRules({ onClose }: { onClose: () => void }) {
           l’étage suivant. Le 10ᵉ étage est encaissé automatiquement.
         </li>
         <li>
-          Une partie sur {TOWER_LUCKY_ODDS} devient une <b>Lucky Tower</b> :
-          cartes en or, aucun piège, et le jackpot progressif au sommet (part
-          proportionnelle à la mise, entière à {TOWER_MAX_BET} cr.). 1 % de
-          chaque mise alimente ce jackpot.
+          Certaines ascensions cachent une <b>carte dorée</b>, jamais à la place
+          du piège, entre les lignes {TOWER_GOLD_FIRST_FLOOR} et{" "}
+          {TOWER_GOLD_LAST_FLOOR}. La retourner déclenche la <b>Lucky Tower</b>{" "}
+          : l’étage atteint est encaissé et votre cagnotte Lucky vous est
+          versée. Chacune de vos mises y ajoute{" "}
+          {Math.round(TOWER_LUCKY_SHARE * 100)} %.
+        </li>
+        <li>
+          Quitter la Tower règle l’ascension en cours : les gains acquis sont
+          encaissés, la mise est rendue si aucun étage n’a été franchi.
         </li>
       </ol>
       <p>
-        Les cercles à gauche des étages montrent où en sont les autres joueurs.
-        Raccourcis : touches 1 à 5 pour choisir une carte, Entrée pour
+        Les cercles à gauche des étages montrent où en sont les joueurs de votre
+        salle. Raccourcis : touches 1 à 5 pour choisir une carte, Entrée pour
         encaisser.
       </p>
     </section>
