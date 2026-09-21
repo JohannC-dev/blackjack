@@ -10780,41 +10780,88 @@ h1 > span:not(.live-tag) {
   text-transform: none;
   font-variant-numeric: tabular-nums;
 }
-.mines-difficulty-value {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-height: 16px;
+.mines-difficulty-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(44px, 0.65fr) minmax(
+      108px,
+      1.4fr
+    );
+  align-items: stretch;
+  min-height: 36px;
 }
-.mines-difficulty-value b {
-  display: inline-flex;
-  align-items: center;
-  min-height: 23px;
-  padding: 0 8px;
-  border: 1px solid #8ee8c43d;
-  border-radius: 999px;
-  background: #8ee8c40f;
+.mines-difficulty-current,
+.mines-difficulty-stat {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+.mines-difficulty-current {
+  padding-right: 10px;
+}
+.mines-difficulty-stat {
+  padding: 0 10px;
+  border-left: 1px solid #ffffff12;
+}
+.mines-difficulty-stat.is-payout {
+  padding-right: 0;
+}
+.mines-difficulty-current span,
+.mines-difficulty-stat span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.mines-difficulty-current b {
   color: var(--mines-accent);
-  font-size: 12px;
-  font-weight: 750;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
 }
-.mines-difficulty-value span {
-  color: var(--muted);
-  font-size: 10px;
+.mines-difficulty-stat b {
+  overflow: hidden;
+  color: #ebe5f1;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.mines-difficulty-stat.is-payout b {
+  color: var(--tower-gold, #f3c969);
 }
 .mines-difficulty-slider {
   position: relative;
-  height: 24px;
+  height: 23px;
   min-width: 0;
-  margin-top: -1px;
+  margin-top: 7px;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+.mines-difficulty-slider.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.mines-difficulty-slider:focus-visible {
+  outline: 2px solid #8ee8c4a8;
+  outline-offset: 4px;
+  border-radius: 99px;
 }
 .mines-difficulty-track,
 .mines-difficulty-fill {
   position: absolute;
   top: 50%;
   left: 0;
-  height: 4px;
+  height: 5px;
   border-radius: 99px;
   transform: translateY(-50%);
   pointer-events: none;
@@ -10840,8 +10887,8 @@ h1 > span:not(.live-tag) {
 .mines-difficulty-ticks i {
   position: absolute;
   top: 50%;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border: 1px solid #7d788a;
   border-radius: 50%;
   background: var(--panel);
@@ -10851,78 +10898,70 @@ h1 > span:not(.live-tag) {
   border-color: var(--mines-accent);
   background: var(--mines-accent);
 }
-.mines-difficulty-range {
+.mines-difficulty-thumb {
   position: absolute;
   z-index: 2;
-  inset: 0;
-  width: 100%;
-  height: 24px;
-  margin: 0;
-  appearance: none;
-  background: transparent;
-  cursor: grab;
-}
-.mines-difficulty-range:active {
-  cursor: grabbing;
-}
-.mines-difficulty-range:focus-visible {
-  outline: 0;
-}
-.mines-difficulty-range::-webkit-slider-runnable-track {
-  height: 4px;
-  background: transparent;
-}
-.mines-difficulty-range::-moz-range-track {
-  height: 4px;
-  background: transparent;
-}
-.mines-difficulty-range::-webkit-slider-thumb {
+  top: 50%;
   width: 18px;
   height: 18px;
-  margin-top: -7px;
-  appearance: none;
   border: 3px solid var(--panel);
   border-radius: 50%;
   background: var(--mines-accent);
+  transform: translate(-50%, -50%);
   box-shadow:
     0 0 0 1px #8ee8c4aa,
     0 3px 12px #8ee8c466;
+  pointer-events: none;
   transition:
+    left 100ms ease,
     transform 150ms ease,
     box-shadow 150ms ease;
 }
-.mines-difficulty-range::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border: 3px solid var(--panel);
-  border-radius: 50%;
-  background: var(--mines-accent);
-  box-shadow:
-    0 0 0 1px #8ee8c4aa,
-    0 3px 12px #8ee8c466;
-}
-.mines-difficulty-range:focus-visible::-webkit-slider-thumb,
-.mines-difficulty-range:hover::-webkit-slider-thumb {
-  transform: scale(1.12);
+.mines-difficulty-slider:not(.is-disabled):hover .mines-difficulty-thumb,
+.mines-difficulty-slider:not(.is-disabled):focus-visible
+  .mines-difficulty-thumb {
+  transform: translate(-50%, -50%) scale(1.12);
   box-shadow:
     0 0 0 4px #8ee8c42b,
     0 3px 14px #8ee8c477;
 }
-.mines-difficulty-range:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
 .mines-difficulty-scale {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
+  position: relative;
+  height: 14px;
+  margin-top: 3px;
   color: var(--muted);
   font-size: 8px;
   letter-spacing: 0.02em;
 }
-.mines-difficulty-scale span:nth-child(2) {
-  color: #8b879b;
-  font-style: italic;
+.mines-difficulty-scale span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  color: #8e899e;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    color 150ms ease,
+    font-weight 150ms ease;
+}
+.mines-difficulty-scale span.is-first {
+  transform: none;
+}
+.mines-difficulty-scale span.is-last {
+  transform: translateX(-100%);
+}
+.mines-difficulty-scale span.is-selected {
+  color: var(--mines-accent);
+  font-weight: 800;
+}
+.mines-difficulty-hint {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 1px;
+  color: #777286;
+  font-size: 8px;
+  line-height: 1;
 }
 .game-options {
   display: flex;

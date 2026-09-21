@@ -11,7 +11,15 @@ import {
   Volume2,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
 import {
   MINES_MAX_BET,
@@ -170,6 +178,7 @@ function MinesControls({
     MINES_TARGET_OPTIONS[targetIndex] ?? MINES_TARGET_OPTIONS[0];
   const difficultyProgress =
     (targetIndex / Math.max(1, MINES_TARGET_OPTIONS.length - 1)) * 100;
+  const difficultyDisabled = active || looping;
   const canStart =
     !active &&
     !looping &&
@@ -179,6 +188,40 @@ function MinesControls({
     bet <= balance &&
     (!patternMode || patternLength > 0);
   const previewPayout = minesPayout(bet, target / 100);
+  const difficultyValueText = `${targetOption.target}% de retour, ${targetOption.mines} bombes, gain potentiel ${credits(previewPayout)} crédits`;
+
+  const setDifficultyFromPointer = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    if (difficultyDisabled) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const position = bounds.width
+      ? Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width))
+      : 0;
+    const index = Math.round(
+      position * Math.max(1, MINES_TARGET_OPTIONS.length - 1),
+    );
+    const option = MINES_TARGET_OPTIONS[index];
+    if (option) setTarget(option.target as MinesTarget);
+  };
+
+  const handleDifficultyKeyDown = (
+    event: ReactKeyboardEvent<HTMLDivElement>,
+  ) => {
+    if (difficultyDisabled) return;
+    let nextIndex = targetIndex;
+    if (event.key === "ArrowRight" || event.key === "ArrowUp")
+      nextIndex = Math.min(MINES_TARGET_OPTIONS.length - 1, targetIndex + 1);
+    else if (event.key === "ArrowLeft" || event.key === "ArrowDown")
+      nextIndex = Math.max(0, targetIndex - 1);
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = MINES_TARGET_OPTIONS.length - 1;
+    else return;
+
+    event.preventDefault();
+    const option = MINES_TARGET_OPTIONS[nextIndex];
+    if (option) setTarget(option.target as MinesTarget);
+  };
 
   const start = () => {
     if (!canStart) return;
@@ -204,11 +247,11 @@ function MinesControls({
     ? `${loopRounds}/${loopCount} manche${loopCount === 1 ? "" : "s"} · cliquer pour arrêter`
     : patternMode
       ? patternLength
-        ? `${minesForTarget(target)} mines · ×${loopCount} manche${loopCount === 1 ? "" : "s"} · d’un coup`
+        ? `${minesForTarget(target)} bombes · ×${loopCount} manche${loopCount === 1 ? "" : "s"} · d’un coup`
         : "Sélectionnez des cases sur la grille"
       : active
         ? "Retirez votre gain maintenant"
-        : `${targetMines} mines · jusqu’à ${credits(previewPayout)} cr.`;
+        : `${targetMines} bombes · gain potentiel ${credits(previewPayout)} cr.`;
   const patternOptionDisabled = !looping && (active || game.pending);
   const patternStatus = looping
     ? "En cours"
@@ -251,13 +294,53 @@ function MinesControls({
       <GameControlsBar ariaLabel="Réglages de la partie">
         <GameControlGroup
           className="mines-difficulty-control"
-          label="Difficulté / retour"
+          label="Risque / gain"
         >
-          <div className="mines-difficulty-value" aria-live="polite">
-            <b>{targetOption.target}%</b>
-            <span>{targetOption.mines} mines</span>
+          <div className="mines-difficulty-summary" aria-live="polite">
+            <div className="mines-difficulty-current">
+              <span>Retour visé</span>
+              <b>{targetOption.target}%</b>
+            </div>
+            <div className="mines-difficulty-stat">
+              <span>Bombes</span>
+              <b>{targetOption.mines}</b>
+            </div>
+            <div className="mines-difficulty-stat is-payout">
+              <span>Gain potentiel</span>
+              <b>{credits(previewPayout)} cr.</b>
+            </div>
           </div>
-          <div className="mines-difficulty-slider">
+          <div
+            className={`mines-difficulty-slider ${
+              difficultyDisabled ? "is-disabled" : ""
+            }`.trim()}
+            role="slider"
+            tabIndex={difficultyDisabled ? -1 : 0}
+            aria-label="Risque et retour visé"
+            aria-valuemin={0}
+            aria-valuemax={MINES_TARGET_OPTIONS.length - 1}
+            aria-valuenow={targetIndex}
+            aria-valuetext={difficultyValueText}
+            aria-disabled={difficultyDisabled}
+            onKeyDown={handleDifficultyKeyDown}
+            onPointerDown={(event) => {
+              if (difficultyDisabled) return;
+              event.currentTarget.setPointerCapture(event.pointerId);
+              setDifficultyFromPointer(event);
+            }}
+            onPointerMove={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId))
+                setDifficultyFromPointer(event);
+            }}
+            onPointerUp={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId))
+                event.currentTarget.releasePointerCapture(event.pointerId);
+            }}
+            onPointerCancel={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId))
+                event.currentTarget.releasePointerCapture(event.pointerId);
+            }}
+          >
             <span className="mines-difficulty-track" />
             <span
               className="mines-difficulty-fill"
@@ -277,29 +360,34 @@ function MinesControls({
                 />
               ))}
             </span>
-            <input
-              className="mines-difficulty-range"
-              type="range"
-              min="0"
-              max={MINES_TARGET_OPTIONS.length - 1}
-              step="1"
-              value={targetIndex}
-              disabled={active || looping}
-              aria-label="Difficulté / retour visé"
-              aria-valuetext={`${targetOption.target}% de retour, ${targetOption.mines} mines`}
-              onChange={(event) => {
-                const option =
-                  MINES_TARGET_OPTIONS[Number(event.currentTarget.value)];
-                if (option) setTarget(option.target as MinesTarget);
-              }}
+            <span
+              className="mines-difficulty-thumb"
+              style={{ left: `${difficultyProgress}%` }}
+              aria-hidden="true"
             />
           </div>
           <div className="mines-difficulty-scale" aria-hidden="true">
-            <span>{MINES_TARGET_OPTIONS[0].target}%</span>
-            <span>plus risqué</span>
-            <span>
-              {MINES_TARGET_OPTIONS[MINES_TARGET_OPTIONS.length - 1].target}%
-            </span>
+            {MINES_TARGET_OPTIONS.map((option, index) => (
+              <span
+                key={option.target}
+                className={`${index === targetIndex ? "is-selected" : ""} ${
+                  index === 0 ? "is-first" : ""
+                } ${
+                  index === MINES_TARGET_OPTIONS.length - 1 ? "is-last" : ""
+                }`.trim()}
+                style={{
+                  left: `${
+                    (index / Math.max(1, MINES_TARGET_OPTIONS.length - 1)) * 100
+                  }%`,
+                }}
+              >
+                {option.target}%
+              </span>
+            ))}
+          </div>
+          <div className="mines-difficulty-hint" aria-hidden="true">
+            <span>moins de bombes</span>
+            <span>plus de bombes</span>
           </div>
         </GameControlGroup>
 
