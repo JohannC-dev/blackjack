@@ -65,6 +65,7 @@ import type {
 import { newToken } from "@/lib/identity";
 import { useGame } from "@/lib/use-game";
 import { BlackjackIcon } from "./blackjack-icon";
+import { CountdownText } from "./countdown";
 import { PlayingCard } from "./playing-card";
 import { CasinoHome, PokerCasino } from "./poker-casino";
 import { PokerShuffleAnimation } from "./poker-shuffle";
@@ -1191,7 +1192,6 @@ function BlackjackCasino({
     visible: boolean;
   } | null>(null);
   const [sound, setSound] = useState(false);
-  const [now, setNow] = useState(0);
   const [doubleChoice, setDoubleChoice] = useState<string | null>(null);
   const [doubleChoiceClosing, setDoubleChoiceClosing] = useState(false);
   const [gambleOpen, setGambleOpen] = useState(false);
@@ -1259,9 +1259,6 @@ function BlackjackCasino({
     (state?.phase === "settled" &&
       (mainWinNet > 0 ||
         (ownGamble?.round === state.round && ownGamble.result === "win")));
-  const seconds = state?.deadline
-    ? Math.max(0, Math.ceil((state.deadline - now) / 1000))
-    : null;
   const disabled = !connected || pending || state?.phase === "shuffling";
   const cardCount =
     (state?.dealer.length ?? 0) +
@@ -1325,12 +1322,6 @@ function BlackjackCasino({
     },
     [],
   );
-  useEffect(() => {
-    const tick = () => setNow(Date.now());
-    tick();
-    const timer = setInterval(tick, 250);
-    return () => clearInterval(timer);
-  }, []);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 3500);
@@ -1812,7 +1803,7 @@ function BlackjackCasino({
                       </strong>
                       <span className="table-round-result-countdown">
                         <small>PROCHAINE MANCHE</small>
-                        {seconds !== null ? `${seconds}s` : "…"}
+                        <CountdownText deadline={state?.deadline} />
                       </span>
                     </div>
                   )}
@@ -1879,8 +1870,10 @@ function BlackjackCasino({
                     : !connected
                       ? "Connexion à la table…"
                       : (state?.message ?? "Bienvenue à la table.")}
-                  {seconds !== null && !showCenterSettlement && (
-                    <span className="countdown">{seconds}s</span>
+                  {state?.deadline != null && !showCenterSettlement && (
+                    <span className="countdown">
+                      <CountdownText deadline={state.deadline} />
+                    </span>
                   )}
                   <span className="round-number">
                     MANCHE {String(state?.round ?? 0).padStart(3, "0")}
@@ -1911,9 +1904,9 @@ function BlackjackCasino({
                         )}
                       </span>
                     )}
-                    {!betting && seconds !== null && (
+                    {!betting && state?.deadline != null && (
                       <span className="turn-clock">
-                        {seconds}
+                        <CountdownText deadline={state.deadline} suffix="" />
                         <small>SEC</small>
                       </span>
                     )}
@@ -2197,7 +2190,13 @@ function BlackjackCasino({
                                 : "La prochaine manche vous attend."}
                             </b>
                             <p>
-                              Les mises rouvrent dans {seconds ?? 0} secondes.
+                              Les mises rouvrent dans{" "}
+                              <CountdownText
+                                deadline={state?.deadline}
+                                suffix=""
+                                fallback="0"
+                              />{" "}
+                              secondes.
                             </p>
                           </div>
                         </>

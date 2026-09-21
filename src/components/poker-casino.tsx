@@ -43,6 +43,7 @@ import type { PokerAction, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import type { CasinoView } from "./casino";
 import { BlackjackIcon } from "./blackjack-icon";
+import { useCountdownSeconds } from "./countdown";
 import { PlayingCard } from "./playing-card";
 import { PokerLobby } from "./poker-lobby";
 import { PokerShuffleAnimation } from "./poker-shuffle";
@@ -308,10 +309,103 @@ function PokerQueue({ game }: { game: Game }) {
   );
 }
 
+function PokerTurnIndicator({
+  deadline,
+  durationMs,
+}: {
+  deadline: number | null;
+  durationMs: number;
+}) {
+  const seconds = useCountdownSeconds(deadline) ?? 0;
+
+  if (deadline === null) return null;
+  const now = Date.now();
+  const remainingMs = Math.max(0, Math.min(durationMs, deadline - now));
+  const progress = 100 * (1 - remainingMs / durationMs);
+
+  return (
+    <>
+      <svg className="poker-turn-outline" aria-hidden="true">
+        <rect
+          className="poker-turn-track"
+          width="100%"
+          height="100%"
+          rx="10"
+          pathLength={100}
+        />
+        <rect
+          className="poker-turn-progress"
+          width="100%"
+          height="100%"
+          rx="10"
+          pathLength={100}
+          style={{ strokeDashoffset: progress }}
+        />
+      </svg>
+      <span className="poker-turn-seconds">{seconds}s</span>
+    </>
+  );
+}
+
+function PokerRevealActions({
+  deadline,
+  disabled,
+  mucked,
+  onShow,
+  onMuck,
+}: {
+  deadline: number | null;
+  disabled: boolean;
+  mucked: boolean;
+  onShow: () => void;
+  onMuck: () => void;
+}) {
+  const seconds = useCountdownSeconds(deadline);
+  const available = deadline !== null && (seconds ?? 0) > 0;
+
+  if (!available)
+    return (
+      <div className="hand-visibility-resolved" role="status">
+        <EyeOff size={14} />
+        <span>
+          <small>VISIBILITÉ DE LA MAIN</small>
+          <b>{mucked ? "Main cachée" : "Main montrée"}</b>
+        </span>
+      </div>
+    );
+
+  return (
+    <div
+      className="hand-visibility-actions"
+      role="group"
+      aria-label="Visibilité de votre main"
+    >
+      <button
+        type="button"
+        className="show-hand"
+        disabled={disabled}
+        onClick={onShow}
+      >
+        <span>Montrer</span>
+        <b>{seconds}s</b>
+      </button>
+      <button
+        type="button"
+        className="hide-hand"
+        disabled={disabled}
+        onClick={onMuck}
+      >
+        <span>
+          <EyeOff size={13} /> Cacher
+        </span>
+      </button>
+    </div>
+  );
+}
+
 function PokerTable({ game }: { game: Game }) {
   const table = game.pokerState!.table!;
   const me = table.seats.find((seat) => seat.id === game.playerId);
-  const [now, setNow] = useState(Date.now());
   const [raiseTo, setRaiseTo] = useState(0);
   const [raiseOpen, setRaiseOpen] = useState(false);
   const [chat, setChat] = useState("");
@@ -325,10 +419,6 @@ function PokerTable({ game }: { game: Game }) {
     active: table.activePlayerId,
     phase: table.phase,
   });
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(timer);
-  }, []);
   const toCall = me ? Math.max(0, table.currentBet - me.bet) : 0;
   const minimumRaise = table.currentBet + table.minRaise;
   const maximum = me ? me.bet + me.stack : 0;
@@ -403,14 +493,7 @@ function PokerTable({ game }: { game: Game }) {
     table.phase,
     table.seats,
   ]);
-  const seconds = table.deadline
-    ? Math.max(0, Math.ceil((table.deadline - now) / 1000))
-    : 0;
   const turnDurationMs = (table.mode === "spin" ? 15 : 25) * 1_000;
-  const turnRemainingMs = table.deadline
-    ? Math.max(0, Math.min(turnDurationMs, table.deadline - now))
-    : 0;
-  const turnProgress = 100 * (1 - turnRemainingMs / turnDurationMs);
   const myTurn = table.activePlayerId === game.playerId;
   const allInContenders = table.seats.filter(
     (seat) => seat.status === "active" || seat.status === "all-in",
@@ -493,12 +576,8 @@ function PokerTable({ game }: { game: Game }) {
   const myWin = handResult?.winners.find(
     (winner) => winner.playerId === game.playerId,
   );
-  const revealSeconds = table.revealDeadline
-    ? Math.max(0, Math.ceil((table.revealDeadline - now) / 1000))
-    : 0;
   const uncontestedWin = myWin?.label === "Uncontested pot";
-  const canChooseReveal =
-    uncontestedWin && !!table.revealDeadline && table.revealDeadline > now;
+  const canChooseReveal = uncontestedWin && table.revealDeadline !== null;
   const handLabel = me
     ? (describePokerHolding(me.cards, table.community) ?? me.handLabel)
     : undefined;
@@ -600,8 +679,6 @@ function PokerTable({ game }: { game: Game }) {
                 position={positions[index]}
                 table={table}
                 playerId={game.playerId}
-                turnSeconds={seconds}
-                turnProgress={turnProgress}
                 dealDelays={dealDelays}
                 winningCardIds={showdownCards.winning}
                 winnerPlayerIds={showdownCards.winnerPlayerIds}
@@ -733,31 +810,13 @@ function PokerTable({ game }: { game: Game }) {
               className={`poker-action-zone ${myTurn || canChooseReveal ? "enabled" : ""}`}
             >
               {canChooseReveal ? (
-                <div
-                  className="hand-visibility-actions"
-                  role="group"
-                  aria-label="Visibilité de votre main"
-                >
-                  <button
-                    type="button"
-                    className="show-hand"
-                    disabled={game.pending}
-                    onClick={() => game.pokerCommand({ type: "show" })}
-                  >
-                    <span>Montrer</span>
-                    <b>{revealSeconds}s</b>
-                  </button>
-                  <button
-                    type="button"
-                    className="hide-hand"
-                    disabled={game.pending}
-                    onClick={() => game.pokerCommand({ type: "muck" })}
-                  >
-                    <span>
-                      <EyeOff size={13} /> Cacher
-                    </span>
-                  </button>
-                </div>
+                <PokerRevealActions
+                  deadline={table.revealDeadline}
+                  disabled={game.pending}
+                  mucked={!!me?.mucked}
+                  onShow={() => game.pokerCommand({ type: "show" })}
+                  onMuck={() => game.pokerCommand({ type: "muck" })}
+                />
               ) : uncontestedWin && table.phase === "showdown" ? (
                 <div className="hand-visibility-resolved" role="status">
                   <EyeOff size={14} />
@@ -1087,8 +1146,6 @@ function PokerSeatView({
   position,
   table,
   playerId,
-  turnSeconds,
-  turnProgress,
   dealDelays,
   winningCardIds,
   winnerPlayerIds,
@@ -1100,8 +1157,6 @@ function PokerSeatView({
   position: { x: number; y: number };
   table: NonNullable<NonNullable<Game["pokerState"]>["table"]>;
   playerId: string;
-  turnSeconds: number;
-  turnProgress: number;
   dealDelays: ReadonlyMap<string, number>;
   winningCardIds: ReadonlySet<string>;
   winnerPlayerIds: ReadonlySet<string>;
@@ -1169,28 +1224,12 @@ function PokerSeatView({
           <Trophy size={11} />
         </span>
       )}
-      <div
-        className="poker-player-card"
-        data-turn-seconds={active ? `${turnSeconds}s` : undefined}
-      >
+      <div className="poker-player-card">
         {active && (
-          <svg className="poker-turn-outline" aria-hidden="true">
-            <rect
-              className="poker-turn-track"
-              width="100%"
-              height="100%"
-              rx="10"
-              pathLength={100}
-            />
-            <rect
-              className="poker-turn-progress"
-              width="100%"
-              height="100%"
-              rx="10"
-              pathLength={100}
-              style={{ strokeDashoffset: turnProgress }}
-            />
-          </svg>
+          <PokerTurnIndicator
+            deadline={table.deadline}
+            durationMs={(table.mode === "spin" ? 15 : 25) * 1_000}
+          />
         )}
         <span className="avatar tiny">
           {seat.name.slice(0, 1).toUpperCase()}
