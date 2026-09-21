@@ -4,7 +4,15 @@ import next from "next";
 import { Server } from "socket.io";
 import { Table, type Player } from "./engine";
 import { PokerManager } from "./poker";
-import type { Ack, Command, PokerCommand, Profile } from "../src/lib/types";
+import { TowerManager } from "./tower";
+import { TOWER_LUCKY_ODDS } from "../src/lib/tower";
+import type {
+  Ack,
+  Command,
+  PokerCommand,
+  Profile,
+  TowerCommand,
+} from "../src/lib/types";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number(process.env.PORT ?? 3000);
@@ -41,6 +49,24 @@ const poker = new PokerManager((playerId, state) => {
   for (const socketId of playerSockets.get(playerId) ?? [])
     io.to(socketId).emit("poker:state", state);
 });
+const TOWER_ROOM = "tower:club";
+const tower = new TowerManager(
+  (playerId, state) => {
+    for (const socketId of playerSockets.get(playerId) ?? [])
+      io.to(socketId).emit("tower:state", state);
+  },
+  (state) => io.to(TOWER_ROOM).emit("tower:feed", state),
+  undefined,
+  // Lets a developer force a Lucky Tower, e.g. TOWER_LUCKY_ODDS=1 bun run dev.
+  Math.max(
+    1,
+    Math.floor(Number(process.env.TOWER_LUCKY_ODDS)) || TOWER_LUCKY_ODDS,
+  ),
+  // Development only: TOWER_NO_TRAPS=1 bun run dev reaches the top every time.
+  dev && process.env.TOWER_NO_TRAPS === "1",
+);
+if (dev && process.env.TOWER_NO_TRAPS === "1")
+  console.log("La Tower · mode test sans pièges activé");
 
 function getTable(id: string) {
   let table = tables.get(id);
@@ -153,6 +179,8 @@ io.on("connection", (socket) => {
         // seat below.
         table.observe(player);
         poker.connect(player);
+        socket.join(TOWER_ROOM);
+        tower.connect(player);
       } catch (error) {
         replyError(ack, error);
       }
@@ -205,6 +233,25 @@ io.on("connection", (socket) => {
       }
     },
   );
+  socket.on(
+    "tower:command",
+    (command: TowerCommand, ack: (value: Ack) => void) => {
+      try {
+        throttle();
+        if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+        tower.command(player, command);
+        // The wallet is shared: refresh the other games' views of the balance.
+        for (const socketId of playerSockets.get(player.id) ?? [])
+          io.to(socketId).emit("poker:state", poker.state(player));
+        const blackjackTable = tables.get(player.roomId);
+        if (blackjackTable)
+          io.to(player.roomId).emit("state", blackjackTable.snapshot());
+        if (typeof ack === "function") ack({ ok: true });
+      } catch (error) {
+        replyError(ack, error);
+      }
+    },
+  );
   socket.on("disconnect", () => {
     if (!player) return;
     const connections = playerSockets.get(player.id);
@@ -228,6 +275,7 @@ setInterval(() => {
       tables.delete(id);
   }
   poker.tick(now);
+  tower.tick(now);
   for (const [token, player] of profiles)
     if (!player.connected && now - player.lastSeen > 24 * 60 * 60_000)
       profiles.delete(token);

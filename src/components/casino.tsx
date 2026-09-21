@@ -16,6 +16,7 @@ import {
   ArrowDownLeft,
   ArrowRight,
   ArrowUpRight,
+  Castle,
   Check,
   ChevronDown,
   CircleHelp,
@@ -69,9 +70,11 @@ import { newToken } from "@/lib/identity";
 import { useGame } from "@/lib/use-game";
 import { BlackjackIcon } from "./blackjack-icon";
 import { CountdownText } from "./countdown";
+import { Chip } from "./chip";
 import { PlayingCard } from "./playing-card";
 import { CasinoHome, PokerCasino } from "./poker-casino";
 import { PokerShuffleAnimation } from "./poker-shuffle";
+import { TowerCasino } from "./tower-casino";
 
 const THREE_PAYOUTS = [
   ["Straight Flush", "9:1"],
@@ -538,31 +541,6 @@ function AnimatedMenu({
     </div>
   );
 }
-
-const Chip = memo(function Chip({
-  amount,
-  selected = false,
-  onClick,
-  disabled = false,
-}: {
-  amount: number;
-  selected?: boolean;
-  onClick?: (amount: number) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      className={`chip chip-${amount} ${selected ? "selected" : ""}`}
-      onClick={() => onClick?.(amount)}
-      disabled={disabled}
-      aria-label={`Sélectionner le jeton de ${amount} crédits`}
-      aria-pressed={selected}
-    >
-      <span>{amount}</span>
-    </button>
-  );
-});
 
 function HandView({ hand, active }: { hand: Hand; active: boolean }) {
   const concealed = hand.cards.some((card) => card.hidden);
@@ -1164,12 +1142,13 @@ function GamblePanel({
   );
 }
 
-export type CasinoView = "home" | "blackjack" | "poker";
+export type CasinoView = "home" | "blackjack" | "poker" | "tower";
 
 type BlackjackSidebarProps = {
   onHome: () => void;
   onBlackjack: () => void;
   onPoker: () => void;
+  onTower: () => void;
   onTables: () => void;
   onHistory: () => void;
   onRules: () => void;
@@ -1179,6 +1158,7 @@ const BlackjackSidebar = memo(function BlackjackSidebar({
   onHome,
   onBlackjack,
   onPoker,
+  onTower,
   onTables,
   onHistory,
   onRules,
@@ -1217,6 +1197,14 @@ const BlackjackSidebar = memo(function BlackjackSidebar({
           onClick={onPoker}
         >
           <Spade size={21} />
+        </button>
+        <button
+          className="rail-button"
+          title="La Tower"
+          aria-label="La Tower"
+          onClick={onTower}
+        >
+          <Castle size={21} />
         </button>
         <button
           className="rail-button"
@@ -1400,6 +1388,8 @@ export function Casino() {
       <CasinoHome game={game} onNavigate={navigate} />
     ) : view === "poker" ? (
       <PokerCasino game={game} onNavigate={navigate} />
+    ) : view === "tower" ? (
+      <TowerCasino game={game} onNavigate={navigate} />
     ) : (
       <BlackjackCasino game={game} onNavigate={navigate} />
     );
@@ -1868,6 +1858,7 @@ function BlackjackCasino({
   const goHome = useCallback(() => onNavigate("home"), [onNavigate]);
   const goBlackjack = useCallback(() => setModal(null), []);
   const goPoker = useCallback(() => onNavigate("poker"), [onNavigate]);
+  const goTower = useCallback(() => onNavigate("tower"), [onNavigate]);
   const openTables = useCallback(() => setModal("tables"), []);
   const openHistory = useCallback(() => setModal("history"), []);
   const openRules = useCallback(() => setModal("rules"), []);
@@ -1900,6 +1891,7 @@ function BlackjackCasino({
         onHome={goHome}
         onBlackjack={goBlackjack}
         onPoker={goPoker}
+        onTower={goTower}
         onTables={openTables}
         onHistory={openHistory}
         onRules={openRules}

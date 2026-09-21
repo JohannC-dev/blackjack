@@ -1,6 +1,6 @@
 # MINUIT · Casino multijoueur
 
-Blackjack européen et Texas Hold’em multijoueurs en crédits fictifs. Next.js **16.3.5**, React, TypeScript, **Bun**, Socket.IO. Aucune base de données.
+Blackjack européen, Texas Hold’em et La Tower, multijoueurs en crédits fictifs. Next.js **16.3.5**, React, TypeScript, **Bun**, Socket.IO. Aucune base de données.
 
 ## Lancer le jeu
 
@@ -35,6 +35,16 @@ Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table
 - Les cartes privées sont retirées individuellement des snapshots envoyés aux adversaires. La reconnexion restaure table, siège et cartes.
 - Chat de table éphémère, limité à cinq messages en dix secondes et sans filtre lexical. Chaque client peut masquer localement un joueur.
 - Les dix dernières mains de la table conservent le board, le pot, les gagnants et uniquement les cartes révélées.
+
+### La Tower
+
+- Choisir une difficulté : **Facile** (5 cartes par étage), **Normal** (4), **Difficile** (3) ou **Impossible** (2). Chaque étage cache toujours **un seul piège**, placé par le serveur au lancement.
+- Mise de **5 à 500** crédits avec les jetons du casino, débitée au lancement. Dix étages : une bonne carte fait monter, le piège fait s’effondrer la tour et perdre la mise.
+- Après chaque étage réussi, encaisser `mise × multiplicateur` ou continuer. Le 10ᵉ étage est encaissé automatiquement. Multiplicateur = `(n / (n − 1))^étage × 0,96`, soit ×8,94 (Facile), ×17,05 (Normal), ×55,36 (Difficile) et ×983,04 (Impossible) au sommet.
+- Seule la carte choisie est révélée, sauf en Impossible où l’autre carte est forcément le piège.
+- **Lucky Tower** : une partie sur 500 devient une tour en or sans piège. Elle remporte au sommet le **jackpot progressif** (1 % de chaque mise, 10 000 crédits au départ), au prorata de la mise (entier à 500) et au minimum 50 × la mise. Le jackpot est en mémoire : il revient à 10 000 au redémarrage. `TOWER_LUCKY_ODDS=1 bun run dev` force une Lucky Tower pour tester.
+- Sons synthétisés en direct (Web Audio) : note montante à chaque étage, roulements de tambour près du sommet, effondrement, sonnerie de jackpot. Les voix « Lucky! » et « JACKPOT! » (`public/audio/tower/`) ont été générées avec la synthèse vocale de Windows ; les remplacer par de vrais enregistrements si besoin.
+- Les autres joueurs apparaissent en cercles discrets à gauche de l’étage qu’ils tentent. Une ascension abandonnée plus de 10 minutes est encaissée automatiquement, ou remboursée si aucun étage n’a été franchi.
 
 ### Blackjack européen
 
