@@ -161,152 +161,192 @@ const COLORS: Record<Palette, [string, string, string, string]> = {
   gold: ["#fffbe8", "#ffd66b", "#e39b22", "#fff3c4"],
 };
 
-const VERTEX = `
-attribute vec2 position;
-void main() { gl_Position = vec4(position, 0.0, 1.0); }
-`;
+type Stop = [number, number, number, number, number];
+// Colour of the fire by temperature (0 to 1): transparent, embers, red, orange, yellow, white.
+const FIRE_STOPS: Stop[] = [
+  [0, 0, 0, 0, 0],
+  [0.1, 90, 12, 8, 0],
+  [0.24, 196, 38, 12, 150],
+  [0.42, 250, 96, 20, 230],
+  [0.62, 255, 170, 56, 255],
+  [0.82, 255, 228, 140, 255],
+  [1, 255, 250, 228, 255],
+];
+const GOLD_STOPS: Stop[] = [
+  [0, 0, 0, 0, 0],
+  [0.1, 90, 56, 10, 0],
+  [0.24, 186, 112, 22, 150],
+  [0.42, 240, 168, 48, 230],
+  [0.62, 255, 212, 104, 255],
+  [0.82, 255, 238, 186, 255],
+  [1, 255, 252, 240, 255],
+];
 
-// Domain-warped fractal noise carves flame tongues out of a "fuel" field that is emitted
-// by the base, the walls and the top of the tower.
-const FRAGMENT = `
-precision highp float;
-uniform vec2 uRes;
-uniform float uRatio;
-uniform float uTime;
-uniform vec4 uRect;
-uniform float uBase;
-uniform float uSide;
-uniform float uCrown;
-uniform float uGlow;
-uniform float uGold;
-uniform float uScale;
-
-// Sine-free hash: stable on every GPU, even with large coordinates.
-float hash(vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.x + p3.y) * p3.z);
-}
-float noise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-             mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
-}
-float fbm(vec2 p) {
-  float value = 0.0;
-  float amplitude = 0.5;
-  for (int i = 0; i < 5; i++) {
-    value += amplitude * noise(p);
-    p = p * 2.02 + vec2(1.7, 9.2);
-    amplitude *= 0.5;
-  }
-  return value;
-}
-
-void main() {
-  vec2 p = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y) / uRatio;
-  float s = uScale;
-  float t = uTime;
-  float left = uRect.x;
-  float top = uRect.y;
-  float right = uRect.z;
-  float bottom = uRect.w;
-  float height = bottom - top;
-
-  vec2 q = p / (70.0 * s);
-  vec2 warp = vec2(
-    fbm(q + vec2(0.0, t * 0.9)),
-    fbm(q + vec2(5.2, t * 1.2))
-  ) - 0.5;
-  vec2 w = p + warp * 46.0 * s;
-
-  float fuel = 0.0;
-  if (uBase > 0.0) {
-    float reach = 34.0 * s;
-    float outside = max(max(left - reach - w.x, w.x - right - reach), 0.0);
-    float h = (bottom - w.y) / (uBase * height);
-    float body = (1.0 - smoothstep(0.0, 1.0, h)) * smoothstep(-0.35, 0.0, h);
-    fuel = max(fuel, exp(-outside / (22.0 * s)) * body);
-  }
-  if (uSide > 0.0) {
-    float litTop = bottom - height * uSide;
-    float dx = min(abs(w.x - left), abs(w.x - right));
-    float width = (10.0 + 26.0 * uSide) * s;
-    float above = (litTop - w.y) / (height * 0.16 + 30.0 * s);
-    float body = (1.0 - smoothstep(0.0, 1.0, above)) * (1.0 - smoothstep(bottom - 4.0 * s, bottom + 14.0 * s, w.y));
-    fuel = max(fuel, exp(-dx / width) * body);
-  }
-  if (uCrown > 0.0) {
-    float outside = max(max(left - w.x, w.x - right), 0.0);
-    float h = (top - w.y) / (uCrown * height);
-    float body = (1.0 - smoothstep(0.0, 1.0, h)) * smoothstep(-0.5, 0.0, h);
-    fuel = max(fuel, exp(-outside / (26.0 * s)) * body);
-  }
-
-  float n = fbm(vec2(p.x / (34.0 * s), p.y / (40.0 * s) + t * 1.7));
-  float n2 = fbm(vec2(p.x / (14.0 * s), p.y / (17.0 * s) + t * 2.6));
-  float fire = clamp((fuel * (0.5 + n) - n2 * 0.38) * 1.5, 0.0, 1.0);
-
-  vec3 deep = mix(vec3(0.45, 0.04, 0.03), vec3(0.5, 0.28, 0.05), uGold);
-  vec3 orange = mix(vec3(1.0, 0.33, 0.06), vec3(1.0, 0.64, 0.16), uGold);
-  vec3 yellow = mix(vec3(1.0, 0.76, 0.3), vec3(1.0, 0.9, 0.55), uGold);
-  vec3 color = mix(deep, orange, smoothstep(0.12, 0.42, fire));
-  color = mix(color, yellow, smoothstep(0.42, 0.7, fire));
-  color = mix(color, vec3(1.0, 0.97, 0.88), smoothstep(0.78, 0.97, fire));
-  float alpha = smoothstep(0.08, 0.36, fire);
-
-  float outsideX = max(max(left - p.x, p.x - right), 0.0);
-  float glow = uGlow * exp(-abs(p.y - bottom) / (70.0 * s)) * exp(-outsideX / (140.0 * s)) * 0.45;
-  vec3 glowColor = mix(vec3(1.0, 0.36, 0.08), vec3(1.0, 0.7, 0.25), uGold);
-
-  gl_FragColor = vec4(color * alpha + glowColor * glow, clamp(alpha + glow, 0.0, 1.0));
-}
-`;
-
-function createFire(canvas: HTMLCanvasElement) {
-  const gl = canvas.getContext("webgl", {
-    premultipliedAlpha: true,
-    antialias: false,
-  });
-  if (!gl) return null;
-  const compile = (type: number, source: string) => {
-    const shader = gl.createShader(type)!;
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    return shader;
-  };
-  const program = gl.createProgram()!;
-  gl.attachShader(program, compile(gl.VERTEX_SHADER, VERTEX));
-  gl.attachShader(program, compile(gl.FRAGMENT_SHADER, FRAGMENT));
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
-  gl.useProgram(program);
-  const buffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.bufferData(
-    gl.ARRAY_BUFFER,
-    new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
-    gl.STATIC_DRAW,
+function sample(stops: Stop[], t: number, channel: number) {
+  let index = 1;
+  while (index < stops.length - 1 && stops[index][0] < t) index++;
+  const from = stops[index - 1];
+  const to = stops[index];
+  const progress = Math.max(
+    0,
+    Math.min(1, (t - from[0]) / (to[0] - from[0] || 1)),
   );
-  const position = gl.getAttribLocation(program, "position");
-  gl.enableVertexAttribArray(position);
-  gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-  const uniform = (name: string) => gl.getUniformLocation(program, name);
-  const uniforms = {
-    res: uniform("uRes"),
-    ratio: uniform("uRatio"),
-    time: uniform("uTime"),
-    rect: uniform("uRect"),
-    base: uniform("uBase"),
-    side: uniform("uSide"),
-    crown: uniform("uCrown"),
-    glow: uniform("uGlow"),
-    gold: uniform("uGold"),
-    scale: uniform("uScale"),
+  return from[channel] + (to[channel] - from[channel]) * progress;
+}
+
+/** 256 packed RGBA colours (little-endian ABGR) written straight into ImageData. */
+function fireLut(gold: number) {
+  const lut = new Uint32Array(256);
+  for (let index = 0; index < 256; index++) {
+    const t = index / 255;
+    const channel = (value: number) =>
+      Math.round(
+        sample(FIRE_STOPS, t, value) * (1 - gold) +
+          sample(GOLD_STOPS, t, value) * gold,
+      );
+    lut[index] =
+      ((channel(4) << 24) |
+        (channel(3) << 16) |
+        (channel(2) << 8) |
+        channel(1)) >>>
+      0;
+  }
+  return lut;
+}
+
+type FireOptions = {
+  bounds: { left: number; right: number; top: number; bottom: number };
+  base: number;
+  side: number;
+  crown: number;
+  lit: boolean;
+  sway: number;
+  lut: Uint32Array;
+  frozen: boolean;
+};
+
+/**
+ * Classic cellular ("Doom") fire: every cell takes the heat of a random neighbour below
+ * it, minus a random cooling. Hot cells placed along the tower feed flames that rise,
+ * flicker and sway. The grid is a few thousand cells, drawn once per frame with
+ * putImageData and smoothed by the browser when the canvas is scaled up to the stage.
+ */
+function createFireGrid(canvas: HTMLCanvasElement) {
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  let seed = 0x2545f491;
+  const random01 = () => {
+    seed ^= seed << 13;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5;
+    return (seed >>> 0) / 4_294_967_296;
   };
-  return { gl, uniforms };
+  let cell = 5;
+  let width = 0;
+  let height = 0;
+  let heat = new Float32Array(0);
+  let image: ImageData | null = null;
+  let pixels = new Uint32Array(0);
+  let idle = false;
+  return {
+    resize(cssWidth: number, cssHeight: number) {
+      cell = cssWidth > 700 ? 4 : 3;
+      // A light blur melts the grid cells into soft flames at almost no cost.
+      canvas.style.filter = `blur(${cell * 0.7}px)`;
+      width = Math.max(1, Math.ceil(cssWidth / cell));
+      height = Math.max(1, Math.ceil(cssHeight / cell));
+      canvas.width = width;
+      canvas.height = height;
+      heat = new Float32Array(width * height);
+      image = context.createImageData(width, height);
+      pixels = new Uint32Array(image.data.buffer);
+      idle = false;
+    },
+    step(options: FireOptions) {
+      if (!image || (idle && !options.lit)) return;
+      const { left, right, top, bottom } = options.bounds;
+      const towerHeight = Math.max(1, bottom - top);
+
+      if (!options.frozen) {
+        // How far the flames rise above their source, in pixels.
+        const reach = Math.max(
+          12,
+          towerHeight *
+            Math.max(options.base, options.crown, options.side > 0 ? 0.13 : 0),
+        );
+        const cooling = (2 * cell) / reach;
+        let hottest = 0;
+        for (let y = 0; y < height - 1; y++) {
+          const row = y * width;
+          const below = row + width;
+          for (let x = 0; x < width; x++) {
+            let source = x + Math.floor(random01() * 3 - 1 + options.sway);
+            if (source < 0) source = 0;
+            else if (source >= width) source = width - 1;
+            const value = heat[below + source] - random01() * cooling;
+            const next = value > 0 ? value : 0;
+            heat[row + x] = next;
+            if (next > hottest) hottest = next;
+          }
+        }
+        heat.fill(0, (height - 1) * width);
+
+        if (options.lit) {
+          const feed = (x: number, y: number, strength: number) => {
+            if (x < 0 || x >= width || y < 0 || y >= height) return;
+            const index = y * width + x;
+            const value = strength * (0.7 + random01() * 0.3);
+            if (value > heat[index]) heat[index] = value;
+          };
+          const baseRow = Math.floor(bottom / cell);
+          const leftCell = Math.floor(left / cell);
+          const rightCell = Math.floor(right / cell);
+          if (options.base > 0) {
+            const spread = Math.max(2, Math.round(30 / cell));
+            const strength = Math.min(1, 0.6 + options.base * 2.2);
+            for (let x = leftCell - spread; x <= rightCell + spread; x++) {
+              const edge = Math.min(
+                x - (leftCell - spread),
+                rightCell + spread - x,
+              );
+              const taper = Math.min(1, (edge + 1) / spread);
+              feed(x, baseRow, strength * taper);
+              feed(x, baseRow - 1, strength * taper);
+            }
+          }
+          if (options.side > 0) {
+            const litTop = Math.floor(
+              (bottom - towerHeight * options.side) / cell,
+            );
+            for (let y = litTop; y <= baseRow; y++)
+              for (const x of [
+                leftCell - 1,
+                leftCell,
+                rightCell,
+                rightCell + 1,
+              ])
+                feed(x, y, 0.95);
+          }
+          if (options.crown > 0) {
+            const crownRow = Math.floor(top / cell);
+            const strength = Math.min(1, 0.55 + options.crown * 2);
+            for (let x = leftCell; x <= rightCell; x++) {
+              feed(x, crownRow, strength);
+              feed(x, crownRow + 1, strength);
+            }
+          }
+        }
+        idle = !options.lit && hottest < 0.004;
+      }
+
+      const lut = options.lut;
+      for (let index = 0; index < heat.length; index++) {
+        const value = heat[index];
+        pixels[index] = lut[value >= 1 ? 255 : (value * 255) | 0];
+      }
+      context.putImageData(image, 0, 0);
+    },
+  };
 }
 
 function sprite(color: string, soft = 0.55) {
@@ -331,8 +371,8 @@ const layer: CSSProperties = {
 };
 
 /**
- * Fire around `targetRef`: a WebGL flame shader grown by `heat` (0 to 1, one tenth per
- * floor), with 2D particles on top for embers, sparks, smoke and the explosions.
+ * Fire around `targetRef`, grown by `heat` (0 to 1, one tenth per floor): a cellular fire
+ * on a 2D canvas, with particles on top for embers, sparks, smoke and the explosions.
  */
 export function TowerFx({
   targetRef,
@@ -485,7 +525,7 @@ export function TowerFx({
     const fireCanvas = fireRef.current!;
     const canvas = particlesRef.current!;
     const context = canvas.getContext("2d")!;
-    const fire = createFire(fireCanvas);
+    const fire = createFireGrid(fireCanvas);
     const state = world.current;
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     state.reduced = media.matches;
@@ -499,20 +539,11 @@ export function TowerFx({
       dust: sprite("#8a7f95", 0.45),
     };
     let dpr = 1;
-    // The flames are soft: a lower resolution keeps the shader cheap.
-    const fireRatio = 0.75;
     const resize = () => {
       dpr = Math.min(2, window.devicePixelRatio || 1);
       canvas.width = Math.max(1, Math.round(canvas.clientWidth * dpr));
       canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr));
-      fireCanvas.width = Math.max(
-        1,
-        Math.round(fireCanvas.clientWidth * fireRatio),
-      );
-      fireCanvas.height = Math.max(
-        1,
-        Math.round(fireCanvas.clientHeight * fireRatio),
-      );
+      fire?.resize(fireCanvas.clientWidth, fireCanvas.clientHeight);
     };
     resize();
     const observer = new ResizeObserver(resize);
@@ -521,6 +552,8 @@ export function TowerFx({
     const emitters = { embers: 0, sparks: 0, smoke: 0 };
     let level = settings.current.heat * 10;
     let gold = settings.current.golden ? 1 : 0;
+    let lut = fireLut(gold);
+    let lutGold = gold;
     let last = performance.now();
     let clock = 0;
     let frame = 0;
@@ -528,8 +561,7 @@ export function TowerFx({
       frame = requestAnimationFrame(step);
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      // Wrapped so the noise coordinates never grow large enough to lose precision.
-      if (!state.reduced) clock = (clock + dt) % 600;
+      if (!state.reduced) clock += dt;
       const host = canvas.getBoundingClientRect();
       state.host = { left: host.left, top: host.top };
       const target = targetRef.current?.getBoundingClientRect();
@@ -558,26 +590,20 @@ export function TowerFx({
       const palette: Palette = golden ? "gold" : "fire";
 
       if (fire) {
-        const { gl, uniforms } = fire;
-        gl.viewport(0, 0, fireCanvas.width, fireCanvas.height);
-        gl.clearColor(0, 0, 0, 0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        if (target && level > 2.2) {
-          gl.uniform2f(uniforms.res, fireCanvas.width, fireCanvas.height);
-          gl.uniform1f(uniforms.ratio, fireRatio);
-          gl.uniform1f(uniforms.time, clock);
-          gl.uniform4f(uniforms.rect, left, top, right, bottom);
-          gl.uniform1f(uniforms.base, profile.base);
-          gl.uniform1f(uniforms.side, profile.side);
-          gl.uniform1f(uniforms.crown, profile.crown);
-          gl.uniform1f(uniforms.glow, profile.glow);
-          gl.uniform1f(uniforms.gold, gold);
-          gl.uniform1f(
-            uniforms.scale,
-            Math.max(0.4, Math.min(1.4, height / 620)),
-          );
-          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        if (Math.abs(gold - lutGold) > 0.02) {
+          lut = fireLut(gold);
+          lutGold = gold;
         }
+        fire.step({
+          bounds: state.bounds,
+          base: profile.base,
+          side: profile.side,
+          crown: profile.crown,
+          lit: Boolean(target) && level > 2.2,
+          sway: Math.sin(clock * 0.7) * 0.35,
+          lut,
+          frozen: state.reduced,
+        });
       }
 
       if (target && !state.reduced) {
@@ -666,6 +692,29 @@ export function TowerFx({
       particles.length = alive;
 
       context.globalCompositeOperation = "lighter";
+      if (target && profile.glow > 0.01) {
+        const centerX = (left + right) / 2;
+        const radius = Math.max(60, (right - left) * 0.95);
+        const glowColor = golden ? "255, 190, 70" : "255, 110, 30";
+        const gradient = context.createRadialGradient(
+          centerX,
+          bottom,
+          0,
+          centerX,
+          bottom,
+          radius,
+        );
+        gradient.addColorStop(0, `rgba(${glowColor}, ${profile.glow * 0.3})`);
+        gradient.addColorStop(1, `rgba(${glowColor}, 0)`);
+        context.globalAlpha = 1;
+        context.fillStyle = gradient;
+        context.fillRect(
+          centerX - radius,
+          bottom - radius,
+          radius * 2,
+          radius * 2,
+        );
+      }
       for (const particle of particles) {
         if (particle.kind === "smoke" || particle.kind === "dust") continue;
         const t = particle.age / particle.life;

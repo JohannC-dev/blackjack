@@ -121,6 +121,7 @@
 /* Stage */
 .stage {
   --heat: 0;
+  --ascent: 0;
   position: relative;
   flex: 1;
   min-height: 340px;
@@ -146,6 +147,67 @@
 .stage[data-golden] .skyGlow {
   background: radial-gradient(circle at 50% 70%, #d9a13a 0%, transparent 62%);
   opacity: 0.4;
+}
+/* Ascension: the stage lightens from above as the climb goes on. */
+.ascentLight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 65% 75% at 50% -12%, #d4c0ff90, transparent 70%),
+    linear-gradient(180deg, #9b74f03a, transparent 65%);
+  opacity: var(--ascent);
+  transition: opacity 0.9s var(--ease);
+}
+.ascentLight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-conic-gradient(
+    from 160deg at 50% -25%,
+    #e2d4ff26 0deg 3deg,
+    transparent 3deg 10deg
+  );
+  mask-image: linear-gradient(180deg, #000, transparent 80%);
+  opacity: calc(var(--ascent) * 0.9);
+  animation: beamsDrift 14s ease-in-out infinite alternate;
+}
+.stage[data-golden] .ascentLight {
+  background:
+    radial-gradient(ellipse 65% 75% at 50% -12%, #ffe6a890, transparent 70%),
+    linear-gradient(180deg, #f3c9693a, transparent 65%);
+}
+.stage[data-golden] .ascentLight::before {
+  background: repeating-conic-gradient(
+    from 160deg at 50% -25%,
+    #fff1c826 0deg 3deg,
+    transparent 3deg 10deg
+  );
+}
+.ascentFlash {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at 50% 60%, #cdb6ff66, transparent 62%);
+}
+.shock {
+  position: absolute;
+  z-index: 3;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 2px solid #e2d4ff;
+  box-shadow:
+    0 0 26px #b79afa,
+    inset 0 0 26px #b79afa88;
+  opacity: 0;
+  pointer-events: none;
+}
+.grow {
+  transform-origin: 50% 100%;
+  transition: transform 0.8s var(--ease);
 }
 .fx {
   position: absolute;
@@ -217,8 +279,13 @@
   gap: 10px;
   padding: 5px 12px 5px 0;
   border-radius: 12px;
-  background: linear-gradient(180deg, #2a2338f2, #1b1627f2);
-  border: 1px solid #ffffff10;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, #7a5fd0 calc(var(--ascent) * 42%), #2a2338),
+    color-mix(in oklab, #4a3790 calc(var(--ascent) * 42%), #1b1627)
+  );
+  border: 1px solid
+    color-mix(in oklab, #c9b0ff calc(var(--ascent) * 55%), #ffffff10);
   box-shadow:
     0 8px 18px #0007,
     inset 0 1px 0 #ffffff0d;
@@ -383,9 +450,17 @@
     serif;
   background:
     repeating-linear-gradient(45deg, #ffffff07 0 4px, transparent 4px 9px),
-    linear-gradient(160deg, #3a2b58, #241a37);
-  border: 1px solid #b79afa2a;
+    linear-gradient(
+      160deg,
+      color-mix(in oklab, #8a6ae0 calc(var(--ascent) * 55%), #3a2b58),
+      color-mix(in oklab, #5a42b0 calc(var(--ascent) * 55%), #241a37)
+    );
+  border: 1px solid
+    color-mix(in oklab, #d9c8ff calc(var(--ascent) * 60%), #b79afa2a);
   box-shadow: inset 0 0 0 3px #1a1428;
+  transition:
+    background 0.8s,
+    border-color 0.8s;
 }
 .card[data-lucky] .cardBack {
   color: #7a5310;
@@ -820,6 +895,14 @@
 }
 
 /* Keyframes */
+@keyframes beamsDrift {
+  from {
+    transform: rotate(-3deg);
+  }
+  to {
+    transform: rotate(3deg);
+  }
+}
 @keyframes towerShake {
   0% {
     transform: translate(0, 0) rotate(0);
@@ -1070,7 +1153,11 @@
   .rubble i {
     animation: none;
   }
+  .ascentLight::before {
+    animation: none;
+  }
   .camera,
+  .grow,
   .cardInner {
     transition-duration: 0.01s !important;
   }

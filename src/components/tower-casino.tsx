@@ -110,6 +110,8 @@ export function TowerCasino({
   const viewportRef = useRef<HTMLDivElement>(null);
   const towerRef = useRef<HTMLDivElement>(null);
   const floorsRef = useRef<HTMLDivElement>(null);
+  const shockRef = useRef<HTMLDivElement>(null);
+  const flashRef = useRef<HTMLDivElement>(null);
 
   const play = useCallback(
     (effect: Parameters<typeof playCasinoSound>[1], count = 1) => {
@@ -120,6 +122,49 @@ export function TowerCasino({
   );
   const sfx = useCallback((sound: (context: AudioContext) => void) => {
     if (soundRef.current && audioRef.current) sound(audioRef.current);
+  }, []);
+  const ascend = useCallback((floor: number, card: DOMRect | undefined) => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const strength = floor / TOWER_FLOORS;
+    towerRef.current?.animate(
+      [
+        { transform: "scale(1)" },
+        { transform: `scale(${1.02 + strength * 0.05})`, offset: 0.22 },
+        { transform: "scale(1)" },
+      ],
+      { duration: 380 + floor * 30, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+    );
+    viewportRef.current?.animate(
+      [
+        { transform: "translateY(0)" },
+        { transform: `translateY(${2 + floor * 0.7}px)`, offset: 0.12 },
+        { transform: "translateY(0)" },
+      ],
+      { duration: 260 + floor * 12, easing: "ease-out" },
+    );
+    flashRef.current?.animate(
+      [{ opacity: 0.25 + strength * 0.6 }, { opacity: 0 }],
+      { duration: 500 + floor * 40, easing: "ease-out" },
+    );
+    const shock = shockRef.current;
+    const stage = shock?.parentElement?.getBoundingClientRect();
+    if (shock && stage && card) {
+      shock.style.left = `${card.left + card.width / 2 - stage.left}px`;
+      shock.style.top = `${card.top + card.height / 2 - stage.top}px`;
+      shock.animate(
+        [
+          { transform: "translate(-50%, -50%) scale(0.2)", opacity: 0.95 },
+          {
+            transform: `translate(-50%, -50%) scale(${2.4 + floor * 0.35})`,
+            opacity: 0,
+          },
+        ],
+        {
+          duration: 620 + floor * 30,
+          easing: "cubic-bezier(0.1, 0.7, 0.3, 1)",
+        },
+      );
+    }
   }, []);
   const later = useCallback((delay: number, callback: () => void) => {
     timers.current.push(window.setTimeout(callback, delay));
@@ -165,6 +210,7 @@ export function TowerCasino({
       );
       const rect = card?.getBoundingClientRect();
       if (rect) fxRef.current?.pop(rect.left + rect.width / 2, rect.top);
+      ascend(run.floor, rect);
     }
     if (previous.status !== "playing" || run.status === "playing") return;
     clearTimers();
@@ -192,7 +238,7 @@ export function TowerCasino({
       setPhase("celebrating");
       later(CELEBRATE_MS, () => setPhase("done"));
     }
-  }, [tower, run, play, sfx, later, clearTimers]);
+  }, [tower, run, play, sfx, ascend, later, clearTimers]);
 
   // Announce other players' big moments.
   useEffect(() => {
@@ -305,15 +351,19 @@ export function TowerCasino({
     ((status === "cashed" || status === "topped") && phase !== "idle");
   const heat = status === "lost" ? 0 : towerHeat(floor);
 
+  // Ascension: the tower grows and the violet brightens with every floor.
+  const ascent = collapsed ? 0 : floor / TOWER_FLOORS;
+  const growth = 1 + ascent * 0.28;
+
   // Camera: keep the floor being played in the lower half of the stage.
-  const overflow = Math.max(0, metrics.tower - metrics.view);
+  const overflow = Math.max(0, metrics.tower * growth - metrics.view);
   const focusFloor = collapsed ? 0 : Math.min(floor, TOWER_FLOORS - 1);
   const shift = Math.round(
     Math.max(
       0,
       Math.min(
         overflow,
-        (focusFloor + 0.5) * metrics.pitch + 40 - metrics.view * 0.55,
+        (focusFloor + 0.5) * metrics.pitch * growth + 40 - metrics.view * 0.55,
       ),
     ),
   );
@@ -384,10 +434,11 @@ export function TowerCasino({
             data-status={status}
             data-golden={golden || undefined}
             data-lucky={shownRun?.lucky || undefined}
-            style={{ "--heat": heat } as CSSProperties}
+            style={{ "--heat": heat, "--ascent": ascent } as CSSProperties}
             aria-label="La tour"
           >
             <div className={styles.skyGlow} aria-hidden="true" />
+            <div className={styles.ascentLight} aria-hidden="true" />
             <TowerFx
               ref={fxRef}
               targetRef={floorsRef}
@@ -400,26 +451,37 @@ export function TowerCasino({
                 className={styles.camera}
                 style={{ transform: `translateY(${shift}px)` }}
               >
-                <TowerView
-                  key={shownRun?.id ?? `preview-${difficulty}`}
-                  run={shownRun}
-                  cols={shownRun?.cols ?? TOWER_DIFFICULTIES[difficulty].cols}
-                  difficulty={shownRun?.difficulty ?? difficulty}
-                  phase={phase}
-                  pendingPick={pendingPick}
-                  canPick={Boolean(playing) && !busy && !animating}
-                  onPick={pick}
-                  ghosts={ghosts}
-                  me={game.profile?.name ?? ""}
-                  towerRef={towerRef}
-                  floorsRef={floorsRef}
-                />
+                <div
+                  className={styles.grow}
+                  style={{ transform: `scale(${growth})` }}
+                >
+                  <TowerView
+                    key={shownRun?.id ?? `preview-${difficulty}`}
+                    run={shownRun}
+                    cols={shownRun?.cols ?? TOWER_DIFFICULTIES[difficulty].cols}
+                    difficulty={shownRun?.difficulty ?? difficulty}
+                    phase={phase}
+                    pendingPick={pendingPick}
+                    canPick={Boolean(playing) && !busy && !animating}
+                    onPick={pick}
+                    ghosts={ghosts}
+                    me={game.profile?.name ?? ""}
+                    towerRef={towerRef}
+                    floorsRef={floorsRef}
+                  />
+                </div>
               </div>
               {shownRun?.status === "lost" && phase !== "shaking" && (
                 <Rubble cols={shownRun.cols} />
               )}
             </div>
             <div className={styles.vignette} aria-hidden="true" />
+            <div
+              className={styles.ascentFlash}
+              ref={flashRef}
+              aria-hidden="true"
+            />
+            <div className={styles.shock} ref={shockRef} aria-hidden="true" />
             {luckyIntro && <LuckyBanner />}
             {shownRun &&
               shownRun.status !== "playing" &&
