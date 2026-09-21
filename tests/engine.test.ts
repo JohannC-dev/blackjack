@@ -668,6 +668,21 @@ describe("Multiplayer authority and lifecycle", () => {
     expect(bobSeat.hands).toHaveLength(0);
     expect(bobSeat.bet).toEqual({ main: 0, three: 0, pairs: 0 });
   });
+  test("a bet spent in another game before the deal is not charged", () => {
+    const alice = player(),
+      bob = player("Bob");
+    const { table } = tableWith([card(10), card(10), card(8)], [alice, bob]);
+    for (const p of [alice, bob])
+      table.command(p.id, { type: "ready", ready: true });
+    // The wallet is shared: Bob starts a Tower climb while confirmed here.
+    bob.balance = 10;
+    table.startRound();
+    expect(bob.balance).toBe(10);
+    expect(bob.ready).toBe(false);
+    const bobSeat = table.state.seats.find((s) => s.playerId === bob.id)!;
+    expect(bobSeat.hands).toHaveLength(0);
+    expect(alice.balance).toBe(1975);
+  });
   test("releases a seat after two rounds without a dealt hand", () => {
     const active = player(),
       idle = player("Idle");

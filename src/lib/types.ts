@@ -214,3 +214,72 @@ export type PokerCommand =
   | { type: "muck" }
   | { type: "show" }
   | { type: "chat"; text: string };
+
+export type TowerDifficulty = "easy" | "normal" | "hard" | "impossible";
+export type TowerCell = "safe" | "trap" | "gold";
+export type TowerStatus = "playing" | "lost" | "cashed" | "topped";
+
+export type TowerRow = {
+  /** Column chosen by the player on this floor, if the floor was reached. */
+  picked: number | null;
+  /** Revealed only once the floor is decided or the climb is over. */
+  cells: TowerCell[] | null;
+};
+
+export type TowerRun = {
+  id: string;
+  difficulty: TowerDifficulty;
+  cols: number;
+  bet: number;
+  /** Number of floors cleared, 0 to 10. */
+  floor: number;
+  status: TowerStatus;
+  /** Set when the player turned the hidden golden card of rows 3 to 6. */
+  lucky: boolean;
+  rows: TowerRow[];
+  payout: number;
+  startedAt: number;
+};
+
+export type TowerGhost = {
+  id: string;
+  playerId: string;
+  name: string;
+  difficulty: TowerDifficulty;
+  cols: number;
+  floor: number;
+  status: TowerStatus;
+  lucky: boolean;
+  payout: number;
+};
+
+export type TowerFeedItem = {
+  id: string;
+  name: string;
+  status: Exclude<TowerStatus, "playing">;
+  difficulty: TowerDifficulty;
+  floor: number;
+  lucky: boolean;
+  amount: number;
+  timestamp: number;
+};
+
+/** Public view of the player's Tower room: its climbers and recent results. */
+export type TowerPublicState = {
+  ghosts: TowerGhost[];
+  feed: TowerFeedItem[];
+};
+
+export type TowerClientState = TowerPublicState & {
+  run: TowerRun | null;
+  /** The player's own Lucky pot, paid by the golden card. */
+  luckyPot: number;
+};
+
+/** The shared wallet, pushed by the server whenever the balance changes. */
+export type Wallet = { balance: number; seq: number };
+
+export type TowerCommand =
+  | { type: "start"; difficulty: TowerDifficulty; bet: number }
+  | { type: "pick"; column: number }
+  | { type: "cashout" };

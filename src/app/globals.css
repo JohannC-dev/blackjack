@@ -8640,3 +8640,164 @@ h1 > span:not(.live-tag) {
     transform-origin: 50% 0;
   }
 }
+
+/* ── LA TOWER · lobby poster ─────────────────────────────────────────── */
+/* Three games side by side: posters stack their art above the copy. */
+.game-selection {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 1320px;
+}
+.game-poster {
+  grid-template-columns: 1fr;
+  grid-template-rows: 240px auto;
+  min-height: 0;
+}
+.game-poster .poster-copy {
+  padding: 26px 26px 24px;
+}
+.game-poster .poster-copy h2 {
+  font-size: clamp(30px, 2.6vw, 42px);
+}
+@media (max-width: 1100px) {
+  .game-selection {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 700px) {
+  .game-selection {
+    grid-template-columns: 1fr;
+  }
+}
+.tower-art {
+  background: radial-gradient(circle at 50% 48%, #543069, #291b39 72%);
+}
+.tower-poster-art {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.tpa-beam {
+  position: absolute;
+  left: 50%;
+  top: -20px;
+  width: 220px;
+  height: 280px;
+  translate: -50% 0;
+  background: linear-gradient(180deg, #b79afa24, transparent 80%);
+  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
+  filter: blur(6px);
+}
+.tpa-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: 30px;
+  width: 200px;
+  height: 44px;
+  translate: -50% 0;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, #0009, transparent 70%);
+}
+.tpa-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+/* Invisible box matching the drawn tower, used to place the fire. */
+.tpa-bounds {
+  position: absolute;
+  pointer-events: none;
+}
+.tpa-scene {
+  position: absolute;
+  left: 50%;
+  bottom: 44px;
+  translate: -50% 0;
+  z-index: 2;
+  perspective: 900px;
+  transition:
+    transform 0.5s var(--ease),
+    filter 0.5s var(--ease);
+}
+.tpa-scene {
+  filter: drop-shadow(0 0 0 transparent);
+}
+.tower-poster:hover .tpa-scene,
+.tower-poster:focus-visible .tpa-scene {
+  transform: translateY(-5px);
+  filter: drop-shadow(0 0 16px #b79afaaa);
+}
+.tpa-iso {
+  position: relative;
+  width: 88px;
+  height: 66px;
+  transform-style: preserve-3d;
+  transform: rotateX(60deg) rotateZ(-40deg);
+}
+.tpa-block {
+  --depth: 20px;
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: translateZ(calc(var(--i) * 24px));
+}
+.tpa-top {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  padding: 9px 8px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #3a2f52, #241c35);
+  border: 1px solid #b79afa33;
+  transform: translateZ(var(--depth));
+}
+.tpa-top i {
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(45deg, #ffffff0a 0 3px, transparent 3px 6px),
+    linear-gradient(160deg, #4a3870, #2c2044);
+  border: 1px solid #b79afa40;
+}
+.tpa-top i.picked {
+  background: linear-gradient(160deg, #e2d4ff, #9b74f0);
+  box-shadow: 0 0 10px #b79afa;
+}
+.tpa-front,
+.tpa-side {
+  position: absolute;
+  background: linear-gradient(180deg, #2a2138, #17111f);
+  border: 1px solid #ffffff10;
+}
+.tpa-front {
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: var(--depth);
+  transform-origin: bottom;
+  transform: rotateX(-90deg);
+}
+.tpa-side {
+  top: 0;
+  right: 0;
+  width: var(--depth);
+  height: 100%;
+  background: linear-gradient(90deg, #1d1628, #120d19);
+  transform-origin: right;
+  transform: rotateY(90deg);
+}
+.tpa-crown {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  color: #f3c969;
+  filter: drop-shadow(0 0 8px #f3c96999);
+  transform: translateZ(calc(4 * 24px + 30px)) rotateZ(40deg) rotateX(-60deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tpa-scene {
+    transition: none;
+  }
+}

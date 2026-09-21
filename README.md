@@ -1,6 +1,6 @@
 # MINUIT · Casino multijoueur
 
-Blackjack européen et Texas Hold’em multijoueurs en crédits fictifs. Next.js **16.3.5**, React, TypeScript, **Bun**, Socket.IO. Aucune base de données.
+Blackjack européen, Texas Hold’em et La Tower, multijoueurs en crédits fictifs. Next.js **16.3.5**, React, TypeScript, **Bun**, Socket.IO. Aucune base de données.
 
 ## Lancer le jeu
 
@@ -35,6 +35,17 @@ Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table
 - Les cartes privées sont retirées individuellement des snapshots envoyés aux adversaires. La reconnexion restaure table, siège et cartes.
 - Chat de table éphémère, limité à cinq messages en dix secondes et sans filtre lexical. Chaque client peut masquer localement un joueur.
 - Les dix dernières mains de la table conservent le board, le pot, les gagnants et uniquement les cartes révélées.
+
+### La Tower
+
+- Choisir une difficulté : **Facile** (5 cartes par étage), **Normal** (4), **Difficile** (3) ou **Impossible** (2). Chaque étage cache toujours **un seul piège**, placé par le serveur au lancement.
+- Mise de **5 à 500** crédits avec les jetons du casino, débitée au lancement. Dix étages : une bonne carte fait monter, le piège fait s’effondrer la tour et perdre la mise.
+- Après chaque étage réussi, encaisser `mise × multiplicateur` ou continuer. Le 10ᵉ étage est encaissé automatiquement. Les multiplicateurs reprennent ceux de la Tower of Chance de MONOPOLY Poker (Normal, Difficile et Impossible correspondent à ses niveaux Easy, Medium et Hard), soit ×7,86 (Facile), ×15,5 (Normal), ×50,9 (Difficile) et ×919 (Impossible) au sommet. La part rendue baisse doucement à mesure qu'on monte, d’environ 92 % au premier étage à 87-90 % au sommet (88 % à 84 % en Facile, qui n’existe pas dans le jeu), plus 3 % versés dans la cagnotte Lucky.
+- Seule la carte choisie est révélée, sauf en Impossible où l’autre carte est forcément le piège.
+- **Lucky Tower** : chaque joueur a sa propre **cagnotte Lucky**, alimentée par 3 % de chacune de ses mises et conservée en mémoire serveur (remise à zéro au redémarrage). Certaines ascensions cachent une **carte dorée** sur une ligne de 3 à 6, jamais à la place du piège, tirée uniquement par le serveur avec une chance réglée par difficulté (≈ 1 ascension sur 500 la retourne en jouant au hasard). La retourner encaisse l’étage atteint et verse la cagnotte ; la tour s’illumine ensuite jusqu’au sommet, en animation seulement. Une carte dorée manquée est révélée avec sa ligne.
+- Sons synthétisés en direct (Web Audio) : note montante à chaque étage, roulements de tambour près du sommet, effondrement, sonnerie de jackpot. Les voix « Lucky! » et « JACKPOT! » (`public/audio/tower/`) ont été générées avec la synthèse vocale de Windows ; les remplacer par de vrais enregistrements si besoin.
+- Les joueurs sont répartis en **salles de 10** (rooms Socket.IO) : on ne voit, et on ne reçoit les mises à jour, que des grimpeurs de sa salle. Quitter la Tower règle l’ascension immédiatement : gains acquis encaissés, mise rendue avant le premier étage. Après une coupure réseau, l’ascension reste reprenable 10 minutes puis est réglée de la même façon.
+- Le solde partagé entre les trois jeux n’est transmis que par l’événement serveur `wallet` (numéroté), jamais par les snapshots de jeu. Une mise Blackjack confirmée mais dépensée ailleurs avant la donne fait sortir le joueur de la manche au lieu de rendre son solde négatif.
 
 ### Blackjack européen
 

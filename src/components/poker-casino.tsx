@@ -3,6 +3,7 @@
 import {
   ArrowLeft,
   ArrowRight,
+  Castle,
   Check,
   Coins,
   EyeOff,
@@ -50,6 +51,7 @@ import { PlayingCard } from "./playing-card";
 import { PokerLobby } from "./poker-lobby";
 import { PokerShuffleAnimation } from "./poker-shuffle";
 import { RoomArt } from "./room-art";
+import { TowerPosterArt } from "./tower-art";
 
 type Game = ReturnType<typeof useGame>;
 type Navigate = (view: CasinoView) => void;
@@ -66,7 +68,7 @@ const THREE_POSITIONS = [
   { x: 50, y: 77 },
   { x: 85, y: 61 },
 ];
-const CasinoRail = memo(function CasinoRail({
+export const CasinoRail = memo(function CasinoRail({
   active,
   onNavigate,
 }: {
@@ -105,6 +107,14 @@ const CasinoRail = memo(function CasinoRail({
         >
           <Spade size={21} />
         </button>
+        <button
+          className={`rail-button ${active === "tower" ? "active" : ""}`}
+          title="La Tower"
+          aria-label="La Tower"
+          onClick={() => onNavigate("tower")}
+        >
+          <Castle size={21} />
+        </button>
       </div>
       <div className="rail-bottom">
         <button className="rail-button" title="Paramètres">
@@ -116,7 +126,7 @@ const CasinoRail = memo(function CasinoRail({
   );
 });
 
-const ClubHeader = memo(function ClubHeader({
+export const ClubHeader = memo(function ClubHeader({
   balance,
   name,
 }: {
@@ -144,8 +154,9 @@ const ClubHeader = memo(function ClubHeader({
   );
 });
 
-function getClubBalance(game: Game) {
+export function getClubBalance(game: Game) {
   return (
+    game.balance ??
     game.pokerState?.balance ??
     game.state?.players.find((player) => player.id === game.playerId)
       ?.balance ??
@@ -161,6 +172,7 @@ export function CasinoHome({
   game: Game;
   onNavigate: Navigate;
 }) {
+  const [towerHot, setTowerHot] = useState(false);
   return (
     <div className="casino-shell hub-shell">
       <CasinoRail active="home" onNavigate={onNavigate} />
@@ -179,7 +191,7 @@ export function CasinoHome({
                 <em>votre table.</em>
               </h1>
               <p>
-                Deux jeux, un seul portefeuille. Entrez sans attendre — les
+                Trois jeux, un seul portefeuille. Entrez sans attendre — les
                 cartes sont déjà prêtes.
               </p>
               <div className="club-trust">
@@ -240,6 +252,33 @@ export function CasinoHome({
                 <p>Cash Game à cinq ou Spin & Play en format éclair.</p>
                 <strong>
                   Entrer dans le lobby <ArrowRight size={17} />
+                </strong>
+              </div>
+            </button>
+            <button
+              className="game-poster tower-poster"
+              onClick={() => onNavigate("tower")}
+              onMouseEnter={() => setTowerHot(true)}
+              onMouseLeave={() => setTowerHot(false)}
+              onFocus={() => setTowerHot(true)}
+              onBlur={() => setTowerHot(false)}
+            >
+              <div className="poster-index">03</div>
+              <div className="poster-art tower-art">
+                <TowerPosterArt hot={towerHot} />
+              </div>
+              <div className="poster-copy">
+                <span>NOUVEAU · SOLO & LIVE</span>
+                <h2>
+                  La
+                  <br />
+                  Tower
+                </h2>
+                <p>
+                  Dix étages, un piège par rangée. Encaissez avant la chute.
+                </p>
+                <strong>
+                  Grimper la tour <ArrowRight size={17} />
                 </strong>
               </div>
             </button>
