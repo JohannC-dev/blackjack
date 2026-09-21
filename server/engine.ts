@@ -30,6 +30,7 @@ const emptySides = () => ({ three: null, pairs: null });
 const BETTING_COUNTDOWN_MS = 12_000;
 const ALL_READY_COUNTDOWN_MS = 3_000;
 const SETTLED_COUNTDOWN_MS = 7_000;
+const IDLE_SEAT_ROUNDS = 2;
 export const BLACKJACK_SHUFFLE_MS = 2_200;
 export function makeShoe(): Card[] {
   const cards: Card[] = [];
@@ -53,6 +54,7 @@ export class Table {
   private nextStep = 0;
   private startRoundAfterShuffle = false;
   private turnOrder: string[] = [];
+  private idleSeatRounds = new Map<number, number>();
   lastUsed = Date.now();
   constructor(
     id: string,
@@ -168,6 +170,10 @@ export class Table {
     this.state.message = "Le croupier mélange le sabot…";
     this.emit();
   }
+  observe(player: Player) {
+    this.players.set(player.id, player);
+    this.emit();
+  }
   add(player: Player) {
     this.players.set(player.id, player);
     if (
@@ -181,9 +187,19 @@ export class Table {
         seat.playerId = player.id;
         seat.bet = emptyBet();
         seat.previousBet = null;
+        this.idleSeatRounds.set(seat.index, 0);
       }
     }
     this.emit();
+  }
+  private clearSeat(seat: Seat) {
+    seat.playerId = null;
+    seat.bet = emptyBet();
+    seat.previousBet = null;
+    seat.hands = [];
+    seat.sides = emptySides();
+    seat.committed = 0;
+    this.idleSeatRounds.delete(seat.index);
   }
   remove(playerId: string) {
     if (
@@ -192,14 +208,7 @@ export class Table {
     )
       throw new Error("Terminez la manche avant de changer de table.");
     for (const seat of this.state.seats)
-      if (seat.playerId === playerId) {
-        seat.playerId = null;
-        seat.bet = emptyBet();
-        seat.previousBet = null;
-        seat.hands = [];
-        seat.sides = emptySides();
-        seat.committed = 0;
-      }
+      if (seat.playerId === playerId) this.clearSeat(seat);
     this.state.gambles = this.state.gambles.filter(
       (entry) => entry.playerId !== playerId,
     );
@@ -309,20 +318,16 @@ export class Table {
           seat.playerId = playerId;
           seat.bet = emptyBet();
           seat.previousBet = null;
+          this.idleSeatRounds.set(seat.index, 0);
         } else {
           if (seat.playerId !== playerId)
             throw new Error("Cette place ne vous appartient pas.");
           if (command.type === "release") {
-            seat.playerId = null;
-            seat.bet = emptyBet();
-            seat.previousBet = null;
             // A released seat must not retain any round-local presentation or
             // accounting state. In normal play these fields are empty during
             // betting, but clearing them here keeps release idempotent and
             // prevents stale chips/results if a table is recovered mid-cycle.
-            seat.hands = [];
-            seat.sides = emptySides();
-            seat.committed = 0;
+            this.clearSeat(seat);
           } else {
             const b = command.bet;
             if (
@@ -451,6 +456,30 @@ export class Table {
     else if (reset || this.state.deadline === null)
       this.state.deadline = Date.now() + BETTING_COUNTDOWN_MS;
   }
+  private expireIdleSeats(dealtSeatIndexes: Set<number>) {
+    const releasedPlayerIds = new Set<string>();
+    for (const seat of this.state.seats) {
+      if (!seat.playerId) {
+        this.idleSeatRounds.delete(seat.index);
+        continue;
+      }
+      if (dealtSeatIndexes.has(seat.index)) {
+        this.idleSeatRounds.set(seat.index, 0);
+        continue;
+      }
+      const idleRounds = (this.idleSeatRounds.get(seat.index) ?? 0) + 1;
+      if (idleRounds >= IDLE_SEAT_ROUNDS) {
+        releasedPlayerIds.add(seat.playerId);
+        this.clearSeat(seat);
+      } else this.idleSeatRounds.set(seat.index, idleRounds);
+    }
+    // `ready` belongs to the player rather than the seat. If an automatic
+    // release removed the player's last seat, do not leave a stale readiness
+    // flag in the table snapshot.
+    for (const playerId of releasedPlayerIds)
+      if (!this.state.seats.some((seat) => seat.playerId === playerId))
+        this.players.get(playerId)!.ready = false;
+  }
   startRound() {
     if (this.state.phase !== "betting") return;
     const seats = this.state.seats.filter(
@@ -468,6 +497,7 @@ export class Table {
       this.startShuffle(Date.now(), true);
       return;
     }
+    this.expireIdleSeats(new Set(seats.map((seat) => seat.index)));
     this.state.gambles = this.state.gambles.filter(
       (entry) => entry.status === "available",
     );
