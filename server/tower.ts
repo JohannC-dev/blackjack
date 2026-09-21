@@ -330,10 +330,21 @@ export class TowerManager {
     this.finish(run, "cashed", now);
   }
 
-  /** Nothing is at risk before the first floor, so the wager is returned. */
+  /**
+   * Nothing is at risk before the first floor, so the wager is returned and
+   * its share taken back from the Lucky pot.
+   */
   private settleAbandoned(run: InternalRun, now: number) {
-    if (!run.floor) this.finish(run, "cashed", now, run.bet);
-    else this.finish(run, "cashed", now);
+    if (run.floor) {
+      this.finish(run, "cashed", now);
+      return;
+    }
+    const pot = this.pots.get(run.player.id) ?? 0;
+    this.pots.set(
+      run.player.id,
+      Math.max(0, Math.round((pot - run.bet * TOWER_LUCKY_SHARE) * 100) / 100),
+    );
+    this.finish(run, "cashed", now, run.bet);
   }
 
   private cells(run: InternalRun, floor: number): TowerCell[] {

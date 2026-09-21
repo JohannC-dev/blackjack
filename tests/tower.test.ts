@@ -451,6 +451,9 @@ describe("Tower rooms", () => {
     manager.leave(refunded, tick());
     expect(cashed.balance).toBe(10_000 - 100 + 124);
     expect(refunded.balance).toBe(10_000);
+    // A refunded wager feeds nothing: the pot cannot be farmed for free.
+    expect(manager.state(cashed).luckyPot).toBe(3);
+    expect(manager.state(refunded).luckyPot).toBe(0);
     expect(manager.roomIdOf(cashed.id)).toBeUndefined();
     // Nothing of the settled climb comes back with the player.
     manager.enter(cashed);
