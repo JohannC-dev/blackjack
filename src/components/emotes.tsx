@@ -156,13 +156,15 @@ export function EmoteButton({
                   type="button"
                   className={styles.emote}
                   disabled={!seated || !target || coolingDown}
+                  aria-label={
+                    target ? `${emote.label} sur ${target.name}` : emote.label
+                  }
                   title={
                     target ? `${emote.label} sur ${target.name}` : emote.label
                   }
                   onClick={() => send(emote)}
                 >
                   <span className={styles.glyph}>{emote.glyph}</span>
-                  <small>{emote.label}</small>
                 </button>
               ))}
             </div>
@@ -176,11 +178,11 @@ export function EmoteButton({
                   type="button"
                   className={styles.emote}
                   disabled={!seated || coolingDown}
+                  aria-label={emote.label}
                   title={emote.label}
                   onClick={() => send(emote)}
                 >
                   <span className={styles.glyph}>{emote.glyph}</span>
-                  <small>{emote.label}</small>
                 </button>
               ))}
             </div>

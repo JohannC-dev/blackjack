@@ -2232,7 +2232,7 @@ h1 > span:not(.live-tag) {
   border: 1px solid #3d314c75;
   border-radius: 14px;
   margin-bottom: 14px;
-  overflow: hidden;
+  overflow: visible;
   background: radial-gradient(ellipse at 50% 50%, #24142e 0%, #18121f 65%);
   box-shadow: 0 6px 36px #00000015;
 }
@@ -2243,7 +2243,7 @@ h1 > span:not(.live-tag) {
   padding: 20px 22px;
   font-size: 9px;
   position: relative;
-  z-index: 2;
+  z-index: 20;
 }
 .table-identity {
   display: flex;
