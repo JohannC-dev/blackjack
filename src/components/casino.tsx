@@ -25,7 +25,9 @@ import {
   House,
   Layers2,
   LoaderCircle,
+  Maximize2,
   Minus,
+  Minimize2,
   Plus,
   Repeat2,
   RotateCcw,
@@ -1194,6 +1196,8 @@ function BlackjackCasino({
   const [doubleChoiceClosing, setDoubleChoiceClosing] = useState(false);
   const [gambleOpen, setGambleOpen] = useState(false);
   const [gamblePromptFeatured, setGamblePromptFeatured] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const shellRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<AudioContext | null>(null);
   const previousCards = useRef(0);
   const previousOwnBet = useRef(0);
@@ -1402,6 +1406,22 @@ function BlackjackCasino({
     if (sound && state?.phase === "shuffling" && audioRef.current)
       playCasinoSound(audioRef.current, "shuffle");
   }, [state?.phase, sound]);
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      setIsFullscreen(document.fullscreenElement === shellRef.current);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !document.fullscreenElement)
+        setIsFullscreen(false);
+    };
+
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
 
   const selectSeat = (s: Seat) => {
     if (!profile) return;
@@ -1498,6 +1518,27 @@ function BlackjackCasino({
     }
     setSound(!sound);
   };
+  const toggleFullscreen = async () => {
+    const shell = shellRef.current;
+    if (!shell) return;
+
+    if (isFullscreen) {
+      setIsFullscreen(false);
+      if (document.fullscreenElement) {
+        await document.exitFullscreen().catch(() => undefined);
+      }
+      return;
+    }
+
+    setIsFullscreen(true);
+    if (document.fullscreenEnabled && shell.requestFullscreen) {
+      try {
+        await shell.requestFullscreen();
+      } catch {
+        // The layout-only mode remains useful when the browser blocks fullscreen.
+      }
+    }
+  };
   const subtitle = myTurn
     ? "C’est à vous de jouer"
     : state?.phase === "shuffling"
@@ -1519,7 +1560,10 @@ function BlackjackCasino({
                 : "Faites vos jeux";
 
   return (
-    <div className="casino-shell">
+    <div
+      ref={shellRef}
+      className={`casino-shell ${isFullscreen ? "is-fullscreen" : ""}`}
+    >
       <aside className="rail" aria-label="Navigation principale">
         <button
           type="button"
@@ -1652,6 +1696,28 @@ function BlackjackCasino({
                       onClick={toggleSound}
                     >
                       <Volume2 size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`poker-sound table-fullscreen-button ${isFullscreen ? "active" : ""}`}
+                      aria-label={
+                        isFullscreen
+                          ? "Quitter le plein écran"
+                          : "Passer la table en plein écran"
+                      }
+                      aria-pressed={isFullscreen}
+                      title={
+                        isFullscreen
+                          ? "Quitter le plein écran"
+                          : "Passer la table en plein écran"
+                      }
+                      onClick={toggleFullscreen}
+                    >
+                      {isFullscreen ? (
+                        <Minimize2 size={15} />
+                      ) : (
+                        <Maximize2 size={15} />
+                      )}
                     </button>
                     <button
                       className="text-button"
