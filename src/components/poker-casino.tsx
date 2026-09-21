@@ -29,6 +29,7 @@ import {
   useState,
   type CSSProperties,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import {
   credits,
@@ -51,6 +52,7 @@ import { PlayingCard } from "./playing-card";
 import { PokerLobby } from "./poker-lobby";
 import { PokerShuffleAnimation } from "./poker-shuffle";
 import { RoomArt } from "./room-art";
+import { EmoteButton, EmoteLayer, type EmotePlayer } from "./emotes";
 import { TowerPosterArt } from "./tower-art";
 
 type Game = ReturnType<typeof useGame>;
@@ -470,7 +472,9 @@ const PokerTableHeading = memo(function PokerTableHeading({
   onLeave,
   onOpenChat,
   onToggleSound,
+  emoteSlot,
 }: {
+  emoteSlot: ReactNode;
   kicker: string;
   title: string;
   chatCount: number;
@@ -501,6 +505,7 @@ const PokerTableHeading = memo(function PokerTableHeading({
         <span>Chat</span>
         {!!chatCount && <b>{chatCount}</b>}
       </button>
+      {emoteSlot}
       <button
         type="button"
         className={`poker-sound ${sound ? "active" : ""}`}
@@ -532,6 +537,27 @@ function PokerTable({ game }: { game: Game }) {
     active: table.activePlayerId,
     phase: table.phase,
   });
+  const emoteSignature = JSON.stringify(
+    table.seats.map((seat) => ({ id: seat.id, name: seat.name })),
+  );
+  const { sendEmote, playerId } = game;
+  const emoteSlot = useMemo(() => {
+    const players: EmotePlayer[] = JSON.parse(emoteSignature);
+    return (
+      <EmoteButton
+        game="poker"
+        players={players}
+        playerId={playerId}
+        seated={players.some((player) => player.id === playerId)}
+        onSend={sendEmote}
+      />
+    );
+  }, [emoteSignature, playerId, sendEmote]);
+  // Blocking a player in the chat also hides their emotes.
+  const emotes = useMemo(
+    () => game.emotes.filter((event) => !blocked.includes(event.fromId)),
+    [game.emotes, blocked],
+  );
   const toCall = me ? Math.max(0, table.currentBet - me.bet) : 0;
   const minimumRaise = table.currentBet + table.minRaise;
   const maximum = me ? me.bet + me.stack : 0;
@@ -706,6 +732,12 @@ function PokerTable({ game }: { game: Game }) {
   }, [sound]);
   return (
     <main className="poker-table-page">
+      <EmoteLayer
+        game="poker"
+        events={emotes}
+        playerId={game.playerId}
+        onDone={game.dismissEmote}
+      />
       <PokerTableHeading
         kicker={`${table.mode === "spin" ? "SPIN & PLAY" : "CASH GAME"} / TABLE ${table.id.slice(-4)}`}
         title={
@@ -720,6 +752,7 @@ function PokerTable({ game }: { game: Game }) {
         onLeave={leaveTable}
         onOpenChat={openChat}
         onToggleSound={toggleSound}
+        emoteSlot={emoteSlot}
       />
       <div className="poker-room-layout">
         <section className="poker-table-panel">
@@ -1314,7 +1347,7 @@ function PokerSeatView({
           <Trophy size={11} />
         </span>
       )}
-      <div className="poker-player-card">
+      <div className="poker-player-card" data-emote-player={seat.id}>
         {active && (
           <PokerTurnIndicator
             deadline={table.deadline}
