@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from "node:crypto";
+import { gameEffect } from "./effect";
 import type { Player } from "./engine";
 import type {
   Card,
@@ -1050,6 +1051,13 @@ export class PokerManager {
     this.send(player.id, this.lobby(player));
   }
 
+  commandEffect(player: Player, command: PokerCommand) {
+    return gameEffect(() => this.command(player, command));
+  }
+
+  tickEffect(now: number) {
+    return gameEffect(() => this.tick(now));
+  }
   tick(now: number) {
     for (const [id, table] of this.tables) {
       const spinNoShow =

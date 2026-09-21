@@ -27,6 +27,8 @@ export function useGame() {
   const [state, setState] = useState<TableState | null>(null);
   const [pokerState, setPokerState] = useState<PokerClientState | null>(null);
   const [towerState, setTowerState] = useState<TowerClientState | null>(null);
+  /** Difference to add to the browser clock to compare it with server deadlines. */
+  const [serverTimeOffset, setServerTimeOffset] = useState(0);
   /** Shared wallet: only the server's wallet event sets it, never a game snapshot. */
   const [balance, setBalance] = useState<number | null>(null);
   const [minesState, setMinesState] = useState<MinesState | null>(null);
@@ -41,6 +43,7 @@ export function useGame() {
   const roomRef = useRef("MINUIT");
   const storageWarned = useRef(false);
   const walletSeq = useRef(0);
+  const clockSyncTimer = useRef<number | null>(null);
   /** Whether the Tower view is open, so a reconnection re-enters its room. */
   const towerOpen = useRef(false);
 
@@ -89,6 +92,7 @@ export function useGame() {
   useEffect(() => {
     if (!token) return;
     setBalance(null);
+    setServerTimeOffset(0);
     const socket = io({
       transports: ["websocket", "polling"],
       reconnectionDelay: 700,
@@ -97,6 +101,33 @@ export function useGame() {
     socketRef.current = socket;
     socket.on("connect", () => {
       walletSeq.current = 0;
+      const synchronizeClock = () => {
+        const sentAt = Date.now();
+        socket
+          .timeout(2000)
+          .emit(
+            "clock:sync",
+            (
+              timeout: Error | null,
+              response: { serverTime?: number } | undefined,
+            ) => {
+              const receivedAt = Date.now();
+              if (
+                timeout ||
+                !response ||
+                typeof response.serverTime !== "number" ||
+                !Number.isFinite(response.serverTime)
+              )
+                return;
+              const midpoint = sentAt + (receivedAt - sentAt) / 2;
+              setServerTimeOffset(response.serverTime - midpoint);
+            },
+          );
+      };
+      if (clockSyncTimer.current !== null)
+        window.clearInterval(clockSyncTimer.current);
+      synchronizeClock();
+      clockSyncTimer.current = window.setInterval(synchronizeClock, 30_000);
       socket
         .timeout(8000)
         .emit(
@@ -163,6 +194,10 @@ export function useGame() {
     });
     socket.on("connect_error", () => setConnected(false));
     return () => {
+      if (clockSyncTimer.current !== null) {
+        window.clearInterval(clockSyncTimer.current);
+        clockSyncTimer.current = null;
+      }
       socket.disconnect();
       socketRef.current = null;
     };
@@ -326,6 +361,7 @@ export function useGame() {
     playerId,
     error,
     pending,
+    serverTimeOffset,
     emotes,
     sendEmote,
     dismissEmote,

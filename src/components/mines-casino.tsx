@@ -40,15 +40,15 @@ import {
 } from "@/lib/tower-audio";
 import type { MinesCell, MinesState } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
-import { CasinoRail, ClubHeader, getClubBalance } from "./poker-casino";
-import type { CasinoView } from "./casino";
+import { CasinoRail, ClubHeader, getClubBalance } from "./shared";
+import type { CasinoView } from "@/lib/navigation";
 import {
   BetChipPicker,
   GameActionButton,
   GameControlGroup,
   GameControlsBar,
 } from "./game-controls";
-import { MineBomb, MineDiamond } from "./mine-art";
+import { MineBomb, MineDiamond } from "./shared/games/mine-art";
 
 type Game = ReturnType<typeof useGame>;
 
@@ -924,7 +924,7 @@ export function MinesCasino({
   return (
     <div className="casino-shell mines-shell">
       <CasinoRail active="mines" onNavigate={onNavigate} />
-      <div className="workspace">
+      <div className="ml-[76px] max-[700px]:ml-[55px] max-[450px]:ml-0">
         <ClubHeader balance={balance} name={game.profile?.name ?? ""} />
         <main className="mines-page">
           <header className="mines-page-heading">

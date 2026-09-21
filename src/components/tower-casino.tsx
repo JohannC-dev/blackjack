@@ -52,9 +52,9 @@ import type {
   TowerRun,
 } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
-import type { CasinoView } from "./casino";
-import { CasinoRail, ClubHeader, getClubBalance } from "./poker-casino";
-import { TowerFx, type TowerFxHandle } from "./tower-fx";
+import type { CasinoView } from "@/lib/navigation";
+import { CasinoRail, ClubHeader, getClubBalance } from "./shared";
+import { TowerFx, type TowerFxHandle } from "./shared/games/tower-fx";
 import {
   BetChipPicker,
   GameActionButton,
@@ -402,7 +402,7 @@ export function TowerCasino({
   return (
     <div className="casino-shell tower-shell">
       <CasinoRail active="tower" onNavigate={onNavigate} />
-      <div className="workspace">
+      <div className="ml-[76px] max-[700px]:ml-[55px] max-[450px]:ml-0">
         <ClubHeader
           balance={getClubBalance(game)}
           name={game.profile?.name ?? ""}

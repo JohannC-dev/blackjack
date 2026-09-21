@@ -69,15 +69,21 @@ import type {
 } from "@/lib/types";
 import { newToken } from "@/lib/identity";
 import { useGame } from "@/lib/use-game";
-import { BlackjackIcon } from "./blackjack-icon";
-import { CountdownText } from "./countdown";
-import { Chip } from "./chip";
-import { PlayingCard } from "./playing-card";
+import { CasinoRail, ClubHeader } from "./shared";
+import { BlackjackIcon } from "./shared/casino/blackjack-icon";
+import type { CasinoView } from "@/lib/navigation";
+import { CountdownText, ServerClockProvider } from "./shared/casino/countdown";
+import { Chip } from "./shared/casino/chip";
+import { PlayingCard } from "./shared/casino/playing-card";
 import { CasinoHome, PokerCasino } from "./poker-casino";
 import { MinesCasino } from "./mines-casino";
-import { PokerShuffleAnimation } from "./poker-shuffle";
+import { PokerShuffleAnimation } from "./shared/casino/poker-shuffle";
 import { TowerCasino } from "./tower-casino";
-import { EmoteButton, EmoteLayer, type EmotePlayer } from "./emotes";
+import {
+  EmoteButton,
+  EmoteLayer,
+  type EmotePlayer,
+} from "./shared/casino/emotes";
 import type { EmoteRequest } from "@/lib/emotes";
 
 const THREE_PAYOUTS = [
@@ -1147,8 +1153,6 @@ function GamblePanel({
   );
 }
 
-export type CasinoView = "home" | "blackjack" | "poker" | "tower" | "mines";
-
 type BlackjackSidebarProps = {
   onHome: () => void;
   onBlackjack: () => void;
@@ -1158,6 +1162,7 @@ type BlackjackSidebarProps = {
   onTables: () => void;
   onHistory: () => void;
   onRules: () => void;
+  blackjackLabel?: string;
 };
 
 const BlackjackSidebar = memo(function BlackjackSidebar({
@@ -1169,92 +1174,25 @@ const BlackjackSidebar = memo(function BlackjackSidebar({
   onTables,
   onHistory,
   onRules,
+  blackjackLabel,
 }: BlackjackSidebarProps) {
   return (
-    <aside className="rail" aria-label="Navigation principale">
-      <button
-        type="button"
-        className="brand-mark"
-        aria-label="Minuit, accueil"
-        onClick={onHome}
-      >
-        <Spade size={28} fill="currentColor" strokeWidth={1.3} />
-      </button>
-      <div className="rail-navigation">
-        <button
-          className="rail-button"
-          title="Accueil"
-          aria-label="Accueil"
-          onClick={onHome}
-        >
-          <House size={21} />
-        </button>
-        <button
-          className="rail-button active"
-          title="Table de blackjack"
-          aria-label="Table de blackjack"
-          onClick={onBlackjack}
-        >
-          <BlackjackIcon />
-        </button>
-        <button
-          className="rail-button"
-          title="Jeu de la mine"
-          aria-label="Jeu de la mine"
-          onClick={onMines}
-        >
-          <span className="rail-diamond-symbol" aria-hidden="true">
-            ◆
-          </span>
-        </button>
-        <button
-          className="rail-button"
-          title="Poker"
-          aria-label="Poker"
-          onClick={onPoker}
-        >
-          <Spade size={21} />
-        </button>
-        <button
-          className="rail-button"
-          title="La Tower"
-          aria-label="La Tower"
-          onClick={onTower}
-        >
-          <Castle size={21} />
-        </button>
-        <button
-          className="rail-button"
-          title="Changer de table"
-          aria-label="Changer de table"
-          onClick={onTables}
-        >
-          <Users size={22} />
-        </button>
-        <button
-          className="rail-button"
-          title="Historique"
-          aria-label="Historique"
-          onClick={onHistory}
-        >
-          <History size={21} />
-        </button>
-      </div>
-      <div className="rail-bottom">
-        <button
-          className="rail-button"
-          title="Règles du jeu"
-          aria-label="Règles du jeu"
-          onClick={onRules}
-        >
-          <CircleHelp size={21} />
-        </button>
-        <div className="rail-monogram">M.</div>
-      </div>
-    </aside>
+    <CasinoRail
+      active="blackjack"
+      blackjackLabel={blackjackLabel}
+      onNavigate={(view) => {
+        if (view === "home") onHome();
+        else if (view === "blackjack") onBlackjack();
+        else if (view === "mines") onMines();
+        else if (view === "poker") onPoker();
+        else if (view === "tower") onTower();
+      }}
+      onTables={onTables}
+      onHistory={onHistory}
+      onRules={onRules}
+    />
   );
 });
-
 const BlackjackTopbar = memo(function BlackjackTopbar({
   balance,
   name,
@@ -1262,27 +1200,8 @@ const BlackjackTopbar = memo(function BlackjackTopbar({
   balance: number;
   name: string;
 }) {
-  return (
-    <header className="topbar">
-      <a className="wordmark" href="/">
-        MINUIT<span>●</span>
-      </a>
-      <span className="topbar-divider" />
-      <div className="topbar-right">
-        <div className="wallet">
-          <Wallet size={17} />
-          <b key={balance}>{credits(balance)}</b>
-          <span>crédits</span>
-          <Coins size={16} className="wallet-coin" />
-        </div>
-        <div className="profile-avatar" title={name || "Votre profil"}>
-          {(name || "M").slice(0, 1).toUpperCase()}
-        </div>
-      </div>
-    </header>
-  );
+  return <ClubHeader balance={balance} name={name} href="/" />;
 });
-
 const BlackjackPageHeading = memo(function BlackjackPageHeading({
   onInvite,
 }: {
@@ -1414,7 +1333,11 @@ export function Casino() {
     setView(next);
   }, []);
   if (!game.profile)
-    return <BlackjackCasino game={game} onNavigate={navigate} />;
+    return (
+      <ServerClockProvider offset={game.serverTimeOffset}>
+        <BlackjackCasino game={game} onNavigate={navigate} />
+      </ServerClockProvider>
+    );
   const content =
     view === "home" ? (
       <CasinoHome game={game} onNavigate={navigate} />
@@ -1440,68 +1363,72 @@ export function Casino() {
         : "le Blackjack";
 
   return (
-    <>
-      {content}
-      {confirmPokerLeave && (
-        <Modal
-          title="Quitter la partie de poker ?"
-          className="leave-poker-modal"
-          onClose={
-            leavingPoker
-              ? undefined
-              : () => {
+    <ServerClockProvider offset={game.serverTimeOffset}>
+      <>
+        {content}
+        {confirmPokerLeave && (
+          <Modal
+            title="Quitter la partie de poker ?"
+            className="leave-poker-modal"
+            onClose={
+              leavingPoker
+                ? undefined
+                : () => {
+                    setConfirmPokerLeave(false);
+                    setPendingView(null);
+                  }
+            }
+          >
+            <span className="modal-emblem">
+              <Spade size={26} fill="currentColor" />
+            </span>
+            <span className="section-kicker">PARTIE EN COURS</span>
+            <h2>Quitter la partie de poker ?</h2>
+            <p className="modal-intro">
+              {pokerExitMessage} Voulez-vous vraiment rejoindre{" "}
+              {pokerExitDestination} ?
+            </p>
+            <div className="leave-poker-actions">
+              <button
+                type="button"
+                className="button secondary"
+                autoFocus
+                disabled={leavingPoker}
+                onClick={() => {
                   setConfirmPokerLeave(false);
                   setPendingView(null);
-                }
-          }
-        >
-          <span className="modal-emblem">
-            <Spade size={26} fill="currentColor" />
-          </span>
-          <span className="section-kicker">PARTIE EN COURS</span>
-          <h2>Quitter la partie de poker ?</h2>
-          <p className="modal-intro">
-            {pokerExitMessage} Voulez-vous vraiment rejoindre{" "}
-            {pokerExitDestination} ?
-          </p>
-          <div className="leave-poker-actions">
-            <button
-              type="button"
-              className="button secondary"
-              autoFocus
-              disabled={leavingPoker}
-              onClick={() => {
-                setConfirmPokerLeave(false);
-                setPendingView(null);
-              }}
-            >
-              Rester au poker
-            </button>
-            <button
-              type="button"
-              className="button primary"
-              disabled={leavingPoker}
-              onClick={async () => {
-                setLeavingPoker(true);
-                const left = await game.pokerCommand({ type: "leave" });
-                setLeavingPoker(false);
-                if (!left) return;
-                setConfirmPokerLeave(false);
-                setView(pendingView ?? "blackjack");
-                setPendingView(null);
-              }}
-            >
-              {leavingPoker ? (
-                <LoaderCircle size={16} className="spinner" />
-              ) : (
-                <BlackjackIcon />
-              )}
-              Quitter et rejoindre {pokerExitDestination}
-            </button>
-          </div>
-        </Modal>
-      )}
-    </>
+                }}
+              >
+                Rester au poker
+              </button>
+              <button
+                type="button"
+                className="button primary"
+                disabled={leavingPoker}
+                onClick={async () => {
+                  setLeavingPoker(true);
+                  const left = await game.pokerCommand({ type: "leave" });
+                  setLeavingPoker(false);
+                  if (!left) return;
+                  setConfirmPokerLeave(false);
+                  setView(pendingView ?? "blackjack");
+                  setPendingView(null);
+                }}
+              >
+                {leavingPoker ? (
+                  <LoaderCircle size={16} className="spinner" />
+                ) : (
+                  <BlackjackIcon />
+                )}
+                {pendingView === "blackjack"
+                  ? "Quitter et jouer au Blackjack"
+                  : "Quitter et rejoindre " + pokerExitDestination}
+              </button>
+            </div>
+          </Modal>
+        )}
+      </>
+    </ServerClockProvider>
   );
 }
 
@@ -1968,9 +1895,10 @@ function BlackjackCasino({
         onTables={openTables}
         onHistory={openHistory}
         onRules={openRules}
+        blackjackLabel={profile ? "Blackjack" : "Table de cartes"}
       />
 
-      <div className="workspace">
+      <div className="ml-[76px] max-[700px]:ml-[55px] max-[450px]:ml-0">
         <BlackjackTopbar
           balance={balance}
           name={me?.name ?? profile?.name ?? "M"}

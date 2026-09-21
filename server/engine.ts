@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from "node:crypto";
+import { gameEffect } from "./effect";
 import {
   betTotal,
   canSplitCards,
@@ -696,6 +697,13 @@ export class Table {
       : dealerTotal > 21
         ? "Le croupier dépasse 21."
         : `Le croupier reste à ${dealerTotal}.`;
+  }
+  commandEffect(playerId: string, command: Command) {
+    return gameEffect(() => this.command(playerId, command));
+  }
+
+  tickEffect(now = Date.now()) {
+    return gameEffect(() => this.tick(now));
   }
   tick(now = Date.now()) {
     let changed = false;

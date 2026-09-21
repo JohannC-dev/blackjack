@@ -1,4 +1,5 @@
 import { randomInt } from "node:crypto";
+import { gameEffect } from "./effect";
 import {
   isMinesTarget,
   minesForTarget,
@@ -116,6 +117,9 @@ export class MinesGame {
     }
   }
 
+  commandEffect(player: MinesPlayer, command: MinesCommand) {
+    return gameEffect(() => this.command(player, command));
+  }
   start(player: MinesPlayer, bet: number, target: number, publish = true) {
     if (this.phase === "playing")
       throw new Error("Terminez la partie en cours avant de rejouer.");

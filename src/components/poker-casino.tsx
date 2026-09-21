@@ -44,17 +44,25 @@ import {
 } from "@/lib/casino-audio";
 import type { PokerAction, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
-import type { CasinoView } from "./casino";
-import { BlackjackIcon } from "./blackjack-icon";
-import { useCountdownSeconds } from "./countdown";
-import { PlayingCard } from "./playing-card";
+import { CasinoRail, ClubHeader, getClubBalance } from "./shared";
+import type { CasinoView } from "@/lib/navigation";
+import { BlackjackIcon } from "./shared/casino/blackjack-icon";
+import {
+  useCountdownSeconds,
+  useServerClockNow,
+} from "./shared/casino/countdown";
+import { PlayingCard } from "./shared/casino/playing-card";
 import { PokerLobby } from "./poker-lobby";
-import { PokerShuffleAnimation } from "./poker-shuffle";
+import { PokerShuffleAnimation } from "./shared/casino/poker-shuffle";
 import { RoomArt } from "./room-art";
-import { EmoteButton, EmoteLayer, type EmotePlayer } from "./emotes";
-import { GamePoster } from "./game-poster";
-import { MineBomb, MineDiamond } from "./mine-art";
-import { TowerPosterArt } from "./tower-art";
+import {
+  EmoteButton,
+  EmoteLayer,
+  type EmotePlayer,
+} from "./shared/casino/emotes";
+import { GamePoster } from "./shared/casino/game-poster";
+import { MineBomb, MineDiamond } from "./shared/games/mine-art";
+import { TowerPosterArt } from "./shared/games/tower-art";
 
 type Game = ReturnType<typeof useGame>;
 type Navigate = (view: CasinoView) => void;
@@ -71,113 +79,6 @@ const THREE_POSITIONS = [
   { x: 50, y: 77 },
   { x: 85, y: 61 },
 ];
-export const CasinoRail = memo(function CasinoRail({
-  active,
-  onNavigate,
-}: {
-  active: CasinoView;
-  onNavigate: Navigate;
-}) {
-  return (
-    <aside className="rail" aria-label="Navigation principale">
-      <button
-        className="brand-mark"
-        aria-label="Minuit, accueil"
-        onClick={() => onNavigate("home")}
-      >
-        <Spade size={28} fill="currentColor" strokeWidth={1.3} />
-      </button>
-      <div className="rail-navigation">
-        <button
-          className={`rail-button ${active === "home" ? "active" : ""}`}
-          title="Accueil"
-          onClick={() => onNavigate("home")}
-        >
-          <House size={21} />
-        </button>
-        <button
-          className={`rail-button ${active === "blackjack" ? "active" : ""}`}
-          title="Blackjack"
-          aria-label="Blackjack"
-          onClick={() => onNavigate("blackjack")}
-        >
-          <BlackjackIcon />
-        </button>
-        <button
-          className={`rail-button ${active === "mines" ? "active" : ""}`}
-          title="Jeu de la mine"
-          aria-label="Jeu de la mine"
-          onClick={() => onNavigate("mines")}
-        >
-          <span className="rail-diamond-symbol" aria-hidden="true">
-            ◆
-          </span>
-        </button>
-        <button
-          className={`rail-button ${active === "poker" ? "active" : ""}`}
-          title="Poker"
-          onClick={() => onNavigate("poker")}
-        >
-          <Spade size={21} />
-        </button>
-        <button
-          className={`rail-button ${active === "tower" ? "active" : ""}`}
-          title="La Tower"
-          aria-label="La Tower"
-          onClick={() => onNavigate("tower")}
-        >
-          <Castle size={21} />
-        </button>
-      </div>
-      <div className="rail-bottom">
-        <button className="rail-button" title="Paramètres">
-          <Settings2 size={20} />
-        </button>
-        <div className="rail-monogram">M.</div>
-      </div>
-    </aside>
-  );
-});
-
-export const ClubHeader = memo(function ClubHeader({
-  balance,
-  name,
-}: {
-  balance: number;
-  name: string;
-}) {
-  return (
-    <header className="topbar">
-      <span className="wordmark">
-        MINUIT<span>●</span>
-      </span>
-      <span className="topbar-divider" />
-      <div className="topbar-right">
-        <div className="wallet">
-          <Wallet size={17} />
-          <b>{credits(balance)}</b>
-          <span>crédits</span>
-          <Coins size={16} className="wallet-coin" />
-        </div>
-        <div className="profile-avatar" title={name || "Votre profil"}>
-          {(name || "M").slice(0, 1).toUpperCase()}
-        </div>
-      </div>
-    </header>
-  );
-});
-
-export function getClubBalance(game: Game) {
-  return (
-    game.balance ??
-    game.pokerState?.balance ??
-    game.state?.players.find((player) => player.id === game.playerId)
-      ?.balance ??
-    game.profile?.balance ??
-    0
-  );
-}
-
 export function CasinoHome({
   game,
   onNavigate,
@@ -188,8 +89,12 @@ export function CasinoHome({
   const [towerHot, setTowerHot] = useState(false);
   return (
     <div className="casino-shell hub-shell">
-      <CasinoRail active="home" onNavigate={onNavigate} />
-      <div className="workspace">
+      <CasinoRail
+        active="home"
+        onNavigate={onNavigate}
+        blackjackLabel="Table de cartes"
+      />
+      <div className="ml-[76px] max-[700px]:ml-[55px] max-[450px]:ml-0">
         <ClubHeader
           balance={getClubBalance(game)}
           name={game.profile?.name ?? ""}
@@ -220,6 +125,7 @@ export function CasinoHome({
           <section className="game-selection" aria-label="Jeux disponibles">
             <GamePoster
               className="blackjack-poster"
+              buttonTitle="Blackjack"
               index="01"
               art={
                 <>
@@ -330,7 +236,7 @@ export function PokerCasino({
   return (
     <div className="casino-shell poker-shell">
       <CasinoRail active="poker" onNavigate={onNavigate} />
-      <div className="workspace">
+      <div className="ml-[76px] max-[700px]:ml-[55px] max-[450px]:ml-0">
         <ClubHeader
           balance={getClubBalance(game)}
           name={game.profile?.name ?? ""}
@@ -406,7 +312,7 @@ function PokerTurnIndicator({
   const seconds = useCountdownSeconds(deadline) ?? 0;
 
   if (deadline === null) return null;
-  const now = Date.now();
+  const now = useServerClockNow();
   const remainingMs = Math.max(0, Math.min(durationMs, deadline - now));
   const progress = 100 * (1 - remainingMs / durationMs);
 
@@ -1315,6 +1221,8 @@ function PokerSeatView({
   collectingBet: boolean;
   maximumBet: number;
 }) {
+  const active = !!seat && table.activePlayerId === seat.id;
+  const turnSeconds = useCountdownSeconds(active ? table.deadline : null);
   if (!seat)
     return (
       <div
@@ -1333,7 +1241,7 @@ function PokerSeatView({
       </div>
     );
   const mine = seat.id === playerId;
-  const active = table.activePlayerId === seat.id;
+
   const winner = winnerPlayerIds.has(seat.id);
   return (
     <div
@@ -1375,7 +1283,11 @@ function PokerSeatView({
           <Trophy size={11} />
         </span>
       )}
-      <div className="poker-player-card" data-emote-player={seat.id}>
+      <div
+        className="poker-player-card"
+        data-emote-player={seat.id}
+        data-turn-seconds={active ? String(turnSeconds ?? 0) + "s" : undefined}
+      >
         {active && (
           <PokerTurnIndicator
             deadline={table.deadline}

@@ -89,9 +89,9 @@ try {
   assert((await emit(alice, "tower:command", { type: "pick", column: 0 })).ok);
   await until(() => alice.tower?.run?.floor === 1, "Étage non franchi");
 
-  // Leaving the Tower settles the climb: 100 × 1.24.
+  // Leaving the Tower settles the climb: 100 × 1.2.
   assert((await emit(alice, "tower:leave")).ok);
-  await until(() => balanceOf(alice) === 10_024, "Sortie non encaissée");
+  await until(() => balanceOf(alice) === 10_020, "Sortie non encaissée");
   await until(
     () =>
       bob.feeds.at(-1)!.feed.some((item) => item.status === "cashed") &&

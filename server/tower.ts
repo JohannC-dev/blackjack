@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from "node:crypto";
+import { gameEffect } from "./effect";
 import type { Player } from "./engine";
 import type {
   TowerCell,
@@ -166,6 +167,13 @@ export class TowerManager {
     this.broadcast(roomId, this.publicState(roomId));
   }
 
+  commandEffect(player: Player, command: TowerCommand, now = Date.now()) {
+    return gameEffect(() => this.command(player, command, now));
+  }
+
+  tickEffect(now: number) {
+    return gameEffect(() => this.tick(now));
+  }
   tick(now: number) {
     const changed = new Set<string>();
     for (const [playerId, run] of this.runs) {

@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { credits } from "@/lib/rules";
 import type { PokerCommand } from "@/lib/types";
 import type { useGame } from "@/lib/use-game";
-import type { CasinoView } from "./casino";
+import type { CasinoView } from "@/lib/navigation";
 import styles from "./poker-lobby.module.css";
 import { RoomArt } from "./room-art";
 
