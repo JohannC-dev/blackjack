@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -59,6 +61,7 @@ import type {
   GambleColor,
   GambleState,
   Hand,
+  PublicPlayer,
   Seat,
   TableState,
 } from "@/lib/types";
@@ -275,72 +278,78 @@ function HoldToConfirmButton({
   );
 }
 
-export function AnimatedTableChip({
-  amount,
-  maximum,
-  className,
-  placeholder,
-}: {
-  amount: number;
-  maximum: number;
-  className: string;
-  placeholder: ReactNode;
-}) {
-  const [renderedAmount, setRenderedAmount] = useState<number | null>(
-    amount > 0 ? amount : null,
-  );
-  const [exiting, setExiting] = useState(false);
-  const exitTimer = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (exitTimer.current !== null) {
-      window.clearTimeout(exitTimer.current);
-      exitTimer.current = null;
-    }
-
-    if (amount > 0) {
-      setRenderedAmount(amount);
-      setExiting(false);
-      return;
-    }
-
-    if (renderedAmount === null) {
-      setExiting(false);
-      return;
-    }
-
-    setExiting(true);
-    exitTimer.current = window.setTimeout(
-      () => {
-        exitTimer.current = null;
-        setRenderedAmount(null);
-        setExiting(false);
-      },
-      motionDuration(180, 120),
+export const AnimatedTableChip = memo(
+  function AnimatedTableChip({
+    amount,
+    maximum,
+    className,
+    placeholder,
+  }: {
+    amount: number;
+    maximum: number;
+    className: string;
+    placeholder: ReactNode;
+  }) {
+    const [renderedAmount, setRenderedAmount] = useState<number | null>(
+      amount > 0 ? amount : null,
     );
+    const [exiting, setExiting] = useState(false);
+    const exitTimer = useRef<number | null>(null);
 
-    return () => {
+    useEffect(() => {
       if (exitTimer.current !== null) {
         window.clearTimeout(exitTimer.current);
         exitTimer.current = null;
       }
-    };
-  }, [amount, renderedAmount]);
 
-  if (renderedAmount === null) {
-    return <span className="spot-placeholder">{placeholder}</span>;
-  }
+      if (amount > 0) {
+        setRenderedAmount(amount);
+        setExiting(false);
+        return;
+      }
 
-  return (
-    <TableChipStack
-      amount={renderedAmount}
-      maximum={maximum}
-      className={`${className} ${exiting ? "is-exiting" : ""}`}
-    />
-  );
-}
+      if (renderedAmount === null) {
+        setExiting(false);
+        return;
+      }
 
-function TableChipStack({
+      setExiting(true);
+      exitTimer.current = window.setTimeout(
+        () => {
+          exitTimer.current = null;
+          setRenderedAmount(null);
+          setExiting(false);
+        },
+        motionDuration(180, 120),
+      );
+
+      return () => {
+        if (exitTimer.current !== null) {
+          window.clearTimeout(exitTimer.current);
+          exitTimer.current = null;
+        }
+      };
+    }, [amount, renderedAmount]);
+
+    if (renderedAmount === null) {
+      return <span className="spot-placeholder">{placeholder}</span>;
+    }
+
+    return (
+      <TableChipStack
+        amount={renderedAmount}
+        maximum={maximum}
+        className={`${className} ${exiting ? "is-exiting" : ""}`}
+      />
+    );
+  },
+  (left, right) =>
+    left.amount === right.amount &&
+    left.maximum === right.maximum &&
+    left.className === right.className,
+);
+
+const TableChipStack = memo(function TableChipStack({
   amount,
   maximum,
   className = "",
@@ -381,7 +390,7 @@ function TableChipStack({
       <span className="table-chip-amount">{credits(amount)}</span>
     </span>
   );
-}
+});
 
 export function SettlementChipAnimation({
   stake,
@@ -530,7 +539,7 @@ function AnimatedMenu({
   );
 }
 
-function Chip({
+const Chip = memo(function Chip({
   amount,
   selected = false,
   onClick,
@@ -538,14 +547,14 @@ function Chip({
 }: {
   amount: number;
   selected?: boolean;
-  onClick?: () => void;
+  onClick?: (amount: number) => void;
   disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       className={`chip chip-${amount} ${selected ? "selected" : ""}`}
-      onClick={onClick}
+      onClick={() => onClick?.(amount)}
       disabled={disabled}
       aria-label={`Sélectionner le jeton de ${amount} crédits`}
       aria-pressed={selected}
@@ -553,7 +562,7 @@ function Chip({
       <span>{amount}</span>
     </button>
   );
-}
+});
 
 function HandView({ hand, active }: { hand: Hand; active: boolean }) {
   const concealed = hand.cards.some((card) => card.hidden);
@@ -655,34 +664,115 @@ function BlackjackMainSettlement({ seat }: { seat: Seat }) {
   );
 }
 
-function SeatView({
+type SeatViewProps = {
+  seat: Seat;
+  owner?: PublicPlayer;
+  phase: TableState["phase"] | null;
+  activeHandId: string | null;
+  playerSeatCount: number;
+  playerId: string;
+  selected: boolean;
+  onSelect: (seat: Seat) => void;
+  onBet: (seat: Seat, type: keyof Bet) => void;
+  chip: number;
+  disabled: boolean;
+};
+
+function sameHand(left: Hand, right: Hand) {
+  return (
+    left.id === right.id &&
+    left.bet === right.bet &&
+    left.status === right.status &&
+    left.split === right.split &&
+    left.splitAces === right.splitAces &&
+    left.doubleCardHidden === right.doubleCardHidden &&
+    left.result === right.result &&
+    left.payout === right.payout &&
+    left.cards.length === right.cards.length &&
+    left.cards.every((card, index) => {
+      const other = right.cards[index];
+      return (
+        card.id === other.id &&
+        card.rank === other.rank &&
+        card.suit === other.suit &&
+        card.hidden === other.hidden
+      );
+    })
+  );
+}
+
+function sameSide(left: Seat["sides"]["three"], right: Seat["sides"]["three"]) {
+  return (
+    left?.label === right?.label &&
+    left?.odds === right?.odds &&
+    left?.payout === right?.payout
+  );
+}
+
+function sameSeat(left: Seat, right: Seat) {
+  return (
+    left.index === right.index &&
+    left.playerId === right.playerId &&
+    left.bet.main === right.bet.main &&
+    left.bet.three === right.bet.three &&
+    left.bet.pairs === right.bet.pairs &&
+    left.hands.length === right.hands.length &&
+    left.hands.every((hand, index) => sameHand(hand, right.hands[index])) &&
+    sameSide(left.sides.three, right.sides.three) &&
+    sameSide(left.sides.pairs, right.sides.pairs)
+  );
+}
+
+function sameOwner(
+  left: PublicPlayer | undefined,
+  right: PublicPlayer | undefined,
+) {
+  return (
+    left?.id === right?.id &&
+    left?.name === right?.name &&
+    left?.ready === right?.ready &&
+    left?.connected === right?.connected
+  );
+}
+
+// Socket snapshots intentionally clone every seat, so reference equality
+// would make an unrelated wager redraw the whole table.
+function areSeatViewPropsEqual(left: SeatViewProps, right: SeatViewProps) {
+  return (
+    sameSeat(left.seat, right.seat) &&
+    sameOwner(left.owner, right.owner) &&
+    left.phase === right.phase &&
+    left.activeHandId === right.activeHandId &&
+    left.playerSeatCount === right.playerSeatCount &&
+    left.playerId === right.playerId &&
+    left.selected === right.selected &&
+    left.onSelect === right.onSelect &&
+    left.onBet === right.onBet &&
+    left.chip === right.chip &&
+    left.disabled === right.disabled
+  );
+}
+
+const SeatView = memo(function SeatView({
   seat,
-  state,
+  owner,
+  phase,
+  activeHandId,
+  playerSeatCount,
   playerId,
   selected,
   onSelect,
   onBet,
   chip,
   disabled,
-}: {
-  seat: Seat;
-  state: TableState | null;
-  playerId: string;
-  selected: boolean;
-  onSelect: () => void;
-  onBet: (type: keyof Bet) => void;
-  chip: number;
-  disabled: boolean;
-}) {
-  const owner = state?.players.find((p) => p.id === seat.playerId);
+}: SeatViewProps) {
   const mine = !!owner && owner.id === playerId;
-  const active = seat.hands.some((h) => h.id === state?.activeHandId);
+  const active = seat.hands.some((h) => h.id === activeHandId);
   const pos = POSITIONS[seat.index];
   const hasCards = seat.hands.some((h) => h.cards.length);
-  const canBet =
-    mine && state?.phase === "betting" && !owner?.ready && !disabled;
+  const canBet = mine && phase === "betting" && !owner?.ready && !disabled;
   const sideBetsResolved =
-    !!state && state.phase !== "betting" && state.phase !== "dealing";
+    phase !== null && phase !== "betting" && phase !== "dealing";
   const mainStake = seat.hands.length
     ? seat.hands.reduce((sum, hand) => sum + hand.bet, 0)
     : seat.bet.main;
@@ -702,7 +792,7 @@ function SeatView({
             <HandView
               key={hand.id}
               hand={hand}
-              active={hand.id === state?.activeHandId}
+              active={hand.id === activeHandId}
             />
           ))}
         </div>
@@ -725,10 +815,9 @@ function SeatView({
                 : (sideResult?.payout ?? 0);
             const settling =
               stake > 0 &&
-              ((type === "main" && state?.phase === "settled") ||
-                (type !== "main" && state?.phase === "bonuses"));
-            const hideResolvedSide =
-              resolvedSideBet && state?.phase !== "bonuses";
+              ((type === "main" && phase === "settled") ||
+                (type !== "main" && phase === "bonuses"));
+            const hideResolvedSide = resolvedSideBet && phase !== "bonuses";
             const placeholder =
               type === "main" ? (
                 <Plus size={19} strokeWidth={1.4} />
@@ -741,7 +830,7 @@ function SeatView({
               <button
                 key={type}
                 className={`table-bet-spot spot-${type} ${stake > 0 && !hideResolvedSide ? "has-chips" : ""}`}
-                onClick={() => onBet(type)}
+                onClick={() => onBet(seat, type)}
                 disabled={!canBet}
                 aria-label={`Miser ${chip} crédits sur ${labels[type]}, main ${seat.index + 1}`}
                 title={
@@ -794,7 +883,7 @@ function SeatView({
           <span className="empty-bonus-zone left">21+3</span>
           <button
             className="seat-target"
-            onClick={onSelect}
+            onClick={() => onSelect(seat)}
             aria-label={`Prendre la place ${seat.index + 1}`}
           >
             <Plus size={19} strokeWidth={1.4} />
@@ -805,7 +894,7 @@ function SeatView({
       ) : null}
       <button
         className="seat-name"
-        onClick={onSelect}
+        onClick={() => onSelect(seat)}
         disabled={!!owner && !mine}
         aria-label={
           owner
@@ -823,14 +912,11 @@ function SeatView({
               {mine && (
                 <small>
                   vous
-                  {(state?.seats.filter((s) => s.playerId === playerId)
-                    .length ?? 0) > 1
-                    ? ` · ${seat.index + 1}`
-                    : ""}
+                  {playerSeatCount > 1 ? ` · ${seat.index + 1}` : ""}
                 </small>
               )}
             </span>
-            {owner.ready && state?.phase === "betting" ? (
+            {owner.ready && phase === "betting" ? (
               <Check className="ready-mark" size={13} />
             ) : !owner.connected ? (
               <span className="offline-dot" />
@@ -849,7 +935,7 @@ function SeatView({
       )}
     </div>
   );
-}
+}, areSeatViewPropsEqual);
 
 function Paytable({
   kind,
@@ -1080,22 +1166,233 @@ function GamblePanel({
 
 export type CasinoView = "home" | "blackjack" | "poker";
 
+type BlackjackSidebarProps = {
+  onHome: () => void;
+  onBlackjack: () => void;
+  onPoker: () => void;
+  onTables: () => void;
+  onHistory: () => void;
+  onRules: () => void;
+};
+
+const BlackjackSidebar = memo(function BlackjackSidebar({
+  onHome,
+  onBlackjack,
+  onPoker,
+  onTables,
+  onHistory,
+  onRules,
+}: BlackjackSidebarProps) {
+  return (
+    <aside className="rail" aria-label="Navigation principale">
+      <button
+        type="button"
+        className="brand-mark"
+        aria-label="Minuit, accueil"
+        onClick={onHome}
+      >
+        <Spade size={28} fill="currentColor" strokeWidth={1.3} />
+      </button>
+      <div className="rail-navigation">
+        <button
+          className="rail-button"
+          title="Accueil"
+          aria-label="Accueil"
+          onClick={onHome}
+        >
+          <House size={21} />
+        </button>
+        <button
+          className="rail-button active"
+          title="Table de blackjack"
+          aria-label="Table de blackjack"
+          onClick={onBlackjack}
+        >
+          <BlackjackIcon />
+        </button>
+        <button
+          className="rail-button"
+          title="Poker"
+          aria-label="Poker"
+          onClick={onPoker}
+        >
+          <Spade size={21} />
+        </button>
+        <button
+          className="rail-button"
+          title="Changer de table"
+          aria-label="Changer de table"
+          onClick={onTables}
+        >
+          <Users size={22} />
+        </button>
+        <button
+          className="rail-button"
+          title="Historique"
+          aria-label="Historique"
+          onClick={onHistory}
+        >
+          <History size={21} />
+        </button>
+      </div>
+      <div className="rail-bottom">
+        <button
+          className="rail-button"
+          title="Règles du jeu"
+          aria-label="Règles du jeu"
+          onClick={onRules}
+        >
+          <CircleHelp size={21} />
+        </button>
+        <div className="rail-monogram">M.</div>
+      </div>
+    </aside>
+  );
+});
+
+const BlackjackTopbar = memo(function BlackjackTopbar({
+  balance,
+  name,
+}: {
+  balance: number;
+  name: string;
+}) {
+  return (
+    <header className="topbar">
+      <a className="wordmark" href="/">
+        MINUIT<span>●</span>
+      </a>
+      <span className="topbar-divider" />
+      <div className="topbar-right">
+        <div className="wallet">
+          <Wallet size={17} />
+          <b key={balance}>{credits(balance)}</b>
+          <span>crédits</span>
+          <Coins size={16} className="wallet-coin" />
+        </div>
+        <div className="profile-avatar" title={name || "Votre profil"}>
+          {(name || "M").slice(0, 1).toUpperCase()}
+        </div>
+      </div>
+    </header>
+  );
+});
+
+const BlackjackPageHeading = memo(function BlackjackPageHeading({
+  onInvite,
+}: {
+  onInvite: () => void;
+}) {
+  return (
+    <div className="page-heading">
+      <div>
+        <div className="eyebrow">
+          LE CLUB <span>/</span> JEUX DE TABLE
+        </div>
+        <h1>
+          Blackjack <span>Européen</span>
+          <span className="live-tag">
+            <i />
+            LIVE
+          </span>
+        </h1>
+      </div>
+      <button
+        type="button"
+        className="button secondary invite-button"
+        onClick={onInvite}
+      >
+        <Users size={16} />
+        Inviter des amis
+        <ArrowUpRight size={15} />
+      </button>
+    </div>
+  );
+});
+
+const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
+  connected,
+  tableId,
+  sound,
+  isFullscreen,
+  seatCount,
+  onToggleSound,
+  onToggleFullscreen,
+  onOpenTables,
+}: {
+  connected: boolean;
+  tableId: string;
+  sound: boolean;
+  isFullscreen: boolean;
+  seatCount: number;
+  onToggleSound: () => void;
+  onToggleFullscreen: () => void;
+  onOpenTables: () => void;
+}) {
+  return (
+    <div className="table-toolbar">
+      <div className="table-identity">
+        <span className={`connection-dot ${connected ? "online" : ""}`} />
+        <b>TABLE {tableId}</b>
+        <span className="table-separator">/</span>
+        <span>5 – 500 crédits</span>
+      </div>
+      <div className="table-toolbar-actions">
+        <button
+          type="button"
+          className={`poker-sound ${sound ? "active" : ""}`}
+          aria-label={
+            sound ? "Couper les sons Blackjack" : "Activer les sons Blackjack"
+          }
+          aria-pressed={sound}
+          onClick={onToggleSound}
+        >
+          <Volume2 size={15} />
+        </button>
+        <button
+          type="button"
+          className={`poker-sound table-fullscreen-button ${isFullscreen ? "active" : ""}`}
+          aria-label={
+            isFullscreen
+              ? "Quitter le plein écran"
+              : "Passer la table en plein écran"
+          }
+          aria-pressed={isFullscreen}
+          title={
+            isFullscreen
+              ? "Quitter le plein écran"
+              : "Passer la table en plein écran"
+          }
+          onClick={onToggleFullscreen}
+        >
+          {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+        </button>
+        <button className="text-button" onClick={onOpenTables}>
+          <Users size={14} />
+          {seatCount}
+          <span>/ 5 places</span>
+          <ChevronDown size={13} />
+        </button>
+      </div>
+    </div>
+  );
+});
+
 export function Casino() {
   const game = useGame();
   const [view, setView] = useState<CasinoView>("home");
   const [confirmPokerLeave, setConfirmPokerLeave] = useState(false);
   const [leavingPoker, setLeavingPoker] = useState(false);
-  const navigate = (next: CasinoView) => {
-    if (
-      next === "blackjack" &&
-      game.pokerState &&
-      game.pokerState.status !== "lobby"
-    ) {
+  const pokerStateRef = useRef(game.pokerState);
+  pokerStateRef.current = game.pokerState;
+  const navigate = useCallback((next: CasinoView) => {
+    const pokerState = pokerStateRef.current;
+    if (next === "blackjack" && pokerState && pokerState.status !== "lobby") {
       setConfirmPokerLeave(true);
       return;
     }
     setView(next);
-  };
+  }, []);
   if (!game.profile)
     return <BlackjackCasino game={game} onNavigate={navigate} />;
   const content =
@@ -1273,6 +1570,22 @@ function BlackjackCasino({
     (state?.seats
       .flatMap((s) => s.hands)
       .reduce((n, h) => n + h.cards.length, 0) ?? 0);
+  const interactionRef = useRef({
+    profile,
+    playerId,
+    betting,
+    playerReady: !!me?.ready,
+    disabled,
+    chip,
+  });
+  interactionRef.current = {
+    profile,
+    playerId,
+    betting,
+    playerReady: !!me?.ready,
+    disabled,
+    chip,
+  };
 
   useEffect(() => {
     if (profile && connected && state?.id) void joinBlackjack();
@@ -1426,39 +1739,49 @@ function BlackjackCasino({
     };
   }, []);
 
-  const selectSeat = (s: Seat) => {
-    if (!profile) return;
-    if (s.playerId === playerId) setSelectedSeat(s.index);
-    else if (!s.playerId) {
-      if (!betting) {
-        setToast("Prenez une place dès la prochaine manche.");
+  const selectSeat = useCallback(
+    (s: Seat) => {
+      const { profile, playerId, betting } = interactionRef.current;
+      if (!profile) return;
+      if (s.playerId === playerId) setSelectedSeat(s.index);
+      else if (!s.playerId) {
+        if (!betting) {
+          setToast("Prenez une place dès la prochaine manche.");
+          return;
+        }
+        command({ type: "claim", seat: s.index });
+        setSelectedSeat(s.index);
+      }
+    },
+    [command],
+  );
+  const placeBet = useCallback(
+    (target: Seat, type: keyof Bet) => {
+      const { playerId, betting, playerReady, disabled, chip } =
+        interactionRef.current;
+      if (target.playerId !== playerId || !betting || playerReady || disabled)
+        return;
+      if (type !== "main" && !target.bet.main) {
+        setToast("Posez d’abord un jeton sur Blackjack pour cette main.");
         return;
       }
-      command({ type: "claim", seat: s.index });
-      setSelectedSeat(s.index);
-    }
-  };
-  const placeBet = (target: Seat, type: keyof Bet) => {
-    if (target.playerId !== playerId || !betting || me?.ready || disabled)
-      return;
-    if (type !== "main" && !target.bet.main) {
-      setToast("Posez d’abord un jeton sur Blackjack pour cette main.");
-      return;
-    }
-    setSelectedSeat(target.index);
-    const before = { ...target.bet };
-    void command({
-      type: "bet",
-      seat: target.index,
-      bet: { ...before, [type]: before[type] + chip },
-    }).then((ok) => {
-      if (ok)
-        setBetHistory((history) => [
-          ...history,
-          { seat: target.index, before },
-        ]);
-    });
-  };
+      setSelectedSeat(target.index);
+      const before = { ...target.bet };
+      void command({
+        type: "bet",
+        seat: target.index,
+        bet: { ...before, [type]: before[type] + chip },
+      }).then((ok) => {
+        if (ok)
+          setBetHistory((history) => [
+            ...history,
+            { seat: target.index, before },
+          ]);
+      });
+    },
+    [command],
+  );
+  const selectChip = useCallback((amount: number) => setChip(amount), []);
   const undoBet = () => {
     const last = betHistory.at(-1);
     if (!last) return;
@@ -1500,28 +1823,28 @@ function BlackjackCasino({
     setGambleOpen(false);
     setGamblePromptFeatured(false);
   };
-  const shareUrl = () => {
+  const shareUrl = useCallback(() => {
     const url = new URL(window.location.href);
     url.searchParams.set("table", state?.id ?? "MINUIT");
     return url.toString();
-  };
-  const invite = async () => {
+  }, [state?.id]);
+  const invite = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(shareUrl());
       setToast("Lien copié. La table attend vos amis.");
     } catch {
       setModal("invite");
     }
-  };
-  const toggleSound = () => {
+  }, [shareUrl]);
+  const toggleSound = useCallback(() => {
     if (!sound) {
       const context = (audioRef.current ??= new AudioContext());
       void context.resume();
       preloadCasinoSounds(context);
     }
     setSound(!sound);
-  };
-  const toggleFullscreen = async () => {
+  }, [sound]);
+  const toggleFullscreen = useCallback(async () => {
     const shell = shellRef.current;
     if (!shell) return;
 
@@ -1541,7 +1864,13 @@ function BlackjackCasino({
         // The layout-only mode remains useful when the browser blocks fullscreen.
       }
     }
-  };
+  }, [isFullscreen]);
+  const goHome = useCallback(() => onNavigate("home"), [onNavigate]);
+  const goBlackjack = useCallback(() => setModal(null), []);
+  const goPoker = useCallback(() => onNavigate("poker"), [onNavigate]);
+  const openTables = useCallback(() => setModal("tables"), []);
+  const openHistory = useCallback(() => setModal("history"), []);
+  const openRules = useCallback(() => setModal("rules"), []);
   const subtitle = myTurn
     ? "C’est à vous de jouer"
     : state?.phase === "shuffling"
@@ -1567,172 +1896,39 @@ function BlackjackCasino({
       ref={shellRef}
       className={`casino-shell ${isFullscreen ? "is-fullscreen" : ""}`}
     >
-      <aside className="rail" aria-label="Navigation principale">
-        <button
-          type="button"
-          className="brand-mark"
-          aria-label="Minuit, accueil"
-          onClick={() => onNavigate("home")}
-        >
-          <Spade size={28} fill="currentColor" strokeWidth={1.3} />
-        </button>
-        <div className="rail-navigation">
-          <button
-            className="rail-button"
-            title="Accueil"
-            aria-label="Accueil"
-            onClick={() => onNavigate("home")}
-          >
-            <House size={21} />
-          </button>
-          <button
-            className="rail-button active"
-            title="Table de blackjack"
-            aria-label="Table de blackjack"
-            onClick={() => setModal(null)}
-          >
-            <BlackjackIcon />
-          </button>
-          <button
-            className="rail-button"
-            title="Poker"
-            aria-label="Poker"
-            onClick={() => onNavigate("poker")}
-          >
-            <Spade size={21} />
-          </button>
-          <button
-            className="rail-button"
-            title="Changer de table"
-            aria-label="Changer de table"
-            onClick={() => setModal("tables")}
-          >
-            <Users size={22} />
-          </button>
-          <button
-            className="rail-button"
-            title="Historique"
-            aria-label="Historique"
-            onClick={() => setModal("history")}
-          >
-            <History size={21} />
-          </button>
-        </div>
-        <div className="rail-bottom">
-          <button
-            className="rail-button"
-            title="Règles du jeu"
-            aria-label="Règles du jeu"
-            onClick={() => setModal("rules")}
-          >
-            <CircleHelp size={21} />
-          </button>
-          <div className="rail-monogram">M.</div>
-        </div>
-      </aside>
+      <BlackjackSidebar
+        onHome={goHome}
+        onBlackjack={goBlackjack}
+        onPoker={goPoker}
+        onTables={openTables}
+        onHistory={openHistory}
+        onRules={openRules}
+      />
 
       <div className="workspace">
-        <header className="topbar">
-          <a className="wordmark" href="/">
-            MINUIT<span>●</span>
-          </a>
-          <span className="topbar-divider" />
-          <div className="topbar-right">
-            <div className="wallet">
-              <Wallet size={17} />
-              <b key={balance}>{credits(balance)}</b>
-              <span>crédits</span>
-              <Coins size={16} className="wallet-coin" />
-            </div>
-            <div
-              className="profile-avatar"
-              title={me?.name ?? profile?.name ?? "Votre profil"}
-            >
-              {(me?.name ?? profile?.name ?? "M").slice(0, 1).toUpperCase()}
-            </div>
-          </div>
-        </header>
+        <BlackjackTopbar
+          balance={balance}
+          name={me?.name ?? profile?.name ?? "M"}
+        />
 
         <main>
-          <div className="page-heading">
-            <div>
-              <div className="eyebrow">
-                LE CLUB <span>/</span> JEUX DE TABLE
-              </div>
-              <h1>
-                Blackjack <span>Européen</span>
-                <span className="live-tag">
-                  <i />
-                  LIVE
-                </span>
-              </h1>
-            </div>
-            <button className="button secondary invite-button" onClick={invite}>
-              <Users size={16} />
-              Inviter des amis
-              <ArrowUpRight size={15} />
-            </button>
-          </div>
+          <BlackjackPageHeading onInvite={invite} />
 
           <div className="game-layout">
             <div className="main-column">
               <section className="table-panel" aria-label="Table de blackjack">
-                <div className="table-toolbar">
-                  <div className="table-identity">
-                    <span
-                      className={`connection-dot ${connected ? "online" : ""}`}
-                    />
-                    <b>TABLE {state?.id ?? "MINUIT"}</b>
-                    <span className="table-separator">/</span>
-                    <span>5 – 500 crédits</span>
-                  </div>
-                  <div className="table-toolbar-actions">
-                    <button
-                      type="button"
-                      className={`poker-sound ${sound ? "active" : ""}`}
-                      aria-label={
-                        sound
-                          ? "Couper les sons Blackjack"
-                          : "Activer les sons Blackjack"
-                      }
-                      aria-pressed={sound}
-                      onClick={toggleSound}
-                    >
-                      <Volume2 size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      className={`poker-sound table-fullscreen-button ${isFullscreen ? "active" : ""}`}
-                      aria-label={
-                        isFullscreen
-                          ? "Quitter le plein écran"
-                          : "Passer la table en plein écran"
-                      }
-                      aria-pressed={isFullscreen}
-                      title={
-                        isFullscreen
-                          ? "Quitter le plein écran"
-                          : "Passer la table en plein écran"
-                      }
-                      onClick={toggleFullscreen}
-                    >
-                      {isFullscreen ? (
-                        <Minimize2 size={15} />
-                      ) : (
-                        <Maximize2 size={15} />
-                      )}
-                    </button>
-                    <button
-                      className="text-button"
-                      onClick={() => setModal("tables")}
-                    >
-                      <Users size={14} />
-                      {state?.seats.filter((seat) => seat.playerId).length ?? 0}
-                      <span>/ 5 places</span>
-                      <ChevronDown size={13} />
-                    </button>
-                  </div>
-                </div>
+                <BlackjackTableToolbar
+                  connected={connected}
+                  tableId={state?.id ?? "MINUIT"}
+                  sound={sound}
+                  isFullscreen={isFullscreen}
+                  seatCount={
+                    state?.seats.filter((seat) => seat.playerId).length ?? 0
+                  }
+                  onToggleSound={toggleSound}
+                  onToggleFullscreen={toggleFullscreen}
+                  onOpenTables={openTables}
+                />
                 <div className="table-stage">
                   <div className="ambient-glow" />
                   <div className="table-surface">
@@ -1823,13 +2019,18 @@ function BlackjackCasino({
                     <SeatView
                       key={s.index}
                       seat={s}
-                      state={state}
+                      owner={state?.players.find((p) => p.id === s.playerId)}
+                      phase={state?.phase ?? null}
+                      activeHandId={state?.activeHandId ?? null}
+                      playerSeatCount={
+                        s.playerId === playerId ? ownSeats.length : 0
+                      }
                       playerId={playerId}
                       selected={s.index === seat?.index}
-                      onSelect={() => selectSeat(s)}
-                      onBet={(type) => placeBet(s, type)}
-                      chip={chip}
-                      disabled={disabled}
+                      onSelect={selectSeat}
+                      onBet={placeBet}
+                      chip={s.playerId === playerId ? chip : 0}
+                      disabled={s.playerId === playerId && disabled}
                     />
                   ))}
                   <div className="felt-bottom-caption">
@@ -1933,8 +2134,8 @@ function BlackjackCasino({
                                 key={amount}
                                 amount={amount}
                                 selected={chip === amount}
-                                disabled={disabled || !!me?.ready}
-                                onClick={() => setChip(amount)}
+                                disabled={!!me?.ready}
+                                onClick={selectChip}
                               />
                             ))}
                             <span className="rack-divider" />
