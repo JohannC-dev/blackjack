@@ -20,6 +20,8 @@ import {
   X,
 } from "lucide-react";
 import {
+  memo,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -64,7 +66,7 @@ const THREE_POSITIONS = [
   { x: 50, y: 77 },
   { x: 85, y: 61 },
 ];
-function CasinoRail({
+const CasinoRail = memo(function CasinoRail({
   active,
   onNavigate,
 }: {
@@ -112,15 +114,15 @@ function CasinoRail({
       </div>
     </aside>
   );
-}
+});
 
-function ClubHeader({ game }: { game: Game }) {
-  const balance =
-    game.pokerState?.balance ??
-    game.state?.players.find((player) => player.id === game.playerId)
-      ?.balance ??
-    game.profile?.balance ??
-    0;
+const ClubHeader = memo(function ClubHeader({
+  balance,
+  name,
+}: {
+  balance: number;
+  name: string;
+}) {
   return (
     <header className="topbar">
       <span className="wordmark">
@@ -134,11 +136,21 @@ function ClubHeader({ game }: { game: Game }) {
           <span>crédits</span>
           <Coins size={16} className="wallet-coin" />
         </div>
-        <div className="profile-avatar" title={game.profile?.name}>
-          {game.profile?.name.slice(0, 1).toUpperCase()}
+        <div className="profile-avatar" title={name || "Votre profil"}>
+          {(name || "M").slice(0, 1).toUpperCase()}
         </div>
       </div>
     </header>
+  );
+});
+
+function getClubBalance(game: Game) {
+  return (
+    game.pokerState?.balance ??
+    game.state?.players.find((player) => player.id === game.playerId)
+      ?.balance ??
+    game.profile?.balance ??
+    0
   );
 }
 
@@ -153,7 +165,10 @@ export function CasinoHome({
     <div className="casino-shell hub-shell">
       <CasinoRail active="home" onNavigate={onNavigate} />
       <div className="workspace">
-        <ClubHeader game={game} />
+        <ClubHeader
+          balance={getClubBalance(game)}
+          name={game.profile?.name ?? ""}
+        />
         <main className="club-lobby">
           <section className="club-hero">
             <div className="club-hero-copy">
@@ -247,7 +262,10 @@ export function PokerCasino({
     <div className="casino-shell poker-shell">
       <CasinoRail active="poker" onNavigate={onNavigate} />
       <div className="workspace">
-        <ClubHeader game={game} />
+        <ClubHeader
+          balance={getClubBalance(game)}
+          name={game.profile?.name ?? ""}
+        />
         {poker?.status === "table" && poker.table ? (
           <PokerTable game={game} />
         ) : poker?.status === "queue" ? (
@@ -402,6 +420,62 @@ function PokerRevealActions({
     </div>
   );
 }
+
+const PokerTableHeading = memo(function PokerTableHeading({
+  kicker,
+  title,
+  chatCount,
+  sound,
+  totalSeats,
+  occupiedSeats,
+  onLeave,
+  onOpenChat,
+  onToggleSound,
+}: {
+  kicker: string;
+  title: string;
+  chatCount: number;
+  sound: boolean;
+  totalSeats: number;
+  occupiedSeats: number;
+  onLeave: () => void;
+  onOpenChat: () => void;
+  onToggleSound: () => void;
+}) {
+  return (
+    <div className="poker-table-heading">
+      <button className="lobby-back" onClick={onLeave}>
+        <ArrowLeft size={15} /> Quitter la table
+      </button>
+      <div>
+        <span className="eyebrow">{kicker}</span>
+        <h1>{title}</h1>
+      </div>
+      <button
+        type="button"
+        className="poker-chat-launch"
+        aria-label="Ouvrir la discussion"
+        aria-haspopup="dialog"
+        onClick={onOpenChat}
+      >
+        <MessageCircle size={15} />
+        <span>Chat</span>
+        {!!chatCount && <b>{chatCount}</b>}
+      </button>
+      <button
+        type="button"
+        className={`poker-sound ${sound ? "active" : ""}`}
+        aria-label={sound ? "Couper les sons Poker" : "Activer les sons Poker"}
+        onClick={onToggleSound}
+      >
+        <Volume2 size={15} />
+      </button>
+      <div className="table-players-count">
+        <Users size={16} /> {occupiedSeats} / {totalSeats}
+      </div>
+    </div>
+  );
+});
 
 function PokerTable({ game }: { game: Game }) {
   const table = game.pokerState!.table!;
@@ -581,56 +655,33 @@ function PokerTable({ game }: { game: Game }) {
   const handLabel = me
     ? (describePokerHolding(me.cards, table.community) ?? me.handLabel)
     : undefined;
+  const leaveTable = useCallback(() => {
+    void game.pokerCommand({ type: "leave" });
+  }, [game.pokerCommand]);
+  const openChat = useCallback(() => setChatOpen(true), []);
+  const toggleSound = useCallback(() => {
+    const context = (audioRef.current ??= new AudioContext());
+    void context.resume();
+    preloadCasinoSounds(context);
+    setSound(!sound);
+  }, [sound]);
   return (
     <main className="poker-table-page">
-      <div className="poker-table-heading">
-        <button
-          className="lobby-back"
-          onClick={() => game.pokerCommand({ type: "leave" })}
-        >
-          <ArrowLeft size={15} /> Quitter la table
-        </button>
-        <div>
-          <span className="eyebrow">
-            {table.mode === "spin" ? "SPIN & PLAY" : "CASH GAME"} / TABLE{" "}
-            {table.id.slice(-4)}
-          </span>
-          <h1>
-            {table.mode === "spin"
-              ? `${credits(table.stake)} crédits · ×${table.wheelMultiplier ?? "?"}`
-              : `Blinds ${table.smallBlind} / ${table.bigBlind}`}
-          </h1>
-        </div>
-        <button
-          type="button"
-          className="poker-chat-launch"
-          aria-label="Ouvrir la discussion"
-          aria-haspopup="dialog"
-          onClick={() => setChatOpen(true)}
-        >
-          <MessageCircle size={15} />
-          <span>Chat</span>
-          {!!table.chat.length && <b>{table.chat.length}</b>}
-        </button>
-        <button
-          type="button"
-          className={`poker-sound ${sound ? "active" : ""}`}
-          aria-label={
-            sound ? "Couper les sons Poker" : "Activer les sons Poker"
-          }
-          onClick={() => {
-            const context = (audioRef.current ??= new AudioContext());
-            void context.resume();
-            preloadCasinoSounds(context);
-            setSound(!sound);
-          }}
-        >
-          <Volume2 size={15} />
-        </button>
-        <div className="table-players-count">
-          <Users size={16} /> {table.seats.length} / {totalSeats}
-        </div>
-      </div>
+      <PokerTableHeading
+        kicker={`${table.mode === "spin" ? "SPIN & PLAY" : "CASH GAME"} / TABLE ${table.id.slice(-4)}`}
+        title={
+          table.mode === "spin"
+            ? `${credits(table.stake)} crédits · ×${table.wheelMultiplier ?? "?"}`
+            : `Blinds ${table.smallBlind} / ${table.bigBlind}`
+        }
+        chatCount={table.chat.length}
+        sound={sound}
+        totalSeats={totalSeats}
+        occupiedSeats={table.seats.length}
+        onLeave={leaveTable}
+        onOpenChat={openChat}
+        onToggleSound={toggleSound}
+      />
       <div className="poker-room-layout">
         <section className="poker-table-panel">
           <div className="poker-felt">

@@ -1166,22 +1166,233 @@ function GamblePanel({
 
 export type CasinoView = "home" | "blackjack" | "poker";
 
+type BlackjackSidebarProps = {
+  onHome: () => void;
+  onBlackjack: () => void;
+  onPoker: () => void;
+  onTables: () => void;
+  onHistory: () => void;
+  onRules: () => void;
+};
+
+const BlackjackSidebar = memo(function BlackjackSidebar({
+  onHome,
+  onBlackjack,
+  onPoker,
+  onTables,
+  onHistory,
+  onRules,
+}: BlackjackSidebarProps) {
+  return (
+    <aside className="rail" aria-label="Navigation principale">
+      <button
+        type="button"
+        className="brand-mark"
+        aria-label="Minuit, accueil"
+        onClick={onHome}
+      >
+        <Spade size={28} fill="currentColor" strokeWidth={1.3} />
+      </button>
+      <div className="rail-navigation">
+        <button
+          className="rail-button"
+          title="Accueil"
+          aria-label="Accueil"
+          onClick={onHome}
+        >
+          <House size={21} />
+        </button>
+        <button
+          className="rail-button active"
+          title="Table de blackjack"
+          aria-label="Table de blackjack"
+          onClick={onBlackjack}
+        >
+          <BlackjackIcon />
+        </button>
+        <button
+          className="rail-button"
+          title="Poker"
+          aria-label="Poker"
+          onClick={onPoker}
+        >
+          <Spade size={21} />
+        </button>
+        <button
+          className="rail-button"
+          title="Changer de table"
+          aria-label="Changer de table"
+          onClick={onTables}
+        >
+          <Users size={22} />
+        </button>
+        <button
+          className="rail-button"
+          title="Historique"
+          aria-label="Historique"
+          onClick={onHistory}
+        >
+          <History size={21} />
+        </button>
+      </div>
+      <div className="rail-bottom">
+        <button
+          className="rail-button"
+          title="Règles du jeu"
+          aria-label="Règles du jeu"
+          onClick={onRules}
+        >
+          <CircleHelp size={21} />
+        </button>
+        <div className="rail-monogram">M.</div>
+      </div>
+    </aside>
+  );
+});
+
+const BlackjackTopbar = memo(function BlackjackTopbar({
+  balance,
+  name,
+}: {
+  balance: number;
+  name: string;
+}) {
+  return (
+    <header className="topbar">
+      <a className="wordmark" href="/">
+        MINUIT<span>●</span>
+      </a>
+      <span className="topbar-divider" />
+      <div className="topbar-right">
+        <div className="wallet">
+          <Wallet size={17} />
+          <b key={balance}>{credits(balance)}</b>
+          <span>crédits</span>
+          <Coins size={16} className="wallet-coin" />
+        </div>
+        <div className="profile-avatar" title={name || "Votre profil"}>
+          {(name || "M").slice(0, 1).toUpperCase()}
+        </div>
+      </div>
+    </header>
+  );
+});
+
+const BlackjackPageHeading = memo(function BlackjackPageHeading({
+  onInvite,
+}: {
+  onInvite: () => void;
+}) {
+  return (
+    <div className="page-heading">
+      <div>
+        <div className="eyebrow">
+          LE CLUB <span>/</span> JEUX DE TABLE
+        </div>
+        <h1>
+          Blackjack <span>Européen</span>
+          <span className="live-tag">
+            <i />
+            LIVE
+          </span>
+        </h1>
+      </div>
+      <button
+        type="button"
+        className="button secondary invite-button"
+        onClick={onInvite}
+      >
+        <Users size={16} />
+        Inviter des amis
+        <ArrowUpRight size={15} />
+      </button>
+    </div>
+  );
+});
+
+const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
+  connected,
+  tableId,
+  sound,
+  isFullscreen,
+  seatCount,
+  onToggleSound,
+  onToggleFullscreen,
+  onOpenTables,
+}: {
+  connected: boolean;
+  tableId: string;
+  sound: boolean;
+  isFullscreen: boolean;
+  seatCount: number;
+  onToggleSound: () => void;
+  onToggleFullscreen: () => void;
+  onOpenTables: () => void;
+}) {
+  return (
+    <div className="table-toolbar">
+      <div className="table-identity">
+        <span className={`connection-dot ${connected ? "online" : ""}`} />
+        <b>TABLE {tableId}</b>
+        <span className="table-separator">/</span>
+        <span>5 – 500 crédits</span>
+      </div>
+      <div className="table-toolbar-actions">
+        <button
+          type="button"
+          className={`poker-sound ${sound ? "active" : ""}`}
+          aria-label={
+            sound ? "Couper les sons Blackjack" : "Activer les sons Blackjack"
+          }
+          aria-pressed={sound}
+          onClick={onToggleSound}
+        >
+          <Volume2 size={15} />
+        </button>
+        <button
+          type="button"
+          className={`poker-sound table-fullscreen-button ${isFullscreen ? "active" : ""}`}
+          aria-label={
+            isFullscreen
+              ? "Quitter le plein écran"
+              : "Passer la table en plein écran"
+          }
+          aria-pressed={isFullscreen}
+          title={
+            isFullscreen
+              ? "Quitter le plein écran"
+              : "Passer la table en plein écran"
+          }
+          onClick={onToggleFullscreen}
+        >
+          {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+        </button>
+        <button className="text-button" onClick={onOpenTables}>
+          <Users size={14} />
+          {seatCount}
+          <span>/ 5 places</span>
+          <ChevronDown size={13} />
+        </button>
+      </div>
+    </div>
+  );
+});
+
 export function Casino() {
   const game = useGame();
   const [view, setView] = useState<CasinoView>("home");
   const [confirmPokerLeave, setConfirmPokerLeave] = useState(false);
   const [leavingPoker, setLeavingPoker] = useState(false);
-  const navigate = (next: CasinoView) => {
-    if (
-      next === "blackjack" &&
-      game.pokerState &&
-      game.pokerState.status !== "lobby"
-    ) {
+  const pokerStateRef = useRef(game.pokerState);
+  pokerStateRef.current = game.pokerState;
+  const navigate = useCallback((next: CasinoView) => {
+    const pokerState = pokerStateRef.current;
+    if (next === "blackjack" && pokerState && pokerState.status !== "lobby") {
       setConfirmPokerLeave(true);
       return;
     }
     setView(next);
-  };
+  }, []);
   if (!game.profile)
     return <BlackjackCasino game={game} onNavigate={navigate} />;
   const content =
@@ -1612,28 +1823,28 @@ function BlackjackCasino({
     setGambleOpen(false);
     setGamblePromptFeatured(false);
   };
-  const shareUrl = () => {
+  const shareUrl = useCallback(() => {
     const url = new URL(window.location.href);
     url.searchParams.set("table", state?.id ?? "MINUIT");
     return url.toString();
-  };
-  const invite = async () => {
+  }, [state?.id]);
+  const invite = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(shareUrl());
       setToast("Lien copié. La table attend vos amis.");
     } catch {
       setModal("invite");
     }
-  };
-  const toggleSound = () => {
+  }, [shareUrl]);
+  const toggleSound = useCallback(() => {
     if (!sound) {
       const context = (audioRef.current ??= new AudioContext());
       void context.resume();
       preloadCasinoSounds(context);
     }
     setSound(!sound);
-  };
-  const toggleFullscreen = async () => {
+  }, [sound]);
+  const toggleFullscreen = useCallback(async () => {
     const shell = shellRef.current;
     if (!shell) return;
 
@@ -1653,7 +1864,13 @@ function BlackjackCasino({
         // The layout-only mode remains useful when the browser blocks fullscreen.
       }
     }
-  };
+  }, [isFullscreen]);
+  const goHome = useCallback(() => onNavigate("home"), [onNavigate]);
+  const goBlackjack = useCallback(() => setModal(null), []);
+  const goPoker = useCallback(() => onNavigate("poker"), [onNavigate]);
+  const openTables = useCallback(() => setModal("tables"), []);
+  const openHistory = useCallback(() => setModal("history"), []);
+  const openRules = useCallback(() => setModal("rules"), []);
   const subtitle = myTurn
     ? "C’est à vous de jouer"
     : state?.phase === "shuffling"
@@ -1679,172 +1896,39 @@ function BlackjackCasino({
       ref={shellRef}
       className={`casino-shell ${isFullscreen ? "is-fullscreen" : ""}`}
     >
-      <aside className="rail" aria-label="Navigation principale">
-        <button
-          type="button"
-          className="brand-mark"
-          aria-label="Minuit, accueil"
-          onClick={() => onNavigate("home")}
-        >
-          <Spade size={28} fill="currentColor" strokeWidth={1.3} />
-        </button>
-        <div className="rail-navigation">
-          <button
-            className="rail-button"
-            title="Accueil"
-            aria-label="Accueil"
-            onClick={() => onNavigate("home")}
-          >
-            <House size={21} />
-          </button>
-          <button
-            className="rail-button active"
-            title="Table de blackjack"
-            aria-label="Table de blackjack"
-            onClick={() => setModal(null)}
-          >
-            <BlackjackIcon />
-          </button>
-          <button
-            className="rail-button"
-            title="Poker"
-            aria-label="Poker"
-            onClick={() => onNavigate("poker")}
-          >
-            <Spade size={21} />
-          </button>
-          <button
-            className="rail-button"
-            title="Changer de table"
-            aria-label="Changer de table"
-            onClick={() => setModal("tables")}
-          >
-            <Users size={22} />
-          </button>
-          <button
-            className="rail-button"
-            title="Historique"
-            aria-label="Historique"
-            onClick={() => setModal("history")}
-          >
-            <History size={21} />
-          </button>
-        </div>
-        <div className="rail-bottom">
-          <button
-            className="rail-button"
-            title="Règles du jeu"
-            aria-label="Règles du jeu"
-            onClick={() => setModal("rules")}
-          >
-            <CircleHelp size={21} />
-          </button>
-          <div className="rail-monogram">M.</div>
-        </div>
-      </aside>
+      <BlackjackSidebar
+        onHome={goHome}
+        onBlackjack={goBlackjack}
+        onPoker={goPoker}
+        onTables={openTables}
+        onHistory={openHistory}
+        onRules={openRules}
+      />
 
       <div className="workspace">
-        <header className="topbar">
-          <a className="wordmark" href="/">
-            MINUIT<span>●</span>
-          </a>
-          <span className="topbar-divider" />
-          <div className="topbar-right">
-            <div className="wallet">
-              <Wallet size={17} />
-              <b key={balance}>{credits(balance)}</b>
-              <span>crédits</span>
-              <Coins size={16} className="wallet-coin" />
-            </div>
-            <div
-              className="profile-avatar"
-              title={me?.name ?? profile?.name ?? "Votre profil"}
-            >
-              {(me?.name ?? profile?.name ?? "M").slice(0, 1).toUpperCase()}
-            </div>
-          </div>
-        </header>
+        <BlackjackTopbar
+          balance={balance}
+          name={me?.name ?? profile?.name ?? "M"}
+        />
 
         <main>
-          <div className="page-heading">
-            <div>
-              <div className="eyebrow">
-                LE CLUB <span>/</span> JEUX DE TABLE
-              </div>
-              <h1>
-                Blackjack <span>Européen</span>
-                <span className="live-tag">
-                  <i />
-                  LIVE
-                </span>
-              </h1>
-            </div>
-            <button className="button secondary invite-button" onClick={invite}>
-              <Users size={16} />
-              Inviter des amis
-              <ArrowUpRight size={15} />
-            </button>
-          </div>
+          <BlackjackPageHeading onInvite={invite} />
 
           <div className="game-layout">
             <div className="main-column">
               <section className="table-panel" aria-label="Table de blackjack">
-                <div className="table-toolbar">
-                  <div className="table-identity">
-                    <span
-                      className={`connection-dot ${connected ? "online" : ""}`}
-                    />
-                    <b>TABLE {state?.id ?? "MINUIT"}</b>
-                    <span className="table-separator">/</span>
-                    <span>5 – 500 crédits</span>
-                  </div>
-                  <div className="table-toolbar-actions">
-                    <button
-                      type="button"
-                      className={`poker-sound ${sound ? "active" : ""}`}
-                      aria-label={
-                        sound
-                          ? "Couper les sons Blackjack"
-                          : "Activer les sons Blackjack"
-                      }
-                      aria-pressed={sound}
-                      onClick={toggleSound}
-                    >
-                      <Volume2 size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      className={`poker-sound table-fullscreen-button ${isFullscreen ? "active" : ""}`}
-                      aria-label={
-                        isFullscreen
-                          ? "Quitter le plein écran"
-                          : "Passer la table en plein écran"
-                      }
-                      aria-pressed={isFullscreen}
-                      title={
-                        isFullscreen
-                          ? "Quitter le plein écran"
-                          : "Passer la table en plein écran"
-                      }
-                      onClick={toggleFullscreen}
-                    >
-                      {isFullscreen ? (
-                        <Minimize2 size={15} />
-                      ) : (
-                        <Maximize2 size={15} />
-                      )}
-                    </button>
-                    <button
-                      className="text-button"
-                      onClick={() => setModal("tables")}
-                    >
-                      <Users size={14} />
-                      {state?.seats.filter((seat) => seat.playerId).length ?? 0}
-                      <span>/ 5 places</span>
-                      <ChevronDown size={13} />
-                    </button>
-                  </div>
-                </div>
+                <BlackjackTableToolbar
+                  connected={connected}
+                  tableId={state?.id ?? "MINUIT"}
+                  sound={sound}
+                  isFullscreen={isFullscreen}
+                  seatCount={
+                    state?.seats.filter((seat) => seat.playerId).length ?? 0
+                  }
+                  onToggleSound={toggleSound}
+                  onToggleFullscreen={toggleFullscreen}
+                  onOpenTables={openTables}
+                />
                 <div className="table-stage">
                   <div className="ambient-glow" />
                   <div className="table-surface">
