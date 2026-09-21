@@ -582,7 +582,7 @@ function HandView({ hand, active }: { hand: Hand; active: boolean }) {
             ? "Égalité"
             : hand.result === "lose"
               ? "Perdu"
-              : `+${credits((hand.payout ?? 0) - hand.bet)}`}
+              : `+${credits(hand.payout ?? 0)}`}
         </span>
       )}
     </div>
@@ -1232,6 +1232,11 @@ function BlackjackCasino({
     state?.phase === "settled"
       ? myHistory.find((h) => h.round === state.round)
       : undefined;
+  const roundBetNet =
+    roundResult?.bets.reduce((sum, bet) => sum + bet.net, 0) ?? 0;
+  const roundPayout =
+    roundResult?.bets.reduce((sum, bet) => sum + bet.payout, 0) ?? 0;
+  const showCenterSettlement = state?.phase === "settled" && !!roundResult;
   const mainWinNet =
     state?.phase === "settled"
       ? (roundResult?.bets.reduce(
@@ -1719,6 +1724,32 @@ function BlackjackCasino({
                       SUPER PAIRS
                     </div>
                   </div>
+                  {showCenterSettlement && roundResult && (
+                    <div
+                      className={`table-round-result ${roundBetNet > 0 ? "positive" : roundBetNet < 0 ? "negative" : "neutral"}`}
+                      role="status"
+                      aria-label={`Résultat de la manche : ${roundBetNet < 0 ? "perte de " : "retour de "}${credits(roundBetNet < 0 ? Math.abs(roundBetNet) : roundPayout)} crédits`}
+                    >
+                      <span className="table-round-result-kicker">
+                        {roundBetNet > 0
+                          ? "RETOUR TOTAL"
+                          : roundBetNet === 0
+                            ? "MISE REMBOURSÉE"
+                            : "MANCHE PERDUE"}
+                      </span>
+                      <strong>
+                        {roundBetNet < 0 ? "−" : "+"}
+                        {credits(
+                          roundBetNet < 0 ? Math.abs(roundBetNet) : roundPayout,
+                        )}
+                        <small>cr.</small>
+                      </strong>
+                      <span className="table-round-result-countdown">
+                        <small>PROCHAINE MANCHE</small>
+                        {seconds !== null ? `${seconds}s` : "…"}
+                      </span>
+                    </div>
+                  )}
                   {(state?.seats ?? EMPTY_SEATS).map((s) => (
                     <SeatView
                       key={s.index}
@@ -1782,7 +1813,7 @@ function BlackjackCasino({
                     : !connected
                       ? "Connexion à la table…"
                       : (state?.message ?? "Bienvenue à la table.")}
-                  {seconds !== null && (
+                  {seconds !== null && !showCenterSettlement && (
                     <span className="countdown">{seconds}s</span>
                   )}
                   <span className="round-number">
@@ -1804,17 +1835,7 @@ function BlackjackCasino({
                               ? `MAIN ${(activeSeat?.index ?? 0) + 1} · ${activeHand ? score(activeHand.cards).total : ""} POINTS`
                               : "LA PARTIE CONTINUE"}
                       </span>
-                      <h2>
-                        {subtitle}
-                        {roundResult && (
-                          <span
-                            className={`round-net ${roundResult.net >= 0 ? "positive" : "negative"}`}
-                          >
-                            {roundResult.net > 0 ? "+" : ""}
-                            {credits(roundResult.net)} cr.
-                          </span>
-                        )}
-                      </h2>
+                      <h2>{subtitle}</h2>
                     </div>
                     {betting && (
                       <span className="selected-hand-label">
