@@ -273,6 +273,115 @@
   transform: translateX(-50%);
 }
 
+/* Settlement belongs to the felt: the returned amount is the visual answer
+ * to the round, with the next-round countdown kept in the same focal area. */
+.table-stage:has(.table-round-result) .felt-brand {
+  opacity: 0.08;
+  transform: translateX(-50%) scale(0.92);
+  filter: blur(0.5px);
+  transition:
+    opacity 0.35s var(--ease),
+    transform 0.35s var(--ease),
+    filter 0.35s var(--ease);
+}
+
+.table-round-result {
+  position: absolute;
+  /* Align the amount itself with the felt's visual center; the countdown
+   * intentionally hangs below that focal point. */
+  top: 38.5%;
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+  max-width: calc(100% - 40px);
+  pointer-events: none;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  animation: table-round-result-in 0.42s var(--ease) both;
+}
+
+.table-round-result-kicker {
+  color: #c7afd8;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 2.2px;
+  line-height: 1;
+}
+
+.table-round-result > strong {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-top: 8px;
+  color: #a4edc5;
+  font-size: clamp(29px, 4vw, 42px);
+  font-weight: 700;
+  letter-spacing: -1.7px;
+  line-height: 0.95;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 3px 16px #88e6bb35;
+}
+
+.table-round-result > strong small {
+  color: #b9a8c5;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.table-round-result.negative > strong {
+  color: #e0a2b1;
+  text-shadow: 0 3px 16px #d986a135;
+}
+
+.table-round-result.neutral > strong {
+  color: #d9c3e8;
+  text-shadow: 0 3px 16px #c29be135;
+}
+
+.table-round-result-countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 16px;
+  color: #e1c9ef;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.table-round-result-countdown::before {
+  content: "";
+  width: 24px;
+  height: 1px;
+  margin-bottom: 3px;
+  background: #d5b9e53b;
+  box-shadow: 0 0 9px #d5b9e51f;
+}
+
+.table-round-result-countdown > small {
+  color: #927fa4;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  line-height: 1;
+}
+
+@keyframes table-round-result-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 /* The menus pop from their centered anchor; there is no directional travel. */
 .table-panel .betting-actions > .chip-rack,
 .table-panel .play-actions {
@@ -381,6 +490,10 @@
   .table-panel .play-actions > .double-action > .button > span {
     font-size: 8px;
   }
+
+  .table-round-result {
+    top: 38.5%;
+  }
 }
 
 @media (max-width: 450px) {
@@ -487,6 +600,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .table-round-result {
+    animation: none;
+  }
+
   .table-panel .betting-actions > .chip-rack,
   .table-panel .betting-actions > .bet-confirm,
   .table-panel .play-actions {
