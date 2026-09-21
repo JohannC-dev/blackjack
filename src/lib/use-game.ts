@@ -150,6 +150,27 @@ export function useGame() {
         });
     });
   }, []);
+  const joinBlackjack = useCallback((): Promise<boolean> => {
+    const socket = socketRef.current;
+    if (!socket?.connected) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      socket
+        .timeout(6000)
+        .emit("blackjack:join", (timeout: Error | null, ack: Ack) => {
+          if (timeout) {
+            setError("La table Blackjack ne répond pas.");
+            resolve(false);
+            return;
+          }
+          if (!ack?.ok) {
+            setError((ack as { error: string }).error);
+            resolve(false);
+            return;
+          }
+          resolve(true);
+        });
+    });
+  }, []);
   const pokerCommand = useCallback((action: PokerCommand): Promise<boolean> => {
     const socket = socketRef.current;
     if (!socket?.connected) {
@@ -207,6 +228,7 @@ export function useGame() {
     setError,
     register,
     command,
+    joinBlackjack,
     pokerCommand,
     changeTable,
   };

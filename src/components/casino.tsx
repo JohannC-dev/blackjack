@@ -1172,8 +1172,16 @@ function BlackjackCasino({
   game: ReturnType<typeof useGame>;
   onNavigate: (view: CasinoView) => void;
 }) {
-  const { state, playerId, connected, profile, loaded, command, pending } =
-    game;
+  const {
+    state,
+    playerId,
+    connected,
+    profile,
+    loaded,
+    command,
+    joinBlackjack,
+    pending,
+  } = game;
   const [modal, setModal] = useState<
     "rules" | "tables" | "history" | "invite" | null
   >(null);
@@ -1268,6 +1276,10 @@ function BlackjackCasino({
     (state?.seats
       .flatMap((s) => s.hands)
       .reduce((n, h) => n + h.cards.length, 0) ?? 0);
+
+  useEffect(() => {
+    if (profile && connected && state?.id) void joinBlackjack();
+  }, [connected, joinBlackjack, profile, state?.id]);
 
   const closeDoubleChoice = () => {
     if (
@@ -1724,7 +1736,7 @@ function BlackjackCasino({
                       onClick={() => setModal("tables")}
                     >
                       <Users size={14} />
-                      {state?.players.filter((p) => p.connected).length ?? 0}
+                      {state?.seats.filter((seat) => seat.playerId).length ?? 0}
                       <span>/ 5 places</span>
                       <ChevronDown size={13} />
                     </button>
@@ -2416,7 +2428,7 @@ function BlackjackCasino({
               {PUBLIC_TABLES.map((publicTable) => {
                 const current = state?.id === publicTable.id;
                 const playerCount = current
-                  ? state.players.filter((player) => player.connected).length
+                  ? state.seats.filter((seat) => seat.playerId).length
                   : null;
                 return (
                   <button
