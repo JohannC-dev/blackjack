@@ -320,7 +320,24 @@ export function TowerFx({
       }
       return image;
     };
-    const dust = sprite("#8a7f95", 0.45);
+    let dust = sprite("#8a7f95", 0.45);
+    // When the GPU drops the canvas, Chrome paints it as a white "sad" placeholder
+    // over the page: hide it until the browser restores the context.
+    let lost = false;
+    const onLost = (event: Event) => {
+      event.preventDefault();
+      lost = true;
+      canvas.style.visibility = "hidden";
+    };
+    const onRestored = () => {
+      lost = false;
+      sprites.clear();
+      dust = sprite("#8a7f95", 0.45);
+      resize();
+      canvas.style.visibility = "";
+    };
+    canvas.addEventListener("contextlost", onLost);
+    canvas.addEventListener("contextrestored", onRestored);
     let dpr = 1;
     const resize = () => {
       dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -337,6 +354,10 @@ export function TowerFx({
     let frame = 0;
     const step = (now: number) => {
       frame = requestAnimationFrame(step);
+      if (lost) {
+        last = now;
+        return;
+      }
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const host = canvas.getBoundingClientRect();
@@ -582,6 +603,8 @@ export function TowerFx({
       cancelAnimationFrame(frame);
       observer.disconnect();
       media.removeEventListener("change", onMotion);
+      canvas.removeEventListener("contextlost", onLost);
+      canvas.removeEventListener("contextrestored", onRestored);
     };
   }, [targetRef]);
 
