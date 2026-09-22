@@ -57,20 +57,34 @@ function parseNumbers(selection: string) {
   return selection.split("-").map(Number);
 }
 
+/**
+ * Numbers of a selection, only in their canonical spelling: "1", never "01"
+ * or "1.0", so one spot can never be played under two different ids.
+ */
+function canonicalNumbers(selection: string, count: number) {
+  const numbers = parseNumbers(selection);
+  if (
+    numbers.length !== count ||
+    numbers.some(
+      (value) => !Number.isInteger(value) || value < 0 || value > 36,
+    ) ||
+    numbers.map(String).join("-") !== selection
+  )
+    return null;
+  return numbers;
+}
+
 function isStraight(selection: string) {
-  const value = Number(selection);
-  return (
-    /^\d{1,2}$/.test(selection) &&
-    Number.isInteger(value) &&
-    value >= 0 &&
-    value <= 36
-  );
+  return canonicalNumbers(selection, 1) !== null;
 }
 
 function isSplit(selection: string) {
-  if (!/^\d{1,2}-\d{1,2}$/.test(selection)) return false;
-  const [first, second] = parseNumbers(selection);
-  if (first < 1 || second > 36 || first >= second) return false;
+  const numbers = canonicalNumbers(selection, 2);
+  if (!numbers) return false;
+  const [first, second] = numbers;
+  // European zero splits: 0/1, 0/2 and 0/3.
+  if (first === 0) return second >= 1 && second <= 3;
+  if (first >= second) return false;
   const vertical =
     second - first === 1 && Math.ceil(first / 3) === Math.ceil(second / 3);
   const horizontal = second - first === 3;
@@ -78,8 +92,9 @@ function isSplit(selection: string) {
 }
 
 function isCorner(selection: string) {
-  if (!/^\d{1,2}-\d{1,2}-\d{1,2}-\d{1,2}$/.test(selection)) return false;
-  const [first, second, third, fourth] = parseNumbers(selection);
+  const numbers = canonicalNumbers(selection, 4);
+  if (!numbers) return false;
+  const [first, second, third, fourth] = numbers;
   return (
     first >= 1 &&
     first <= 32 &&

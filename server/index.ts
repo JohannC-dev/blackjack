@@ -357,6 +357,11 @@ io.on("connection", (socket) => {
       try {
         throttle();
         if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+        // Only a connection showing the table may bet: a tab left on another
+        // game cannot act on the wheel. Several Roulette tabs of the same
+        // player all joined the table, so each of them may play.
+        if (!rouletteSockets.get(player.id)?.has(socket.id))
+          throw new Error("Ouvrez la roulette pour jouer.");
         const tableId = rouletteSeats.get(player.id);
         const table = tableId && rouletteTables.get(tableId);
         if (!table) throw new Error("Rejoignez la table de roulette.");

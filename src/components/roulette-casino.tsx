@@ -190,6 +190,9 @@ export function targetAt(number: number, x: number, y: number): Target {
   const row = rowOf(number);
   const dx = x < EDGE ? -1 : x > 1 - EDGE ? 1 : 0;
   const dy = y < EDGE ? -1 : y > 1 - EDGE ? 1 : 0;
+  // The left edge of the first column borders the zero: zero split.
+  if (dx === -1 && column === 1)
+    return { kind: "split", selection: `0-${number}` };
   const side =
     dx && column + dx >= 1 && column + dx <= 12 ? number + dx * 3 : null;
   // Up the layout is number + 1 (3 sits above 2), down is number - 1.
@@ -207,6 +210,13 @@ export function targetAt(number: number, x: number, y: number): Target {
   return { kind: "straight", selection: String(number) };
 }
 
+/** Aiming at the right edge of the zero plays it with 1, 2 or 3. */
+export function zeroTargetAt(x: number, y: number): Target {
+  if (x <= 1 - EDGE) return { kind: "straight", selection: "0" };
+  const row = Math.min(2, Math.max(0, Math.floor(y * 3)));
+  return { kind: "split", selection: `0-${3 - row}` };
+}
+
 function pointerTarget(
   number: number,
   event: { clientX: number; clientY: number; currentTarget: Element },
@@ -219,14 +229,28 @@ function pointerTarget(
   );
 }
 
+function zeroPointerTarget(event: {
+  clientX: number;
+  clientY: number;
+  currentTarget: Element;
+}) {
+  const box = event.currentTarget.getBoundingClientRect();
+  return zeroTargetAt(
+    (event.clientX - box.left) / box.width,
+    (event.clientY - box.top) / box.height,
+  );
+}
+
 /** Where the chips of a split or corner sit, on the lines between numbers. */
 function anchorOf({ kind, selection }: Target) {
   const numbers = selection.split("-").map(Number);
   const average = (values: number[]) =>
     values.reduce((sum, value) => sum + value, 0) / values.length;
+  // The zero spans the three rows: a zero split sits on its neighbour's row,
+  // on the line between the zero and the first column (column 0 here).
   return {
     left: `${((average(numbers.map(columnOf)) - 0.5) * 100) / 12}%`,
-    top: `${((average(numbers.map(rowOf)) + 0.5) * 100) / 3}%`,
+    top: `${((average(numbers.filter((number) => number).map(rowOf)) + 0.5) * 100) / 3}%`,
     shape: kind === "corner" ? "is-corner" : "is-split",
   };
 }
@@ -354,6 +378,20 @@ function RouletteBoard(props: BoardProps) {
         <button
           {...spotProps({ kind: "straight", selection: "0" })}
           className={`roulette-spot roulette-zero ${outcomeClass({ kind: "straight", selection: "0" }, board.result)} ${covered(0) ? "is-preview" : ""}`}
+          onPointerMove={(event) => hover(zeroPointerTarget(event))}
+          onClick={(event) => {
+            // Keyboard activation has no pointer position: plain zero.
+            const target =
+              event.detail === 0
+                ? { kind: "straight" as const, selection: "0" }
+                : zeroPointerTarget(event);
+            board.onPlace(target.kind, target.selection);
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            const target = zeroPointerTarget(event);
+            board.onRemove(target.kind, target.selection);
+          }}
         >
           <span className="roulette-number">0</span>
           <Chips id="straight:0" board={board} />

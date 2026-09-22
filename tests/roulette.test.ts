@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { RouletteTable, ROULETTE_SPIN_MS } from "../server/roulette";
-import { targetAt } from "../src/components/roulette-casino";
+import { targetAt, zeroTargetAt } from "../src/components/roulette-casino";
 import {
   isValidRouletteBet,
   rouletteBetWins,
@@ -51,6 +51,43 @@ describe("Roulette européenne", () => {
           expect(
             isValidRouletteBet({ ...targetAt(number, x, y), amount: 5 }),
           ).toBe(true);
+  });
+
+  test("une case n’a qu’une seule écriture", () => {
+    const valid = (kind: "straight" | "split" | "corner", selection: string) =>
+      isValidRouletteBet({ kind, selection, amount: 5 });
+    expect(valid("straight", "1")).toBe(true);
+    expect(valid("straight", "0")).toBe(true);
+    for (const selection of ["01", "00", "1.0", " 1", "+1", "", "1e1", "37"])
+      expect(valid("straight", selection)).toBe(false);
+    expect(valid("split", "01-02")).toBe(false);
+    expect(valid("corner", "01-2-4-5")).toBe(false);
+  });
+
+  test("le zéro se joue à cheval avec 1, 2 et 3", () => {
+    for (const selection of ["0-1", "0-2", "0-3"]) {
+      expect(isValidRouletteBet({ kind: "split", selection, amount: 5 })).toBe(
+        true,
+      );
+      expect(rouletteBetWins({ kind: "split", selection }, 0)).toBe(true);
+    }
+    for (const selection of ["0-4", "1-0", "0-0"])
+      expect(isValidRouletteBet({ kind: "split", selection, amount: 5 })).toBe(
+        false,
+      );
+    expect(
+      rouletteReturn([{ kind: "split", selection: "0-2", amount: 10 }], 2),
+    ).toBe(180);
+    // Aiming at the line between the zero and the first column.
+    expect(targetAt(1, 0.05, 0.5).selection).toBe("0-1");
+    expect(targetAt(3, 0.05, 0.05).selection).toBe("0-3");
+    expect(zeroTargetAt(0.95, 0.1).selection).toBe("0-3");
+    expect(zeroTargetAt(0.95, 0.5).selection).toBe("0-2");
+    expect(zeroTargetAt(0.95, 0.9).selection).toBe("0-1");
+    expect(zeroTargetAt(0.5, 0.5)).toEqual({
+      kind: "straight",
+      selection: "0",
+    });
   });
 
   test("le zéro fait perdre toutes les chances simples", () => {
