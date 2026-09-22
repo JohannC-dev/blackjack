@@ -1,4 +1,5 @@
 import { Data } from "effect";
+import type { RoomError } from "../rooms";
 
 /**
  * Every refusal of the Roulette is a typed error: the compiler lists what each
@@ -53,4 +54,9 @@ export type TableError =
   | CannotBeReady
   | InsufficientCredits;
 export type RouletteError =
-  CommandError | TableError | NotShowingRoulette | NotAtTable | TableFull;
+  | CommandError
+  | TableError
+  | NotShowingRoulette
+  | NotAtTable
+  | TableFull
+  | RoomError;

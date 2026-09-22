@@ -13,6 +13,7 @@ import {
   readWallet,
 } from "./db/wallet";
 import { PokerManager } from "./poker";
+import { makeRoomRuntime, roomChannel } from "./rooms";
 import { TowerManager } from "./tower";
 import { MinesGame } from "./mines";
 import { makeRouletteRuntime } from "./roulette";
@@ -42,7 +43,6 @@ import type {
   MinesCommand,
   PokerCommand,
   TowerCommand,
-  TableVisibility,
   Wallet,
 } from "../src/lib/types";
 import {
@@ -132,7 +132,9 @@ io.use(async (socket, next) => {
 });
 
 const tables = new Map<string, Table>();
-const publicTableIds = new Set<string>();
+const blackjackRooms = makeRoomRuntime("blackjack", () =>
+  randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase(),
+);
 const profiles = new Map<string, Player>();
 const playersById = new Map<string, Player>();
 const gameWallet = new RecordingGameWallet();
@@ -181,8 +183,8 @@ function getMines(playerId: string) {
 function getMinesEffect(playerId: string) {
   return gameEffect(() => getMines(playerId));
 }
-const rouletteRoom = (tableId: string) => `roulette:${tableId}`;
-const blackjackRoom = (tableId: string) => `blackjack:${tableId}`;
+const rouletteRoom = (tableId: string) => roomChannel("roulette", tableId);
+const blackjackRoom = (tableId: string) => blackjackRooms.channel(tableId);
 /** Roulette owns its table pool and borrows only club players and sockets. */
 const roulette = makeRouletteRuntime({
   players: {
@@ -224,48 +226,32 @@ const tower = new TowerManager(
 if (dev && process.env.TOWER_NO_TRAPS === "1")
   console.log("La Tower · mode test sans pièges activé");
 
-function newTableId() {
-  let id: string;
-  do {
-    id = randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase();
-  } while (tables.has(id) || publicTableIds.has(id));
-  return id;
-}
-
 function publicTableFor(playerId?: string) {
-  const currentRoom = playerId ? profiles.get(playerId)?.roomId : undefined;
-  if (currentRoom && publicTableIds.has(currentRoom) && tables.has(currentRoom))
+  const currentRoom = playerId ? blackjackRooms.roomOf(playerId) : undefined;
+  if (currentRoom && blackjackRooms.get(currentRoom)?.visibility === "public")
     return currentRoom;
-
-  for (const id of publicTableIds) {
-    const table = tables.get(id);
-    if (!table) {
-      publicTableIds.delete(id);
-      continue;
-    }
-    if (
-      table.state.phase === "betting" &&
-      table.state.seats.some((seat) => seat.playerId === null)
-    )
-      return id;
-  }
-
-  const id = newTableId();
-  publicTableIds.add(id);
-  return id;
+  return blackjackRooms.publicRoom((room) => {
+    const table = tables.get(room.id);
+    return (
+      !table ||
+      (table.state.phase === "betting" &&
+        table.state.seats.some((seat) => seat.playerId === null))
+    );
+  }).id;
 }
 
-function getTable(id: string, visibility: TableVisibility) {
+function getTable(id: string) {
   let table = tables.get(id);
   if (!table) {
-    if (visibility === "public") publicTableIds.add(id);
+    const room = blackjackRooms.get(id);
+    if (!room) throw new Error("Cette salle n’existe pas.");
     table = new Table(
       id,
       () => io.to(blackjackRoom(id)).emit("state", tables.get(id)!.snapshot()),
       undefined,
       gameWallet,
       false,
-      visibility,
+      room.visibility,
     );
     tables.set(id, table);
   }
@@ -478,11 +464,10 @@ io.on("connection", (socket) => {
         });
         let known = profiles.get(session.user.id);
         const tableId = safeData.createPrivate
-          ? newTableId()
-          : (safeData.tableId ?? publicTableFor(known?.id));
-        const visibility: TableVisibility = publicTableIds.has(tableId)
-          ? "public"
-          : "private";
+          ? blackjackRooms.create("private").id
+          : safeData.tableId
+            ? blackjackRooms.privateRoom(safeData.tableId).id
+            : publicTableFor(known?.id);
         if (known && known.roomId !== tableId) {
           const connections = playerSockets.get(known.id);
           if (
@@ -501,7 +486,7 @@ io.on("connection", (socket) => {
           known.ready = false;
         }
 
-        const table = getTable(tableId, visibility);
+        const table = getTable(tableId);
         if (!known) {
           known = {
             id: session.user.id,
@@ -522,6 +507,7 @@ io.on("connection", (socket) => {
         player.connected = true;
         player.lastSeen = clock.now();
         player.roomId = tableId;
+        blackjackRooms.join(player.id, tableId);
         const connections = playerSockets.get(player.id) ?? new Set();
         connections.add(socket.id);
         playerSockets.set(player.id, connections);
@@ -851,9 +837,11 @@ const maintenanceEffect = Effect.provide(
     const now = clock.now();
     for (const [id, table] of tables) {
       yield* Effect.either(walletTransactionEffect(table.tickEffect(now)));
+      for (const memberId of blackjackRooms.get(id)?.members ?? [])
+        if (!table.players.has(memberId)) blackjackRooms.leave(memberId);
       if (!table.players.size && now - table.lastUsed > 30 * 60_000) {
         tables.delete(id);
-        publicTableIds.delete(id);
+        blackjackRooms.deleteEmpty(id);
       }
     }
     yield* Effect.either(walletTransactionEffect(poker.tickEffect(now)));
@@ -870,6 +858,8 @@ const maintenanceEffect = Effect.provide(
         yield* Effect.either(
           gameEffect(() => {
             profiles.delete(token);
+            blackjackRooms.leave(profile.id);
+            blackjackRooms.deleteEmpty(profile.roomId);
             wallets.delete(profile.id);
             playersById.delete(profile.id);
             mines.delete(profile.id);

@@ -90,7 +90,8 @@ export type HistoryItem = {
   /** Each red/black draw made with the winnings after this round. */
   gambles?: HistoryGamble[];
 };
-export type TableVisibility = "public" | "private";
+export type RoomVisibility = "public" | "private";
+export type TableVisibility = RoomVisibility;
 
 export type TableState = {
   id: string;

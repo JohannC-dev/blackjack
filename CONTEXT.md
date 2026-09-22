@@ -3,10 +3,12 @@
 - **Club** : l’espace commun de Minuit qui regroupe les jeux et le portefeuille de crédits.
 - **Jeux de cartes** : Blackjack et Poker, deux jeux distincts du Club avec leurs propres parties.
 - **Jeux de risque** : Mines et Tower. Ils partagent une mise, une progression visible et une sortie volontaire de la partie.
-- **Table** : partie multijoueur propre à un jeu. Son état, ses places et ses participants ne s’étendent pas aux tables des autres jeux.
+- **Table** : partie multijoueur propre à un jeu. Son état et ses places ne s’étendent pas aux tables des autres jeux.
+- **Registre des salles** : ensemble des salles d’un jeu, avec leur visibilité et les joueurs présents. Les places disponibles et les mises relèvent des règles du jeu.
 - **Table publique** : table ouverte, attribuée automatiquement parmi celles qui ont des places disponibles.
 - **Table privée** : table créée à la demande et accessible aux personnes qui ont son lien ou son code.
-- **Salle** : espace de jeu identifié, notamment pour une partie de Poker ou une ascension de Tower.
+- **Salle** : espace de jeu identifié au sein d’un seul jeu. Blackjack, Roulette, Tower et Poker utilisent chacun leur propre registre.
+- **File Poker** : attente par mise avant une partie Spin & Play. Un joueur en file n’occupe pas encore de salle Poker.
 - **Joueur** : personne connectée avec un profil, un portefeuille et des actions disponibles.
 - **Place** : position occupée ou libre autour d’une table ou dans une salle.
 - **Spectateur** : joueur connecté qui regarde une partie sans occuper de place active.

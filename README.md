@@ -94,6 +94,7 @@ Seule la meilleure combinaison est payée. « Pour 1 » désigne le gain net, av
 - Le serveur recharge le portefeuille avant toute commande financière. Chaque moteur déclare ses débits et crédits via le même port `GameWallet`, avec un identifiant stable et leur cause métier. Les opérations d’une commande sont écrites ensemble dans une seule transaction ; une commande sans variation de solde ne touche pas PostgreSQL.
 - Le client reçoit le solde par `GET /api/profile` et par l’événement Socket.IO `wallet`. Ces valeurs servent à l’affichage et à désactiver des actions impossibles ; elles ne sont jamais acceptées comme autorité par le serveur.
 - Les cartes, tables, manches et historiques restent en mémoire dans cette version. Un seul processus serveur doit donc héberger les parties. Les comptes, sessions, soldes et écritures du portefeuille survivent aux redémarrages.
+- `server/rooms.ts` définit les transitions immuables des salles et un service Effect fondé sur `SynchronizedRef`. Blackjack, Tower et Poker utilisent chacun une instance du service ; Roulette applique les mêmes transitions dans sa transaction Effect qui contient aussi les tables. Chaque jeu décide si une salle peut accueillir un joueur. Les files Poker et l’état des parties restent dans leurs moteurs.
 - Une place déconnectée est libérée après 60 secondes lors de la phase de mise. Une table vide expire après 30 minutes ; un profil de jeu inactif est retiré de la mémoire après 24 heures, sans supprimer son compte ni son portefeuille.
 
 ## Production
@@ -139,6 +140,7 @@ Les tests couvrent les deux moteurs, toutes les catégories de mains Poker, la c
 - `server/engine.ts` : moteur et phases du Blackjack.
 - `server/poker.ts` : moteur Hold’em, matchmaking, files et tables Poker.
 - `server/roulette/` : Roulette écrite avec [Effect](https://effect.website) — erreurs typées (`errors.ts`), validation des commandes par `Schema` (`schema.ts`), table immuable (`table.ts`), registre transactionnel des tables (`service.ts`) et runtime synchrone branché sur Socket.IO (`index.ts`). Joueurs, roue, horloge et transport sont des services injectés, remplacés par des doubles dans les tests.
+- `server/rooms.ts` : service Effect et transitions de création, visibilité, appartenance et suppression des salles.
 - `server/index.ts` : serveur Bun/Next.js, sessions HTTP et protocole Socket.IO.
 - `server/auth.ts` : configuration Better Auth.
 - `server/db/schema.ts` : tables Better Auth, portefeuille et journal comptable.

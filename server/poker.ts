@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from "node:crypto";
+import { makeRoomRuntime } from "./rooms";
 import { gameEffect } from "./effect";
 import type { Player } from "./engine";
 import { inMemoryGameWallet, type GameWallet } from "./game-wallet";
@@ -86,7 +87,7 @@ function spinMultiplier() {
 }
 
 export class PokerTable {
-  readonly id = `PKR-${randomUUID().slice(0, 8).toUpperCase()}`;
+  readonly id: string;
   readonly maxSeats: number;
   participants: Participant[] = [];
   phase: PokerTableState["phase"] = "waiting";
@@ -122,7 +123,9 @@ export class PokerTable {
     readonly smallBlind: number,
     readonly initialBigBlind: number,
     private publish: () => void,
+    id = `PKR-${randomUUID().slice(0, 8).toUpperCase()}`,
   ) {
+    this.id = id;
     this.maxSeats = mode === "spin" ? 3 : 5;
     this.minRaise = initialBigBlind;
   }
@@ -889,7 +892,11 @@ type QueueEntry = {
 
 export class PokerManager {
   private tables = new Map<string, PokerTable>();
-  private membership = new Map<string, string>();
+  private rooms = makeRoomRuntime(
+    "poker",
+    () => `PKR-${randomUUID().slice(0, 8).toUpperCase()}`,
+  );
+  private queued = new Map<string, number>();
   private queues = new Map<number, QueueEntry[]>();
 
   constructor(
@@ -899,7 +906,7 @@ export class PokerManager {
 
   /** Players seated at the same poker table, the player included. */
   tableMatesOf(playerId: string) {
-    const table = this.tables.get(this.membership.get(playerId) ?? "");
+    const table = this.tables.get(this.rooms.roomOf(playerId) ?? "");
     return table?.participants.map((entry) => entry.player.id) ?? [];
   }
 
@@ -908,9 +915,8 @@ export class PokerManager {
   }
 
   state(player: Player) {
-    const membership = this.membership.get(player.id);
-    if (membership?.startsWith("queue:")) {
-      const stake = Number(membership.slice(6));
+    const stake = this.queued.get(player.id);
+    if (stake !== undefined) {
       return {
         status: "queue" as const,
         balance: player.balance,
@@ -921,7 +927,7 @@ export class PokerManager {
         },
       };
     }
-    const table = membership ? this.tables.get(membership) : undefined;
+    const table = this.tables.get(this.rooms.roomOf(player.id) ?? "");
     return table
       ? {
           status: "table" as const,
@@ -932,19 +938,18 @@ export class PokerManager {
   }
 
   connect(player: Player) {
-    const tableId = this.membership.get(player.id);
+    const tableId = this.rooms.roomOf(player.id);
     const table = tableId ? this.tables.get(tableId) : undefined;
     if (table) table.reconnect(player.id);
     this.send(player.id, this.state(player));
   }
 
   disconnect(player: Player) {
-    const member = this.membership.get(player.id);
-    if (member?.startsWith("queue:")) {
+    if (this.queued.has(player.id)) {
       this.leave(player);
       return;
     }
-    this.tables.get(member ?? "")?.disconnect(player.id);
+    this.tables.get(this.rooms.roomOf(player.id) ?? "")?.disconnect(player.id);
   }
 
   connectEffect(player: Player) {
@@ -970,7 +975,7 @@ export class PokerManager {
       this.match(player, command.mode, command.stake, command.buyIn);
     else if (command.type === "leave") this.leave(player);
     else {
-      const table = this.tables.get(this.membership.get(player.id) ?? "");
+      const table = this.tables.get(this.rooms.roomOf(player.id) ?? "");
       if (!table) throw new Error("Vous n’êtes pas à une table de poker.");
       if (command.type === "chat") table.chatMessage(player.id, command.text);
       else if (command.type === "muck") table.muck(player.id);
@@ -988,7 +993,7 @@ export class PokerManager {
     stake: number,
     requestedBuyIn?: number,
   ) {
-    if (this.membership.has(player.id))
+    if (this.queued.has(player.id) || this.rooms.roomOf(player.id))
       throw new Error("Vous jouez déjà au poker.");
     if (mode === "spin") {
       if (!SPIN_BUY_INS.includes(stake as (typeof SPIN_BUY_INS)[number]))
@@ -1008,15 +1013,22 @@ export class PokerManager {
       const queue = this.queues.get(stake) ?? [];
       queue.push({ id: entryId, player, stake, joinedAt: Date.now() });
       this.queues.set(stake, queue);
-      this.membership.set(player.id, `queue:${stake}`);
+      this.queued.set(player.id, stake);
       if (queue.length >= 3) {
         const matched = queue.splice(0, 3);
-        const table = new PokerTable("spin", stake, 10, 20, () =>
-          this.publishTable(table),
+        const room = this.rooms.create("public");
+        const table = new PokerTable(
+          "spin",
+          stake,
+          10,
+          20,
+          () => this.publishTable(table),
+          room.id,
         );
         this.tables.set(table.id, table);
         for (const entry of matched) {
-          this.membership.set(entry.player.id, table.id);
+          this.queued.delete(entry.player.id);
+          this.rooms.join(entry.player.id, table.id);
           table.add(entry.player, 500, entry.id);
         }
       }
@@ -1031,12 +1043,16 @@ export class PokerManager {
       throw new Error("Le buy-in doit être compris entre 40 et 100 BB.");
     if (this.wallet.balance(player) < buyIn)
       throw new Error("Votre solde est insuffisant.");
-    let table = [...this.tables.values()].find(
-      (candidate) =>
+    const room = this.rooms.publicRoom((room) => {
+      const candidate = this.tables.get(room.id);
+      return (
+        !!candidate &&
         candidate.mode === "cash" &&
         candidate.stake === stake &&
-        candidate.participants.length < candidate.maxSeats,
-    );
+        candidate.participants.length < candidate.maxSeats
+      );
+    });
+    let table = this.tables.get(room.id);
     if (!table) {
       table = new PokerTable(
         "cash",
@@ -1044,6 +1060,7 @@ export class PokerManager {
         limit.smallBlind,
         limit.bigBlind,
         () => this.publishTable(table!),
+        room.id,
       );
       this.tables.set(table.id, table);
     }
@@ -1057,19 +1074,20 @@ export class PokerManager {
       amount: buyIn,
       metadata: { mode, stake, tableId: table.id },
     });
-    this.membership.set(player.id, table.id);
+    this.rooms.join(player.id, table.id);
     table.add(player, buyIn, entryId);
     this.send(player.id, this.state(player));
   }
 
   leave(player: Player) {
-    const member = this.membership.get(player.id);
-    if (!member) {
+    const queuedStake = this.queued.get(player.id);
+    const roomId = this.rooms.roomOf(player.id);
+    if (queuedStake === undefined && !roomId) {
       this.send(player.id, this.lobby(player));
       return;
     }
-    if (member.startsWith("queue:")) {
-      const stake = Number(member.slice(6));
+    if (queuedStake !== undefined) {
+      const stake = queuedStake;
       const queue = this.queues.get(stake) ?? [];
       const found = queue.find((entry) => entry.player.id === player.id);
       this.queues.set(
@@ -1086,12 +1104,12 @@ export class PokerManager {
           amount: found.stake,
           metadata: { stake },
         });
-      this.membership.delete(player.id);
+      this.queued.delete(player.id);
       this.publishQueue(stake);
       this.send(player.id, this.lobby(player));
       return;
     }
-    const table = this.tables.get(member);
+    const table = this.tables.get(roomId!);
     if (table) {
       const entry = table.requestLeave(player.id);
       if (!entry) return;
@@ -1107,7 +1125,11 @@ export class PokerManager {
         });
       this.publishTable(table);
     }
-    this.membership.delete(player.id);
+    this.rooms.leave(player.id);
+    if (roomId && !table?.participants.length) {
+      this.tables.delete(roomId);
+      this.rooms.deleteEmpty(roomId);
+    }
     this.send(player.id, this.lobby(player));
   }
 
@@ -1144,7 +1166,7 @@ export class PokerManager {
               amount: table.stake,
               metadata: { tableId: table.id, stake: table.stake },
             });
-            this.membership.delete(entry.player.id);
+            this.rooms.leave(entry.player.id);
             this.send(entry.player.id, this.lobby(entry.player));
           } else {
             queue.push({
@@ -1153,11 +1175,13 @@ export class PokerManager {
               stake: table.stake,
               joinedAt: now,
             });
-            this.membership.set(entry.player.id, `queue:${table.stake}`);
+            this.rooms.leave(entry.player.id);
+            this.queued.set(entry.player.id, table.stake);
           }
         }
         this.queues.set(table.stake, queue);
         this.tables.delete(id);
+        this.rooms.deleteEmpty(id);
         this.publishQueue(table.stake);
         continue;
       }
@@ -1170,22 +1194,31 @@ export class PokerManager {
         if (remaining.length === 1) {
           table.lonelySince ||= now;
           if (now - table.lonelySince >= 30_000) {
-            const destination = [...this.tables.values()].find(
-              (candidate) =>
+            const destinationRoom = this.rooms.findPublic((room) => {
+              const candidate = this.tables.get(room.id);
+              return (
+                !!candidate &&
                 candidate !== table &&
                 candidate.mode === "cash" &&
                 candidate.stake === table.stake &&
-                candidate.participants.length < candidate.maxSeats,
-            );
+                candidate.participants.length < candidate.maxSeats
+              );
+            });
+            const destination = destinationRoom
+              ? this.tables.get(destinationRoom.id)
+              : undefined;
             if (destination) {
               const entry = table.remove(remaining[0].player.id);
-              this.membership.set(entry.player.id, destination.id);
+              this.rooms.join(entry.player.id, destination.id);
               destination.add(
                 entry.player,
                 entry.stack,
                 entry.walletReferenceId,
               );
-              if (!table.participants.length) this.tables.delete(id);
+              if (!table.participants.length) {
+                this.tables.delete(id);
+                this.rooms.deleteEmpty(id);
+              }
               continue;
             }
             table.lonelySince = now;
@@ -1221,11 +1254,14 @@ export class PokerManager {
               metadata: { tableId: table.id, stake: table.stake },
             });
           table.remove(entry.player.id);
-          this.membership.delete(entry.player.id);
+          this.rooms.leave(entry.player.id);
           this.send(entry.player.id, this.lobby(entry.player));
         }
       }
-      if (!table.participants.length) this.tables.delete(id);
+      if (!table.participants.length) {
+        this.tables.delete(id);
+        this.rooms.deleteEmpty(id);
+      }
     }
   }
 
