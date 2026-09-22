@@ -22,6 +22,7 @@ import {
   ChevronDown,
   CircleHelp,
   Coins,
+  Disc3,
   Diamond,
   Eye,
   EyeOff,
@@ -79,6 +80,7 @@ import { CasinoHome, PokerCasino } from "./poker-casino";
 import { MinesCasino } from "./mines-casino";
 import { PokerShuffleAnimation } from "./shared/casino/poker-shuffle";
 import { TowerCasino } from "./tower-casino";
+import { RouletteCasino } from "./roulette-casino";
 import {
   EmoteButton,
   EmoteLayer,
@@ -362,7 +364,7 @@ export const AnimatedTableChip = memo(
     left.className === right.className,
 );
 
-const TableChipStack = memo(function TableChipStack({
+export const TableChipStack = memo(function TableChipStack({
   amount,
   maximum,
   className = "",
@@ -422,15 +424,16 @@ export function SettlementChipAnimation({
 
   useLayoutEffect(() => {
     const root = ref.current;
-    const table = root?.closest(".table-stage");
+    // The Roulette reuses this settlement: its bank is the top of the felt
+    // and the winning pile stays on its spot, so it has no player target.
+    const table = root?.closest(".table-stage, .roulette-stage");
     const seat = root?.closest(".seat");
-    const bank = table?.querySelector(".dealer-cards");
+    const bank = table?.querySelector(".dealer-cards, .roulette-pot-anchor");
     const player = seat?.querySelector(".seat-name");
-    if (!root || !bank || !player) return;
+    if (!root || !bank) return;
 
     const origin = root.getBoundingClientRect();
     const bankRect = bank.getBoundingClientRect();
-    const playerRect = player.getBoundingClientRect();
     const centerX = origin.left + origin.width / 2;
     const centerY = origin.top + origin.height / 2;
     root.style.setProperty(
@@ -441,6 +444,8 @@ export function SettlementChipAnimation({
       "--settlement-bank-y",
       `${bankRect.top + bankRect.height / 2 - centerY}px`,
     );
+    if (!player) return;
+    const playerRect = player.getBoundingClientRect();
     root.style.setProperty(
       "--settlement-player-x",
       side ? `${playerRect.left + playerRect.width / 2 - centerX}px` : "0px",
@@ -1159,6 +1164,7 @@ type BlackjackSidebarProps = {
   onMines: () => void;
   onPoker: () => void;
   onTower: () => void;
+  onRoulette: () => void;
   onTables: () => void;
   onHistory: () => void;
   onRules: () => void;
@@ -1171,6 +1177,7 @@ const BlackjackSidebar = memo(function BlackjackSidebar({
   onMines,
   onPoker,
   onTower,
+  onRoulette,
   onTables,
   onHistory,
   onRules,
@@ -1186,6 +1193,7 @@ const BlackjackSidebar = memo(function BlackjackSidebar({
         else if (view === "mines") onMines();
         else if (view === "poker") onPoker();
         else if (view === "tower") onTower();
+        else if (view === "roulette") onRoulette();
       }}
       onTables={onTables}
       onHistory={onHistory}
@@ -1347,6 +1355,8 @@ export function Casino() {
       <TowerCasino game={game} onNavigate={navigate} />
     ) : view === "mines" ? (
       <MinesCasino game={game} onNavigate={navigate} />
+    ) : view === "roulette" ? (
+      <RouletteCasino game={game} onNavigate={navigate} />
     ) : (
       <BlackjackCasino game={game} onNavigate={navigate} />
     );
@@ -1358,9 +1368,11 @@ export function Casino() {
   const pokerExitDestination =
     pendingView === "mines"
       ? "le jeu de la Mine"
-      : pendingView === "home"
-        ? "l’accueil du club"
-        : "le Blackjack";
+      : pendingView === "roulette"
+        ? "la Roulette"
+        : pendingView === "home"
+          ? "l’accueil du club"
+          : "le Blackjack";
 
   return (
     <ServerClockProvider offset={game.serverTimeOffset}>
@@ -1852,6 +1864,7 @@ function BlackjackCasino({
   const goMines = useCallback(() => onNavigate("mines"), [onNavigate]);
   const goPoker = useCallback(() => onNavigate("poker"), [onNavigate]);
   const goTower = useCallback(() => onNavigate("tower"), [onNavigate]);
+  const goRoulette = useCallback(() => onNavigate("roulette"), [onNavigate]);
   const openTables = useCallback(() => setModal("tables"), []);
   const openHistory = useCallback(() => setModal("history"), []);
   const openRules = useCallback(() => setModal("rules"), []);
@@ -1892,6 +1905,7 @@ function BlackjackCasino({
         onMines={goMines}
         onPoker={goPoker}
         onTower={goTower}
+        onRoulette={goRoulette}
         onTables={openTables}
         onHistory={openHistory}
         onRules={openRules}

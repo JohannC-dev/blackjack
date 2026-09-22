@@ -1,1 +1,2 @@
-export type CasinoView = "home" | "blackjack" | "poker" | "tower" | "mines";
+export type CasinoView =
+  "home" | "blackjack" | "poker" | "tower" | "mines" | "roulette";

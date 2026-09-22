@@ -8,6 +8,7 @@ import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
 import "./globals.css";
 import "../styles/legacy.css";
+import "../styles/roulette.css";
 import "../styles/table-center.css";
 
 export const metadata: Metadata = {

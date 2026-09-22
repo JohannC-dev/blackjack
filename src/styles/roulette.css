@@ -1,0 +1,901 @@
+/* ── ROULETTE EUROPÉENNE ─────────────────────────────────────────────── */
+/* Blackjack chrome and chips on a rectangular felt; the dock is the shared
+   Tower and Mine betting bar. */
+.roulette-shell {
+  --roulette-red: #b33a55;
+  --roulette-red-deep: #7c2138;
+  --roulette-black: #16121d;
+  --roulette-green: #2f8a68;
+  --roulette-gold: #d8b77a;
+  --roulette-line: #c39bd638;
+}
+.roulette-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 36px;
+}
+.roulette-page .page-heading {
+  margin-bottom: 8px;
+}
+.roulette-panel {
+  margin-bottom: 0;
+}
+.roulette-history {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.roulette-history > li {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid #ffffff1c;
+  border-radius: 50%;
+  color: #f4eafd;
+  font-size: 9px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.roulette-history > li:first-child {
+  box-shadow: 0 0 0 2px #d8b77a55;
+}
+.roulette-history > li:nth-child(n + 7) {
+  opacity: 0.55;
+}
+.roulette-shell .tone-red {
+  background: var(--roulette-red);
+}
+.roulette-shell .tone-black {
+  background: var(--roulette-black);
+}
+.roulette-shell .tone-green {
+  background: var(--roulette-green);
+}
+
+.roulette-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(14px, 1.6vw, 26px);
+  padding: 28px clamp(22px, 2.4vw, 38px) 34px;
+  isolation: isolate;
+}
+.roulette-felt {
+  position: absolute;
+  inset: 4px 18px 20px;
+  z-index: -1;
+  border-radius: 34px;
+  background: radial-gradient(
+    ellipse at 30% 10%,
+    #543069 0%,
+    #3a204c 50%,
+    #291b39 100%
+  );
+  box-shadow:
+    0 0 0 1px #9a6eca45,
+    0 0 0 5px #26192e,
+    0 0 0 6px #68467760,
+    0 0 0 12px #211627,
+    0 0 0 13px #a776bd2b,
+    0 14px 0 11px #0e0a13,
+    0 18px 24px 14px #0007,
+    inset 0 0 52px #140c2266;
+}
+.roulette-felt .table-inner-line {
+  inset: 12px;
+}
+
+/* Wheel */
+.roulette-wheel-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+.roulette-wheel-frame {
+  --wheel-size: clamp(200px, 17vw, 250px);
+  position: relative;
+  flex: none;
+  width: var(--wheel-size);
+  height: var(--wheel-size);
+  padding: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #3b2a22 60%, #20150f 70%, #4a3322 100%);
+  box-shadow:
+    0 0 0 2px #d8b77a66,
+    0 0 0 7px #1a1119,
+    0 0 0 8px #a776bd3a,
+    0 18px 40px #000a,
+    inset 0 0 18px #000c;
+}
+.roulette-wheel-pointer {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  z-index: 5;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 13px solid #d8b77a;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 2px 3px #0009);
+}
+.roulette-wheel {
+  --sector: calc(360deg / 37);
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle,
+      transparent 61%,
+      #d8b77a55 61.5%,
+      transparent 62.5%
+    ),
+    repeating-conic-gradient(
+      from calc(var(--sector) / -2),
+      transparent 0deg calc(var(--sector) - 0.5deg),
+      #d8b77a70 calc(var(--sector) - 0.5deg) var(--sector)
+    ),
+    conic-gradient(
+      from calc(var(--sector) / -2),
+      #2f8a68 0deg var(--sector),
+      transparent var(--sector)
+    ),
+    repeating-conic-gradient(
+      from calc(var(--sector) / 2),
+      #b33a55 0deg var(--sector),
+      #16121d var(--sector) calc(var(--sector) * 2)
+    );
+  box-shadow: inset 0 0 0 3px #0008;
+  transition: transform 4200ms cubic-bezier(0.18, 0.72, 0.16, 1);
+  will-change: transform;
+}
+.roulette-wheel-slot {
+  position: absolute;
+  bottom: 50%;
+  left: 50%;
+  width: 1px;
+  height: 50%;
+  transform-origin: bottom;
+}
+.roulette-wheel-slot > b {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #f7eefc;
+  font-size: calc(var(--wheel-size) * 0.036);
+  font-weight: 800;
+  text-shadow: 0 1px 2px #000a;
+}
+.roulette-wheel-cone {
+  position: absolute;
+  inset: 24%;
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(#0000 0 22.5deg, #ffffff08 22.5deg 45deg),
+    radial-gradient(circle, #6b4a86 0%, #3a2350 55%, #1d1328 100%);
+  box-shadow:
+    0 0 0 2px #d8b77a55,
+    0 0 18px #000a inset;
+}
+.roulette-wheel-turret {
+  position: absolute;
+  inset: 44%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff3c9, #d8b77a 40%, #7a5a2a);
+  box-shadow: 0 2px 6px #000a;
+}
+.roulette-ball-orbit {
+  position: absolute;
+  inset: 20px;
+  z-index: 4;
+  border-radius: 50%;
+  pointer-events: none;
+  transition: transform 4200ms cubic-bezier(0.2, 0.6, 0.12, 1);
+  will-change: transform;
+}
+.roulette-ball {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, #d9d4e2 55%, #8d8698);
+  box-shadow: 0 2px 5px #000c;
+  transform: translate(-50%, 6px);
+}
+.roulette-wheel-frame.is-spinning .roulette-ball {
+  animation: roulette-ball-drop 4200ms cubic-bezier(0.5, 0, 0.3, 1) both;
+}
+@keyframes roulette-ball-drop {
+  from {
+    transform: translate(-50%, -8px);
+  }
+  70% {
+    transform: translate(-50%, -4px);
+  }
+  to {
+    transform: translate(-50%, 6px);
+  }
+}
+.roulette-wheel-result {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 6;
+  display: grid;
+  width: 25%;
+  height: 25%;
+  place-items: center;
+  border: 2px solid #f3dcaa;
+  border-radius: 50%;
+  color: #fff;
+  font-size: calc(var(--wheel-size) * 0.1);
+  font-weight: 800;
+  box-shadow:
+    0 8px 22px #000b,
+    0 0 26px #d8b77a55;
+  transform: translate(-50%, -50%);
+  animation: roulette-result-in 360ms var(--ease) both;
+}
+@keyframes roulette-result-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+}
+.roulette-wheel-frame.is-poster {
+  --wheel-size: 150px;
+  padding: 8px;
+}
+.roulette-outcome {
+  display: flex;
+  min-width: 190px;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 18px;
+  border: 1px solid #ffffff14;
+  border-radius: 12px;
+  background: #160f1fcc;
+  box-shadow: 0 8px 20px #0006;
+  text-align: center;
+}
+.roulette-outcome small {
+  color: #a597b3;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+}
+.roulette-outcome strong {
+  color: #efe6f7;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.roulette-outcome strong > span {
+  color: #9d91ad;
+  font-size: 11px;
+}
+.roulette-outcome.positive {
+  border-color: #83e9bc55;
+}
+.roulette-outcome.positive strong {
+  color: var(--mint);
+}
+.roulette-outcome.negative strong {
+  color: #e59aa8;
+}
+.roulette-outcome.is-spinning strong {
+  color: var(--roulette-gold);
+}
+
+/* Betting layout */
+.roulette-board-zone {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+.roulette-layout-scroll {
+  container-type: inline-size;
+  min-width: 0;
+  overflow: visible;
+  padding: 10px 6px 14px;
+  scrollbar-width: none;
+}
+.roulette-layout {
+  /* Fits the zone, then scrolls sideways below a comfortable tap size. */
+  --cell: clamp(32px, calc((100cqw - 14px) / 14), 88px);
+  display: grid;
+  width: max-content;
+  margin: 0 auto;
+  grid-template-columns: var(--cell) repeat(12, var(--cell)) var(--cell);
+  grid-template-rows:
+    repeat(3, var(--cell)) calc(var(--cell) * 0.82)
+    calc(var(--cell) * 0.82);
+  border: 1px solid var(--roulette-line);
+  border-radius: 6px 12px 12px 6px;
+  background: #1c122766;
+  box-shadow: 0 10px 26px #0005;
+  user-select: none;
+}
+.roulette-numbers {
+  position: relative;
+  display: grid;
+  grid-column: 2 / 14;
+  grid-row: 1 / 4;
+  grid-template-columns: repeat(12, var(--cell));
+  grid-template-rows: repeat(3, var(--cell));
+}
+.roulette-spot {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--roulette-line);
+  border-bottom: 1px solid var(--roulette-line);
+  background: transparent;
+  color: #eadff3;
+  font-size: calc(var(--cell) * 0.24);
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    filter 140ms ease,
+    opacity 200ms ease;
+}
+.roulette-spot:disabled {
+  cursor: default;
+}
+.roulette-spot > span:first-child {
+  pointer-events: none;
+}
+.roulette-number {
+  display: grid;
+  width: 72%;
+  height: 72%;
+  place-items: center;
+  border-radius: 50%;
+  font-size: calc(var(--cell) * 0.3);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.roulette-shell .roulette-cell.tone-red,
+.roulette-shell .roulette-cell.tone-black {
+  background: transparent;
+}
+.roulette-cell.tone-red .roulette-number {
+  background: var(--roulette-red);
+  box-shadow: inset 0 -2px 0 var(--roulette-red-deep);
+}
+.roulette-cell.tone-black .roulette-number {
+  background: var(--roulette-black);
+  box-shadow: inset 0 -2px 0 #000;
+}
+.roulette-shell .roulette-zero {
+  grid-column: 1;
+  grid-row: 1 / 4;
+  border-radius: 6px 0 0 6px;
+  background: linear-gradient(180deg, #2f8a6855, #2f8a6830);
+}
+.roulette-zero .roulette-number {
+  width: 76%;
+  height: auto;
+  aspect-ratio: 1;
+  background: var(--roulette-green);
+}
+.roulette-column {
+  border-right: 0;
+}
+.roulette-outside {
+  color: #d6c3e4;
+  font-size: calc(var(--cell) * 0.22);
+  letter-spacing: 0.4px;
+}
+.roulette-outside sup {
+  font-size: 0.7em;
+}
+.roulette-shell .roulette-outside.tone-red,
+.roulette-shell .roulette-outside.tone-black {
+  background: transparent;
+}
+.roulette-diamond {
+  width: calc(var(--cell) * 0.5);
+  height: calc(var(--cell) * 0.5);
+  border: 1px solid #ffffff30;
+  transform: rotate(45deg) scaleY(0.7);
+}
+.roulette-spot:not(:disabled):hover,
+.roulette-spot.is-preview {
+  background: #c7a1f724;
+}
+.roulette-spot.is-preview .roulette-number {
+  box-shadow:
+    0 0 0 2px #e0bbffaa,
+    0 0 14px #c7a1f766;
+}
+.roulette-spot:has(.table-chip) {
+  z-index: 7;
+}
+.roulette-spot .table-chip.roulette-chip,
+.roulette-anchor .table-chip.roulette-chip,
+.roulette-fx .table-chip.roulette-chip {
+  --table-chip-size: calc(var(--cell) * 0.5);
+  --table-chip-layer-gap: 2px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 8;
+  width: calc(var(--cell) * 0.78);
+  height: calc(var(--cell) * 0.78);
+  margin: 0;
+  transform: translate(-50%, -58%);
+  pointer-events: none;
+}
+.roulette-chip .table-chip-amount {
+  min-width: 18px;
+  padding: 2px 4px;
+  font-size: max(8px, calc(var(--cell) * 0.16));
+}
+/* Other players: another colour, translucent, slightly behind mine. */
+.roulette-chip.roulette-chip-other {
+  opacity: 0.3;
+  transition: opacity 160ms ease;
+  /* The casino entry flash would briefly show them at full strength. */
+  animation: none;
+}
+/* Under my own chips, or under the spot I am aiming at. */
+.roulette-chip.roulette-chip-other.is-faint {
+  opacity: 0.12;
+}
+.roulette-chip-other .table-chip-column {
+  --chip-edge: #bff3e2;
+  --chip-base: #3f9c86;
+  --chip-border: #8fdcc7;
+  --chip-shadow: #24594d;
+}
+.roulette-chip-other .table-chip-amount {
+  color: #c9f5e8;
+  background: #0f2a25e8;
+}
+.table-chip.roulette-chip.roulette-chip-other.is-behind {
+  z-index: 7;
+  transform: translate(-78%, -76%);
+}
+.roulette-chip-other.is-behind .table-chip-amount {
+  display: none;
+}
+/* Split and corner chips sit on the lines; aiming is done on the numbers. */
+.roulette-anchor {
+  position: absolute;
+  z-index: 9;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.roulette-anchor-preview::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--cell) * 0.42);
+  height: calc(var(--cell) * 0.42);
+  border: 1px solid #e0bbffcc;
+  border-radius: 50%;
+  background: #c7a1f755;
+  box-shadow: 0 0 12px #c7a1f788;
+  content: "";
+  transform: translate(-50%, -50%);
+}
+.roulette-preview-label {
+  position: absolute;
+  bottom: calc(var(--cell) * 0.34);
+  left: 50%;
+  padding: 3px 7px;
+  border-radius: 9px;
+  background: #c7a1f7;
+  color: #25153a;
+  font-size: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+/* Result: every winning spot lights up, chips or not. */
+/* A locked felt (ready, spinning, results) keeps full strength: dimming the
+   spots would also dim their chips but not the split and corner ones. */
+.roulette-spot:disabled {
+  opacity: 1;
+  cursor: default;
+}
+/* The winning spots themselves light up, not only their chips. */
+.roulette-layout.has-result .roulette-spot.is-won {
+  z-index: 3;
+  background: linear-gradient(180deg, #f3dcaa4d, #d8b77a2e);
+  box-shadow:
+    inset 0 0 0 2px #f3dcaa,
+    0 0 22px #f3dcaa66;
+  color: #fff4d6;
+  animation: roulette-win-glow 1.4s ease-in-out 3 alternate;
+}
+.roulette-layout.has-result .roulette-cell.is-won .roulette-number,
+.roulette-layout.has-result .roulette-zero.is-won .roulette-number {
+  box-shadow:
+    0 0 0 3px #f3dcaa,
+    0 0 22px #f3dcaacc;
+}
+@keyframes roulette-win-glow {
+  to {
+    box-shadow:
+      inset 0 0 0 2px #fff4d6,
+      0 0 34px #f3dcaaaa;
+  }
+}
+/* Only the labels fade: a filter on the spot would trap the raked chips. */
+.roulette-layout.has-result .roulette-spot.is-lost > :first-child {
+  opacity: 0.45;
+}
+/* ── Chip choreography once the ball is launched (RouletteFx) ──────── */
+/* The pot gathers at the top of the felt, above the layout. */
+.roulette-pot-zone {
+  position: relative;
+  height: 96px;
+}
+.roulette-pot-anchor {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  width: 1px;
+  height: 1px;
+}
+.roulette-pot-zone .roulette-round-result {
+  top: 50%;
+  animation-delay: 0.2s;
+}
+.roulette-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+.roulette-fx-pile {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+/* After the results, each losing pile lifts off its spot, then its chips
+   fall away (see .roulette-rain-drop). */
+.roulette-fx-pile.is-lift {
+  animation: roulette-lift var(--dur) cubic-bezier(0.3, 0, 0.3, 1) var(--delay)
+    both;
+}
+@keyframes roulette-lift {
+  70% {
+    opacity: 1;
+    transform: translateY(calc(var(--cell) * -0.45)) scale(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(calc(var(--cell) * -0.45)) scale(1.1);
+  }
+}
+/* Winning spots reuse the Blackjack settlement: the winnings come from the
+   bank at the top of the felt, merge into the stake, and the merged pile
+   stays on the spot instead of leaving for the player. */
+.roulette-layout .settlement-chips {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 8;
+  width: calc(var(--cell) * 0.78);
+  height: calc(var(--cell) * 0.78);
+  transform: translate(-50%, -58%);
+}
+.roulette-layout .settlement-chip.table-chip {
+  --table-chip-size: calc(var(--cell) * 0.5);
+  --table-chip-layer-gap: 2px;
+  /* The losing chips fall first, then the winnings come in. */
+  animation-delay: var(--roulette-winnings-delay, 0ms);
+}
+.roulette-layout .settlement-chip .table-chip-amount {
+  min-width: 18px;
+  padding: 2px 4px;
+  font-size: 7px;
+}
+.roulette-layout .settlement-return {
+  animation-name: roulette-settlement-keep;
+}
+@keyframes roulette-settlement-keep {
+  0%,
+  46% {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  52%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.roulette-layout .settlement-return .table-chip-disc {
+  box-shadow:
+    0 2px 0 var(--chip-shadow),
+    0 0 8px #f3dcaa88;
+}
+.roulette-win-tag {
+  position: absolute;
+  top: calc(50% - var(--cell) * 0.95);
+  left: 50%;
+  z-index: 12;
+  padding: 3px 7px;
+  border: 1px solid #a4edc566;
+  border-radius: 9px;
+  background: #10261ee8;
+  color: #a4edc5;
+  font-size: 9px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px #0007;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: roulette-tag-in 260ms var(--ease)
+    calc(var(--roulette-winnings-delay, 0ms) + 1000ms) both;
+}
+/* Splits and corners sit between numbers: their tag goes below. */
+.roulette-win-tag.is-below {
+  top: calc(50% + var(--cell) * 0.3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .roulette-layout .settlement-return {
+    animation: roulette-settlement-keep 700ms var(--ease) both !important;
+  }
+}
+@keyframes roulette-tag-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
+/* Lost chips fall from their spot in a rain of loose discs. */
+.roulette-rain-drop {
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
+  border: 1px solid var(--chip-border);
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle,
+      var(--chip-base) 0 48%,
+      var(--chip-edge) 49% 54%,
+      transparent 55%
+    ),
+    repeating-conic-gradient(
+      var(--chip-edge) 0deg 12deg,
+      var(--chip-base) 12deg 45deg
+    );
+  box-shadow:
+    0 2px 0 var(--chip-shadow),
+    0 4px 6px #0005;
+  opacity: 0;
+  animation: roulette-rain var(--dur) cubic-bezier(0.35, 0, 0.85, 0.55)
+    var(--delay) forwards;
+}
+@keyframes roulette-rain {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(calc(var(--x) * 0.3), var(--rise))
+      rotate(calc(var(--rot) * 0.2));
+  }
+  80% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--x), var(--fall)) rotate(var(--rot)) scaleY(0.55);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .roulette-fx-pile,
+  .roulette-fx-pile.is-lift,
+  .roulette-win-tag,
+  .roulette-rain-drop {
+    animation-duration: 1ms;
+  }
+}
+.roulette-bet-summary {
+  color: var(--muted);
+  font-size: 11px;
+}
+.roulette-shell .game-controls-bar .chip-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.roulette-players {
+  display: flex;
+  max-width: 320px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.roulette-players > li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px 4px 4px;
+  border: 1px solid #ffffff12;
+  border-radius: 20px;
+  background: #160f1fb3;
+  color: #cbbfd8;
+  font-size: 10px;
+}
+.roulette-players > li.is-other {
+  border-color: #8fdcc733;
+}
+.roulette-players > li.is-ready {
+  border-color: #83e9bc88;
+}
+.roulette-players > li.is-away {
+  opacity: 0.45;
+}
+.roulette-player-avatar {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 50%;
+  background: #b79afa;
+  color: #24143e;
+  font-size: 9px;
+  font-weight: 800;
+}
+.is-other .roulette-player-avatar {
+  background: #3f9c86;
+  color: #e3fbf3;
+}
+.roulette-player-name {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.roulette-players b {
+  color: #efe6f7;
+  font-variant-numeric: tabular-nums;
+}
+.roulette-players b.positive {
+  color: var(--mint);
+}
+.roulette-players b.negative {
+  color: #e59aa8;
+}
+.roulette-player-ready {
+  color: var(--mint);
+}
+
+/* Home poster */
+.roulette-poster {
+  background: #111210;
+}
+.roulette-poster:hover {
+  border-color: #b79afa70;
+}
+.roulette-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 48%, #543069, #291b39 72%);
+}
+.roulette-poster-art {
+  position: relative;
+  transform: rotate(-12deg);
+}
+.roulette-poster-art .roulette-wheel {
+  transition: transform 1600ms var(--ease);
+}
+.roulette-poster:hover .roulette-poster-art .roulette-wheel {
+  transform: rotate(160deg) !important;
+}
+.roulette-poster-ball {
+  position: absolute;
+  top: 22px;
+  left: 58%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, #cfc8da 60%, #7f788b);
+  box-shadow: 0 2px 5px #000a;
+}
+.roulette-poster .poster-copy > span,
+.roulette-poster .poster-copy strong {
+  color: #b79afa;
+}
+/* Five games: the poster grid fills rows instead of a fixed column count. */
+.game-selection {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+@media (max-width: 1280px) {
+  .roulette-stage {
+    grid-template-columns: 1fr;
+    padding: 26px 24px 34px;
+  }
+  .roulette-wheel-zone {
+    flex-direction: row;
+    justify-content: center;
+    gap: 26px;
+  }
+}
+@media (max-width: 700px) {
+  .roulette-page {
+    padding: 22px 13px 32px;
+  }
+  .roulette-stage {
+    padding: 20px 12px 30px;
+  }
+  .roulette-felt {
+    inset: 2px 6px 14px;
+    border-radius: 22px;
+  }
+  .roulette-wheel-zone {
+    flex-direction: column;
+  }
+  .roulette-wheel-frame {
+    --wheel-size: min(62vw, 240px);
+  }
+  .roulette-layout-scroll {
+    overflow-x: auto;
+  }
+  .roulette-history > li:nth-child(n + 6) {
+    display: none;
+  }
+  .roulette-shell .table-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .roulette-wheel,
+  .roulette-ball-orbit {
+    transition-duration: 1ms;
+  }
+  .roulette-wheel-frame.is-spinning .roulette-ball {
+    animation: none;
+  }
+}
+
+@media (max-width: 450px) {
+  .roulette-shell .rail {
+    display: none;
+  }
+  .roulette-shell .workspace {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roulette-layout.has-result .roulette-spot.is-won {
+    animation: none;
+  }
+}

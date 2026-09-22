@@ -63,6 +63,7 @@ import {
 import { GamePoster } from "./shared/casino/game-poster";
 import { MineBomb, MineDiamond } from "./shared/games/mine-art";
 import { TowerPosterArt } from "./shared/games/tower-art";
+import { RoulettePosterArt } from "./roulette-wheel";
 
 type Game = ReturnType<typeof useGame>;
 type Navigate = (view: CasinoView) => void;
@@ -109,7 +110,7 @@ export function CasinoHome({
                 <em>votre table.</em>
               </h1>
               <p>
-                Quatre jeux, un seul portefeuille. Entrez sans attendre — les
+                Cinq jeux, un seul portefeuille. Entrez sans attendre — les
                 cartes et la grille sont déjà prêtes.
               </p>
               <div className="club-trust">
@@ -170,8 +171,25 @@ export function CasinoHome({
               onClick={() => onNavigate("poker")}
             />
             <GamePoster
-              className="tower-poster"
+              className="roulette-poster"
               index="03"
+              artClassName="roulette-art"
+              art={<RoulettePosterArt />}
+              eyebrow="JEU DE TABLE · MULTIJOUEUR"
+              title={
+                <>
+                  Roulette
+                  <br />
+                  Européenne
+                </>
+              }
+              description="Le tapis vert, les mises classiques et la bille en direct."
+              action="Jouer à la roulette"
+              onClick={() => onNavigate("roulette")}
+            />
+            <GamePoster
+              className="tower-poster"
+              index="04"
               artClassName="tower-art"
               art={<TowerPosterArt hot={towerHot} />}
               eyebrow="NOUVEAU · SOLO & LIVE"
@@ -192,7 +210,7 @@ export function CasinoHome({
             />
             <GamePoster
               className="mines-poster"
-              index="04"
+              index="05"
               artClassName="mines-art"
               art={
                 <>

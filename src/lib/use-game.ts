@@ -10,6 +10,8 @@ import type {
   PokerClientState,
   PokerCommand,
   Profile,
+  RouletteCommand,
+  RouletteTableState,
   TableState,
   TowerClientState,
   TowerCommand,
@@ -32,6 +34,9 @@ export function useGame() {
   /** Shared wallet: only the server's wallet event sets it, never a game snapshot. */
   const [balance, setBalance] = useState<number | null>(null);
   const [minesState, setMinesState] = useState<MinesState | null>(null);
+  const [rouletteState, setRouletteState] = useState<RouletteTableState | null>(
+    null,
+  );
   const [playerId, setPlayerId] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -46,6 +51,8 @@ export function useGame() {
   const clockSyncTimer = useRef<number | null>(null);
   /** Whether the Tower view is open, so a reconnection re-enters its room. */
   const towerOpen = useRef(false);
+  /** Whether the Roulette view is open, so a reconnection re-enters its room. */
+  const rouletteOpen = useRef(false);
 
   const save = useCallback((p: Profile) => {
     profileRef.current = p;
@@ -147,6 +154,7 @@ export function useGame() {
             setPlayerId(ack.playerId!);
             setConnected(true);
             if (towerOpen.current) socket.emit("tower:join");
+            if (rouletteOpen.current) socket.emit("roulette:join");
           },
         );
     });
@@ -187,6 +195,10 @@ export function useGame() {
     });
     socket.on("mines:state", (snapshot: MinesState | null) => {
       setMinesState(snapshot);
+    });
+    socket.on("roulette:state", (snapshot: RouletteTableState | null) => {
+      if (!snapshot || !rouletteOpen.current) return;
+      setRouletteState(snapshot);
     });
     socket.on("disconnect", () => {
       setConnected(false);
@@ -310,6 +322,31 @@ export function useGame() {
         });
     });
   }, []);
+  const rouletteCommand = useCallback(
+    (action: RouletteCommand): Promise<boolean> => {
+      const socket = socketRef.current;
+      if (!socket?.connected) {
+        setError("La connexion à la roulette est interrompue.");
+        return Promise.resolve(false);
+      }
+      setPending(true);
+      return new Promise((resolve) => {
+        socket
+          .timeout(6000)
+          .emit(
+            "roulette:command",
+            action,
+            (timeout: Error | null, ack: Ack) => {
+              setPending(false);
+              if (timeout) setError("La roulette ne répond pas.");
+              else if (!ack.ok) setError(ack.error);
+              resolve(!timeout && ack?.ok);
+            },
+          );
+      });
+    },
+    [],
+  );
   /** Opens the Tower: joins a room and restores the climb in progress. */
   const enterTower = useCallback(() => {
     towerOpen.current = true;
@@ -321,6 +358,18 @@ export function useGame() {
     towerOpen.current = false;
     setTowerState(null);
     socketRef.current?.emit("tower:leave");
+  }, []);
+  /** Opens the Roulette room for the current club table. */
+  const enterRoulette = useCallback(() => {
+    rouletteOpen.current = true;
+    const socket = socketRef.current;
+    if (socket?.connected && idRef.current) socket.emit("roulette:join");
+  }, []);
+  /** Leaves the Roulette room while keeping the shared club connection alive. */
+  const leaveRoulette = useCallback(() => {
+    rouletteOpen.current = false;
+    setRouletteState(null);
+    socketRef.current?.emit("roulette:leave");
   }, []);
   const changeTable = (tableId: string) => {
     const socket = socketRef.current;
@@ -346,6 +395,7 @@ export function useGame() {
           const url = new URL(window.location.href);
           url.searchParams.set("table", tableId);
           window.history.replaceState({}, "", url);
+          if (rouletteOpen.current) socket.emit("roulette:join");
         },
       );
   };
@@ -358,6 +408,7 @@ export function useGame() {
     towerState,
     balance,
     minesState,
+    rouletteState,
     playerId,
     error,
     pending,
@@ -373,6 +424,9 @@ export function useGame() {
     towerCommand,
     enterTower,
     leaveTower,
+    rouletteCommand,
+    enterRoulette,
+    leaveRoulette,
     minesCommand,
     changeTable,
   };

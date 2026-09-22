@@ -4,6 +4,7 @@ import {
   Castle,
   CircleHelp,
   Coins,
+  Disc3,
   History,
   House,
   Settings2,
@@ -77,6 +78,7 @@ export const CasinoRail = memo(function CasinoRail({
         )}
         {item("poker", "Poker", <Spade size={21} />)}
         {item("tower", "La Tower", <Castle size={21} />)}
+        {item("roulette", "Roulette", <Disc3 size={21} />)}
         {onTables && (
           <button
             type="button"

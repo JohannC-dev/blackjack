@@ -2,11 +2,12 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import next from "next";
 import { Server } from "socket.io";
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { Table, type Player } from "./engine";
 import { PokerManager } from "./poker";
 import { TowerManager } from "./tower";
 import { MinesGame } from "./mines";
+import { InsufficientCredits, makeRouletteRuntime } from "./roulette";
 import {
   GameError,
   ServerClock,
@@ -99,6 +100,41 @@ function getMines(playerId: string) {
 function getMinesEffect(playerId: string) {
   return gameEffect(() => getMines(playerId));
 }
+const rouletteRoom = (tableId: string) => `roulette:${tableId}`;
+/** The Roulette runs on Effect; the club only lends it its players and sockets. */
+const roulette = makeRouletteRuntime({
+  players: {
+    get: (playerId) =>
+      Effect.sync(() => Option.fromNullable(playersById.get(playerId))),
+    debit: (playerId, amount) =>
+      Effect.suspend(() => {
+        const player = playersById.get(playerId);
+        if (!player || player.balance < amount)
+          return Effect.fail(new InsufficientCredits());
+        player.balance -= amount;
+        return Effect.void;
+      }),
+    credit: (playerId, amount) =>
+      Effect.sync(() => {
+        const player = playersById.get(playerId);
+        if (player) player.balance += amount;
+      }),
+  },
+  transport: {
+    publish: (state) =>
+      Effect.sync(() => {
+        io.to(rouletteRoom(state.id)).emit("roulette:state", state);
+      }),
+    enter: (socketIds, tableId) =>
+      Effect.sync(() =>
+        io.in([...socketIds]).socketsJoin(rouletteRoom(tableId)),
+      ),
+    exit: (socketIds, tableId) =>
+      Effect.sync(() =>
+        io.in([...socketIds]).socketsLeave(rouletteRoom(tableId)),
+      ),
+  },
+});
 const poker = new PokerManager((playerId, state) => {
   for (const socketId of playerSockets.get(playerId) ?? [])
     io.to(socketId).emit("poker:state", state);
@@ -421,6 +457,45 @@ io.on("connection", (socket) => {
       ),
     );
   });
+  socket.on(
+    "roulette:command",
+    (command: unknown, ack: (value: Ack) => void) => {
+      replyEffect(
+        ack,
+        gameEffect((clock) => {
+          throttle(clock.now());
+          const currentPlayer = player;
+          if (!currentPlayer) throw new Error("Connectez-vous au club.");
+          roulette.run((r) => r.command(socket.id, currentPlayer.id, command));
+          syncWallets();
+        }),
+      );
+    },
+  );
+  socket.on("roulette:join", (ack: (value: Ack) => void) => {
+    replyEffect(
+      ack,
+      gameEffect((clock) => {
+        throttle(clock.now());
+        const currentPlayer = player;
+        if (!currentPlayer) throw new Error("Connectez-vous au club.");
+        roulette.run((r) =>
+          r.join(socket.id, currentPlayer.id, currentPlayer.roomId),
+        );
+      }),
+    );
+  });
+  socket.on("roulette:leave", (ack: (value: Ack) => void) => {
+    replyEffect(
+      ack,
+      gameEffect((clock) => {
+        throttle(clock.now());
+        const currentPlayer = player;
+        if (!currentPlayer) throw new Error("Connectez-vous au club.");
+        roulette.run((r) => r.leave(socket.id, currentPlayer.id));
+      }),
+    );
+  });
   socket.on("tower:join", (ack: (value: Ack) => void) => {
     replyEffect(
       ack,
@@ -515,6 +590,9 @@ io.on("connection", (socket) => {
     runOrThrow(
       Effect.gen(function* () {
         yield* leaveTowerEffect(socket.id, disconnectedPlayer, false);
+        yield* gameEffect(() => {
+          roulette.run((r) => r.disconnect(socket.id, disconnectedPlayer.id));
+        });
         const shouldDisconnect = yield* gameEffect((clock) => {
           const connections = playerSockets.get(disconnectedPlayer.id);
           connections?.delete(socket.id);
@@ -549,10 +627,14 @@ const maintenanceEffect = Effect.provide(
         tables.delete(id);
     }
     yield* Effect.either(poker.tickEffect(now));
+    yield* Effect.either(gameEffect(() => roulette.run((r) => r.tick)));
     yield* Effect.either(tower.tickEffect(now));
     yield* Effect.either(syncWalletsEffect());
     for (const [token, profile] of profiles)
       if (!profile.connected && now - profile.lastSeen > 24 * 60 * 60_000) {
+        yield* Effect.either(
+          gameEffect(() => roulette.run((r) => r.forget(profile.id))),
+        );
         yield* Effect.either(tower.forgetEffect(profile.id));
         yield* Effect.either(
           gameEffect(() => {
@@ -574,3 +656,7 @@ await Effect.runPromise(listenEffect);
 console.log(
   `MINUIT · http://localhost:${port} · ${dev ? "development" : "production"}`,
 );
+const maintenanceTimer = setInterval(() => {
+  void Effect.runPromise(maintenanceEffect);
+}, 100);
+maintenanceTimer.unref();

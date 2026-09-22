@@ -1,3 +1,5 @@
+import type { RouletteBet } from "./roulette";
+
 export type Suit = "hearts" | "diamonds" | "clubs" | "spades";
 export type Card = {
   id: string;
@@ -231,6 +233,42 @@ export type MinesCommand =
   | { type: "reveal"; index: number }
   | { type: "playPattern"; bet: number; target: number; indexes: number[] }
   | { type: "cashout" };
+
+export type RouletteResult = {
+  playerId: string;
+  name: string;
+  total: number;
+  /** Credits returned: stakes and winnings of the winning bets. */
+  payout: number;
+  net: number;
+};
+
+export type RoulettePublicPlayer = {
+  id: string;
+  name: string;
+  connected: boolean;
+  ready: boolean;
+  bets: RouletteBet[];
+  previousTotal: number;
+};
+
+export type RouletteTableState = {
+  id: string;
+  phase: "betting" | "spinning" | "settled";
+  round: number;
+  deadline: number | null;
+  /** Drawn number, sent when the spin starts so every wheel lands on it. */
+  number: number | null;
+  /** Most recent number first. */
+  history: number[];
+  results: RouletteResult[];
+  players: RoulettePublicPlayer[];
+};
+
+export type RouletteCommand =
+  | { type: "bets"; bets: RouletteBet[] }
+  | { type: "repeat" }
+  | { type: "ready"; ready: boolean };
 
 export type PokerCommand =
   | { type: "match"; mode: PokerMode; stake: number; buyIn?: number }
