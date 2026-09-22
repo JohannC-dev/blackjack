@@ -40,14 +40,14 @@ import {
 } from "@/lib/tower-audio";
 import type { MinesCell, MinesState } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
-import { CasinoRail, ClubHeader, getClubBalance } from "../../shared";
+import { CasinoRail, ClubHeader, getClubBalance } from "../../ui";
 import type { CasinoView } from "@/lib/navigation";
 import {
   BetChipPicker,
   GameActionButton,
   GameControlGroup,
   GameControlsBar,
-} from "../../shared/casino/game-controls";
+} from "../../ui/game-controls";
 import { MineBomb, MineDiamond } from "./mine-art";
 
 type Game = ReturnType<typeof useGame>;

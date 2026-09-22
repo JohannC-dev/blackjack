@@ -53,7 +53,7 @@ import type {
 } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import type { CasinoView } from "@/lib/navigation";
-import { CasinoRail, ClubHeader, getClubBalance } from "../../shared";
+import { CasinoRail, ClubHeader, getClubBalance } from "../../ui";
 import { TowerFx, type TowerFxHandle } from "./tower-fx";
 import {
   BetChipPicker,
@@ -61,7 +61,7 @@ import {
   GameControlGroup,
   GameControlsBar,
   GameOption,
-} from "../../shared/casino/game-controls";
+} from "../../ui/game-controls";
 import styles from "./tower.module.css";
 
 type Game = ReturnType<typeof useGame>;

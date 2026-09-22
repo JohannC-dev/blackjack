@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { BlackjackIcon } from "../shared/casino/blackjack-icon";
-import { Modal } from "../shared/casino/modal";
-import { ServerClockProvider } from "../shared/casino/countdown";
+import { BlackjackIcon } from "../ui/blackjack-icon";
+import { Modal } from "../ui/modal";
+import { ServerClockProvider } from "../ui/countdown";
 import { LoaderCircle, Spade } from "lucide-react";
 import type { CasinoView } from "@/lib/navigation";
 import { useGame } from "@/lib/use-game";

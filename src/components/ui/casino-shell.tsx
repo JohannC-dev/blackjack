@@ -16,7 +16,7 @@ import { memo, type ReactNode } from "react";
 import { credits } from "@/lib/rules";
 import type { CasinoView } from "@/lib/navigation";
 import { BlackjackIcon } from "./blackjack-icon";
-import { MineBomb } from "../../games/mines/mine-art";
+import { MineBomb } from "../games/mines/mine-art";
 
 type Navigate = (view: CasinoView) => void;
 

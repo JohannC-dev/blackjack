@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { remainingSeconds } from "../src/components/shared/casino/countdown";
+import { remainingSeconds } from "../src/components/ui/countdown";
 
 describe("server-synchronized countdown", () => {
   test("compares the deadline with server time instead of the local clock", () => {

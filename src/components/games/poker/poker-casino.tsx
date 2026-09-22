@@ -44,23 +44,23 @@ import {
 } from "@/lib/casino-audio";
 import type { PokerAction, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
-import { CasinoRail, ClubHeader, getClubBalance } from "../../shared";
+import { CasinoRail, ClubHeader, getClubBalance } from "../../ui";
 import type { CasinoView } from "@/lib/navigation";
-import { BlackjackIcon } from "../../shared/casino/blackjack-icon";
+import { BlackjackIcon } from "../../ui/blackjack-icon";
 import {
   useCountdownSeconds,
   useServerClockNow,
-} from "../../shared/casino/countdown";
-import { PlayingCard } from "../../shared/casino/playing-card";
+} from "../../ui/countdown";
+import { PlayingCard } from "../../ui/playing-card";
 import { PokerLobby } from "./poker-lobby";
-import { PokerShuffleAnimation } from "../../shared/casino/poker-shuffle";
+import { PokerShuffleAnimation } from "../../ui/poker-shuffle";
 import { RoomArt } from "./room-art";
 import {
   EmoteButton,
   EmoteLayer,
   type EmotePlayer,
-} from "../../shared/casino/emotes";
-import { GamePoster } from "../../shared/casino/game-poster";
+} from "../../ui/emotes";
+import { GamePoster } from "../../ui/game-poster";
 import { MineBomb, MineDiamond } from "../mines/mine-art";
 import { TowerPosterArt } from "../tower/tower-art";
 import { RoulettePosterArt } from "../roulette/roulette-wheel";

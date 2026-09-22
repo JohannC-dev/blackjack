@@ -66,23 +66,23 @@ import type {
 } from "@/lib/types";
 import { newToken } from "@/lib/identity";
 import { useGame } from "@/lib/use-game";
-import { CasinoRail, ClubHeader } from "../../shared";
+import { CasinoRail, ClubHeader } from "../../ui";
 import type { CasinoView } from "@/lib/navigation";
-import { CountdownText } from "../../shared/casino/countdown";
-import { Chip } from "../../shared/casino/chip";
-import { Modal } from "../../shared/casino/modal";
-import { motionDuration } from "../../shared/casino/motion";
-import { PlayingCard } from "../../shared/casino/playing-card";
+import { CountdownText } from "../../ui/countdown";
+import { Chip } from "../../ui/chip";
+import { Modal } from "../../ui/modal";
+import { motionDuration } from "../../ui/motion";
+import { PlayingCard } from "../../ui/playing-card";
 import {
   AnimatedTableChip,
   SettlementChipAnimation,
-} from "../../shared/casino/table-chips";
-import { PokerShuffleAnimation } from "../../shared/casino/poker-shuffle";
+} from "../../ui/table-chips";
+import { PokerShuffleAnimation } from "../../ui/poker-shuffle";
 import {
   EmoteButton,
   EmoteLayer,
   type EmotePlayer,
-} from "../../shared/casino/emotes";
+} from "../../ui/emotes";
 import type { EmoteRequest } from "@/lib/emotes";
 
 const THREE_PAYOUTS = [

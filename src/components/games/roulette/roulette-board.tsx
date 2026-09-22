@@ -16,7 +16,7 @@ import type { RouletteTableState } from "@/lib/types";
 import {
   SettlementChipAnimation,
   TableChipStack,
-} from "../../shared/casino/table-chips";
+} from "../../ui/table-chips";
 import { numberTone } from "./roulette-wheel";
 
 export type Target = { kind: RouletteBetKind; selection: string };

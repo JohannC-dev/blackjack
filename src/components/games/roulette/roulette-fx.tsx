@@ -13,7 +13,7 @@ import {
   rouletteBetWins,
 } from "@/lib/roulette";
 import type { RouletteTableState } from "@/lib/types";
-import { TableChipStack } from "../../shared/casino/table-chips";
+import { TableChipStack } from "../../ui/table-chips";
 
 type Point = { x: number; y: number };
 type Geometry = {
