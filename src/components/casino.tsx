@@ -70,6 +70,7 @@ import type {
 } from "@/lib/types";
 import { newToken } from "@/lib/identity";
 import { useGame } from "@/lib/use-game";
+import { REFILL_BALANCE, REFILL_THRESHOLD } from "@/lib/wallet";
 import { BlackjackIcon } from "./blackjack-icon";
 import { CountdownText } from "./countdown";
 import { Chip } from "./chip";
@@ -1415,6 +1416,8 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
 export function Casino() {
   const game = useGame();
   const [view, setView] = useState<CasinoView>("home");
+  const [refillOpen, setRefillOpen] = useState(false);
+  const lastRefillPrompt = useRef("");
   const [confirmPokerLeave, setConfirmPokerLeave] = useState(false);
   const [leavingPoker, setLeavingPoker] = useState(false);
   const [pendingView, setPendingView] = useState<CasinoView | null>(null);
@@ -1429,21 +1432,74 @@ export function Casino() {
     }
     setView(next);
   }, []);
+  const balance = game.balance ?? game.profile?.balance ?? 0;
+  const needsMinimumBet =
+    view === "poker"
+      ? game.pokerState?.status === "lobby" && balance < 200
+      : view === "blackjack"
+        ? game.state?.phase === "betting" && balance < 5
+        : view === "tower" || view === "mines" || view === "roulette"
+          ? balance < 5
+          : false;
+  useEffect(() => {
+    if (balance >= REFILL_THRESHOLD) {
+      lastRefillPrompt.current = "";
+      return;
+    }
+    if (!game.connected || game.balance === null || !needsMinimumBet) return;
+    const key = `${view}:${balance}`;
+    if (lastRefillPrompt.current === key) return;
+    lastRefillPrompt.current = key;
+    setRefillOpen(true);
+  }, [balance, game.balance, game.connected, needsMinimumBet, view]);
+  const offerRefill = useCallback(() => {
+    if (
+      game.connected &&
+      (game.balance ?? game.profile?.balance ?? 0) < REFILL_THRESHOLD
+    )
+      setRefillOpen(true);
+  }, [game.balance, game.connected, game.profile?.balance]);
   if (!game.profile)
-    return <BlackjackCasino game={game} onNavigate={navigate} />;
+    return (
+      <BlackjackCasino
+        game={game}
+        onNavigate={navigate}
+        onNeedRefill={offerRefill}
+      />
+    );
   const content =
     view === "home" ? (
       <CasinoHome game={game} onNavigate={navigate} />
     ) : view === "poker" ? (
-      <PokerCasino game={game} onNavigate={navigate} />
+      <PokerCasino
+        game={game}
+        onNavigate={navigate}
+        onNeedRefill={offerRefill}
+      />
     ) : view === "tower" ? (
-      <TowerCasino game={game} onNavigate={navigate} />
+      <TowerCasino
+        game={game}
+        onNavigate={navigate}
+        onNeedRefill={offerRefill}
+      />
     ) : view === "mines" ? (
-      <MinesCasino game={game} onNavigate={navigate} />
+      <MinesCasino
+        game={game}
+        onNavigate={navigate}
+        onNeedRefill={offerRefill}
+      />
     ) : view === "roulette" ? (
-      <RouletteCasino game={game} onNavigate={navigate} />
+      <RouletteCasino
+        game={game}
+        onNavigate={navigate}
+        onNeedRefill={offerRefill}
+      />
     ) : (
-      <BlackjackCasino game={game} onNavigate={navigate} />
+      <BlackjackCasino
+        game={game}
+        onNavigate={navigate}
+        onNeedRefill={offerRefill}
+      />
     );
   const pokerExitMessage = game.pokerState?.queue
     ? "Votre recherche sera annulée et votre buy-in sera récupéré."
@@ -1462,6 +1518,44 @@ export function Casino() {
   return (
     <>
       {content}
+      {refillOpen && balance < REFILL_THRESHOLD && (
+        <Modal
+          title="Recaver"
+          className="refill-modal"
+          onClose={() => setRefillOpen(false)}
+        >
+          <span className="modal-emblem">
+            <Coins size={26} />
+          </span>
+          <span className="section-kicker">SOLDE INSUFFISANT</span>
+          <h2>Reprenez la partie.</h2>
+          <p className="modal-intro">
+            Votre solde passera à {credits(REFILL_BALANCE)} crédits, quel que
+            soit son montant actuel.
+          </p>
+          <div className="leave-poker-actions">
+            <button
+              type="button"
+              className="button secondary"
+              autoFocus
+              onClick={() => setRefillOpen(false)}
+            >
+              Plus tard
+            </button>
+            <button
+              type="button"
+              className="button primary"
+              disabled={!game.connected || game.pending}
+              onClick={async () => {
+                if (await game.refillWallet()) setRefillOpen(false);
+              }}
+            >
+              <Coins size={16} />
+              Recaver à {credits(REFILL_BALANCE)} cr.
+            </button>
+          </div>
+        </Modal>
+      )}
       {confirmPokerLeave && (
         <Modal
           title="Quitter la partie de poker ?"
@@ -1528,9 +1622,11 @@ export function Casino() {
 function BlackjackCasino({
   game,
   onNavigate,
+  onNeedRefill,
 }: {
   game: ReturnType<typeof useGame>;
   onNavigate: (view: CasinoView) => void;
+  onNeedRefill: () => void;
 }) {
   const {
     state,
@@ -1840,6 +1936,11 @@ function BlackjackCasino({
         setToast("Posez d’abord un jeton sur Blackjack pour cette main.");
         return;
       }
+      if (totalBet + chip > balance) {
+        if (balance < REFILL_THRESHOLD) onNeedRefill();
+        else setToast("Votre solde est insuffisant pour ce jeton.");
+        return;
+      }
       setSelectedSeat(target.index);
       const before = { ...target.bet };
       void command({
@@ -1854,7 +1955,7 @@ function BlackjackCasino({
           ]);
       });
     },
-    [command],
+    [balance, command, onNeedRefill, totalBet],
   );
   const selectChip = useCallback((amount: number) => setChip(amount), []);
   const undoBet = () => {
@@ -1868,6 +1969,11 @@ function BlackjackCasino({
   };
   const repeatBet = () => {
     if (!previousBetTotal || totalBet) return;
+    if (previousBetTotal > balance) {
+      if (balance < REFILL_THRESHOLD) onNeedRefill();
+      else setToast("Votre solde est insuffisant pour répéter cette mise.");
+      return;
+    }
     const before = ownSeats
       .filter((target) => target.previousBet)
       .map((target) => ({ seat: target.index, before: { ...target.bet } }));
@@ -2235,7 +2341,6 @@ function BlackjackCasino({
                                 disabled ||
                                 !previousBetTotal ||
                                 totalBet > 0 ||
-                                previousBetTotal > balance ||
                                 !!me?.ready
                               }
                               onClick={repeatBet}
@@ -2281,36 +2386,25 @@ function BlackjackCasino({
                               {credits(totalBet)} <small>cr.</small>
                             </b>
                           </span>
-                          {balance < 5 ? (
-                            <button
-                              className="button primary"
-                              onClick={() => command({ type: "refill" })}
-                              disabled={disabled}
-                            >
-                              <Coins size={16} />
-                              Recharger
-                            </button>
-                          ) : (
-                            <button
-                              className={`button primary deal-button ${me?.ready ? "is-ready" : ""}`}
-                              disabled={disabled || totalBet === 0}
-                              onClick={() =>
-                                command({ type: "ready", ready: !me?.ready })
-                              }
-                            >
-                              {me?.ready ? (
-                                <>
-                                  <Check size={18} />
-                                  Prêt · annuler
-                                </>
-                              ) : (
-                                <>
-                                  Je suis prêt
-                                  <ArrowRight size={18} />
-                                </>
-                              )}
-                            </button>
-                          )}
+                          <button
+                            className={`button primary deal-button ${me?.ready ? "is-ready" : ""}`}
+                            disabled={disabled || totalBet === 0}
+                            onClick={() =>
+                              command({ type: "ready", ready: !me?.ready })
+                            }
+                          >
+                            {me?.ready ? (
+                              <>
+                                <Check size={18} />
+                                Prêt · annuler
+                              </>
+                            ) : (
+                              <>
+                                Je suis prêt
+                                <ArrowRight size={18} />
+                              </>
+                            )}
+                          </button>
                         </div>
                       </>
                     ) : null}

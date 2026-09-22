@@ -349,9 +349,11 @@ export function CasinoHome({
 export function PokerCasino({
   game,
   onNavigate,
+  onNeedRefill,
 }: {
   game: Game;
   onNavigate: Navigate;
+  onNeedRefill: () => void;
 }) {
   const poker = game.pokerState;
   return (
@@ -367,7 +369,11 @@ export function PokerCasino({
         ) : poker?.status === "queue" ? (
           <PokerQueue game={game} />
         ) : (
-          <PokerLobby game={game} onNavigate={onNavigate} />
+          <PokerLobby
+            game={game}
+            onNavigate={onNavigate}
+            onNeedRefill={onNeedRefill}
+          />
         )}
       </div>
       {game.error && (

@@ -79,7 +79,7 @@ try {
   ).toBeEnabled();
   await expect(
     page.getByRole("button", { name: /^Spin & Play, 5\s000/ }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await checkLayout(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await cash.click();
@@ -89,7 +89,7 @@ try {
   await expect(dialog).toBeVisible();
   await expect(
     dialog.getByRole("button", { name: /^Salon, plafond/ }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await expect(
     dialog.getByRole("button", { name: /^Velours, plafond/ }),
   ).toHaveAccessibleName(/entrer avec 1\s262 crédits/);
@@ -125,7 +125,7 @@ try {
   await expect(page.locator(".wallet b")).toHaveText("462");
   await page.getByTitle("Blackjack", { exact: true }).click();
   await leaveConfirmation
-    .getByRole("button", { name: "Quitter et jouer au Blackjack" })
+    .getByRole("button", { name: "Quitter et rejoindre le Blackjack" })
     .click();
   await expect(page.locator(".table-panel")).toBeVisible();
   await expect(page.locator(".wallet b")).toHaveText("1 262");
@@ -154,14 +154,17 @@ try {
   await funded.context().close();
 
   const insufficient = await lobby(150);
+  const refill = insufficient.getByRole("dialog", { name: "Recaver" });
+  await expect(refill).toBeVisible();
+  await refill.getByRole("button", { name: "Plus tard" }).click();
   const spins = insufficient.getByRole("button", { name: /^Spin & Play,/ });
-  for (let i = 0; i < 5; i++) await expect(spins.nth(i)).toBeDisabled();
+  for (let i = 0; i < 5; i++) await expect(spins.nth(i)).toBeEnabled();
   await insufficient
     .getByRole("button", { name: "Cash Game, choisir le plafond" })
     .click();
   await expect(
     insufficient.getByRole("button", { name: /^Velours, plafond/ }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await expect(
     insufficient.getByRole("button", { name: /^Velours, plafond/ }),
   ).toHaveAccessibleName(/650 crédits manquants/);

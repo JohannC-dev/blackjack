@@ -805,9 +805,8 @@ describe("Multiplayer authority and lifecycle", () => {
     });
     expect(() => table.command(p.id, { type: "claim", seat: 1 })).not.toThrow();
   });
-  test("next round resets state and credits can only be refilled when depleted", () => {
+  test("next round resets state", () => {
     const { table, p } = tableWith([card(10), card(10), card(8), card(7)]);
-    expect(() => table.command(p.id, { type: "refill" })).toThrow("sous 5");
     begin(table, [p]);
     table.command(p.id, { type: "stand", handId: table.state.activeHandId! });
     settle(table);
@@ -822,9 +821,6 @@ describe("Multiplayer authority and lifecycle", () => {
       three: 0,
       pairs: 0,
     });
-    p.balance = 0;
-    table.command(p.id, { type: "refill" });
-    expect(p.balance).toBe(2000);
   });
   test("repeat restores every previous seat wager atomically", () => {
     const { table, p } = tableWith([card(10), card(10), card(8), card(7)]);

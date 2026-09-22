@@ -30,6 +30,7 @@ import {
   type MinesTarget,
 } from "@/lib/mines";
 import { credits } from "@/lib/rules";
+import { REFILL_THRESHOLD } from "@/lib/wallet";
 import {
   playTowerCashout,
   playTowerCollapse,
@@ -627,9 +628,11 @@ function MinesControls({
 export function MinesCasino({
   game,
   onNavigate,
+  onNeedRefill,
 }: {
   game: Game;
   onNavigate: (view: CasinoView) => void;
+  onNeedRefill: () => void;
 }) {
   const state = game.minesState;
   const [bet, setBet] = useState(25);
@@ -646,6 +649,17 @@ export function MinesCasino({
   const cells = state?.cells ?? EMPTY_CELLS;
   const balance = getClubBalance(game);
   const maxBet = Math.min(MINES_MAX_BET, Math.floor(balance));
+  const lastUnaffordableBalance = useRef<number | null>(null);
+  useEffect(() => {
+    if (balance >= REFILL_THRESHOLD || bet <= balance) {
+      lastUnaffordableBalance.current = null;
+      return;
+    }
+    if (active || !game.connected || game.balance === null) return;
+    if (lastUnaffordableBalance.current === balance) return;
+    lastUnaffordableBalance.current = balance;
+    onNeedRefill();
+  }, [active, balance, bet, game.balance, game.connected, onNeedRefill]);
   const liveBet = state?.bet ?? bet;
   const liveTarget = state?.target ?? target;
   const currentMultiplier = state?.multiplier ?? 1;

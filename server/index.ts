@@ -8,6 +8,7 @@ import { TowerManager } from "./tower";
 import { MinesGame } from "./mines";
 import { Effect, Option } from "effect";
 import { InsufficientCredits, makeRouletteRuntime } from "./roulette";
+import { refillBalance } from "../src/lib/wallet";
 import type {
   Ack,
   Command,
@@ -285,6 +286,18 @@ io.on("connection", (socket) => {
       throttle();
       if (!player) throw new Error("Vous n’êtes pas connecté à la table.");
       tables.get(player.roomId)!.add(player);
+      if (typeof ack === "function") ack({ ok: true });
+    } catch (error) {
+      replyError(ack, error);
+    }
+  });
+  socket.on("wallet:refill", (ack: (value: Ack) => void) => {
+    try {
+      throttle();
+      if (!player) throw new Error("Connectez-vous pour recaver.");
+      player.balance = refillBalance(player.balance);
+      syncWallets();
+      io.to(player.roomId).emit("state", tables.get(player.roomId)!.snapshot());
       if (typeof ack === "function") ack({ ok: true });
     } catch (error) {
       replyError(ack, error);

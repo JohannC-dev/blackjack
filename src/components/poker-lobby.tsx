@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { credits } from "@/lib/rules";
 import type { PokerCommand } from "@/lib/types";
 import type { useGame } from "@/lib/use-game";
+import { REFILL_THRESHOLD } from "@/lib/wallet";
 import type { CasinoView } from "./casino";
 import styles from "./poker-lobby.module.css";
 import { RoomArt } from "./room-art";
@@ -56,9 +57,11 @@ const SPINS = [
 export function PokerLobby({
   game,
   onNavigate,
+  onNeedRefill,
 }: {
   game: ReturnType<typeof useGame>;
   onNavigate: (view: CasinoView) => void;
+  onNeedRefill: () => void;
 }) {
   const [cashOpen, setCashOpen] = useState(false);
   const [buyInBB, setBuyInBB] = useState(100);
@@ -167,14 +170,20 @@ export function PokerLobby({
                 key={stake}
                 className={`${styles.gameCard} ${styles[theme]} ${locked ? styles.locked : ""}`}
                 aria-label={`Spin & Play, ${credits(stake)} crédits${locked ? `, ${credits(stake - balance)} crédits manquants` : ""}`}
-                disabled={locked || busy || !game.connected}
-                onClick={() =>
-                  void enter(`spin-${stake}`, {
-                    type: "match",
-                    mode: "spin",
-                    stake,
-                  })
+                disabled={
+                  (locked && balance >= REFILL_THRESHOLD) ||
+                  busy ||
+                  !game.connected
                 }
+                onClick={() => {
+                  if (locked) onNeedRefill();
+                  else
+                    void enter(`spin-${stake}`, {
+                      type: "match",
+                      mode: "spin",
+                      stake,
+                    });
+                }}
               >
                 <div className={styles.roomTopline}>
                   <span>
@@ -273,16 +282,22 @@ export function PokerLobby({
               <button
                 key={room.stake}
                 className={`${styles.limitCard} ${styles[room.theme]} ${locked ? styles.locked : ""}`}
-                disabled={locked || busy || !game.connected}
-                aria-label={`${room.name}, plafond ${credits(room.max)} crédits, blinds ${room.blinds}${locked ? `, ${credits(room.min - balance)} crédits manquants` : `, entrer avec ${credits(buyIn)} crédits`}`}
-                onClick={() =>
-                  void enter(`cash-${room.stake}`, {
-                    type: "match",
-                    mode: "cash",
-                    stake: room.stake,
-                    buyIn,
-                  })
+                disabled={
+                  (locked && balance >= REFILL_THRESHOLD) ||
+                  busy ||
+                  !game.connected
                 }
+                aria-label={`${room.name}, plafond ${credits(room.max)} crédits, blinds ${room.blinds}${locked ? `, ${credits(room.min - balance)} crédits manquants` : `, entrer avec ${credits(buyIn)} crédits`}`}
+                onClick={() => {
+                  if (locked) onNeedRefill();
+                  else
+                    void enter(`cash-${room.stake}`, {
+                      type: "match",
+                      mode: "cash",
+                      stake: room.stake,
+                      buyIn,
+                    });
+                }}
               >
                 <span className={styles.limitName}>
                   {room.name}

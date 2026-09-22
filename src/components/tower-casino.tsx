@@ -21,6 +21,7 @@ import {
   type RefObject,
 } from "react";
 import { credits } from "@/lib/rules";
+import { REFILL_THRESHOLD } from "@/lib/wallet";
 import {
   formatMultiplier,
   TOWER_DIFFICULTIES,
@@ -92,9 +93,11 @@ function jitter(index: number, salt: number) {
 export function TowerCasino({
   game,
   onNavigate,
+  onNeedRefill,
 }: {
   game: Game;
   onNavigate: Navigate;
+  onNeedRefill: () => void;
 }) {
   const tower = game.towerState;
   const run = tower?.run ?? null;
@@ -311,6 +314,17 @@ export function TowerCasino({
   const activeDifficulty = playing && run ? run.difficulty : difficulty;
   const shownRun = run && (playing || !previewing) ? run : null;
   const maxBet = Math.min(TOWER_MAX_BET, Math.floor(balance));
+  const lastUnaffordableBalance = useRef<number | null>(null);
+  useEffect(() => {
+    if (balance >= REFILL_THRESHOLD || bet <= balance) {
+      lastUnaffordableBalance.current = null;
+      return;
+    }
+    if (playing || !game.connected || game.balance === null) return;
+    if (lastUnaffordableBalance.current === balance) return;
+    lastUnaffordableBalance.current = balance;
+    onNeedRefill();
+  }, [balance, bet, game.balance, game.connected, onNeedRefill, playing]);
   const busy = game.pending || pendingPick !== null;
   const animating =
     phase === "shaking" ||

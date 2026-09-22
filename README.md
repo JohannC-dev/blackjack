@@ -64,7 +64,7 @@ Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table
 - Blackjack naturel payé **3:2**, victoire **1:1**, égalité remboursée. Un blackjack du croupier fait perdre les mises de double et de séparation ; seul un blackjack naturel est remboursé à égalité.
 - Double autorisé sur deux cartes, également après séparation. Au moment de doubler, le joueur choisit de voir immédiatement sa dernière carte ou de la garder face cachée jusqu’à la fin du jeu du croupier. Dans ce second mode, sa valeur reste uniquement sur le serveur jusqu’à la révélation. Séparation de cartes de même valeur, donc 10/valet/dame/roi peuvent être séparés ensemble, jusqu’à 4 mains par place. Les as séparés reçoivent une seule carte ; pas de nouvelle séparation des as. Le 21 après séparation paie 1:1.
 - Pas d’assurance ni d’abandon. 25 secondes par décision, puis la main reste automatiquement, y compris après une déconnexion.
-- Mises par pas de 5 : **5–500** au blackjack et **0–100** sur chaque pari annexe. Recharge à 2 000 crédits disponible lorsque le solde est inférieur à 5.
+- Mises par pas de 5 : **5–500** au blackjack et **0–100** sur chaque pari annexe. La recave du portefeuille commun remet le solde à 10 000 crédits lorsqu'il est inférieur à 5 000.
 - Après une manche positive, tentez vos gains sur une carte **rouge ou noire**. L’option reste disponible jusqu’à votre décision sans bloquer les manches suivantes. Une bonne couleur double le montant à risque et permet de recommencer sans limite ; une mauvaise couleur perd la séquence. Vous pouvez encaisser à tout moment.
 
 ### 21+3

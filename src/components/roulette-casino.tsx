@@ -28,6 +28,7 @@ import {
 import { credits } from "@/lib/rules";
 import type { RouletteTableState } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
+import { REFILL_THRESHOLD } from "@/lib/wallet";
 import {
   SettlementChipAnimation,
   TableChipStack,
@@ -532,9 +533,11 @@ function betMap(bets: RouletteBet[], into = new Map<string, number>()) {
 export function RouletteCasino({
   game,
   onNavigate,
+  onNeedRefill,
 }: {
   game: Game;
   onNavigate: (view: CasinoView) => void;
+  onNeedRefill: () => void;
 }) {
   const table = game.rouletteState;
   const balance = getClubBalance(game);
@@ -612,7 +615,8 @@ export function RouletteCasino({
       return;
     }
     if (total + chip > balance) {
-      game.setError("Votre solde est insuffisant pour ce jeton.");
+      if (balance < REFILL_THRESHOLD) onNeedRefill();
+      else game.setError("Votre solde est insuffisant pour ce jeton.");
       return;
     }
     const existing = staked > 0;
@@ -642,6 +646,12 @@ export function RouletteCasino({
   };
   const repeat = () => {
     if (!canBet) return;
+    if ((me?.previousTotal ?? 0) > balance) {
+      if (balance < REFILL_THRESHOLD) onNeedRefill();
+      else
+        game.setError("Votre solde est insuffisant pour répéter cette mise.");
+      return;
+    }
     const before = myBets;
     play("chips");
     void game
@@ -919,12 +929,7 @@ export function RouletteCasino({
                 <button
                   type="button"
                   className="icon-button repeat-bet"
-                  disabled={
-                    !canBet ||
-                    !me?.previousTotal ||
-                    total > 0 ||
-                    me.previousTotal > balance
-                  }
+                  disabled={!canBet || !me?.previousTotal || total > 0}
                   onClick={repeat}
                   title={
                     me?.previousTotal

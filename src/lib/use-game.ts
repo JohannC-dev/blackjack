@@ -206,6 +206,24 @@ export function useGame() {
         });
     });
   }, []);
+  const refillWallet = useCallback((): Promise<boolean> => {
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      setError("La connexion au club est interrompue.");
+      return Promise.resolve(false);
+    }
+    setPending(true);
+    return new Promise((resolve) => {
+      socket
+        .timeout(6000)
+        .emit("wallet:refill", (timeout: Error | null, ack: Ack) => {
+          setPending(false);
+          if (timeout) setError("Le club ne répond pas. Réessayez.");
+          else if (!ack.ok) setError(ack.error);
+          resolve(!timeout && ack?.ok);
+        });
+    });
+  }, []);
   const joinBlackjack = useCallback((): Promise<boolean> => {
     const socket = socketRef.current;
     if (!socket?.connected) return Promise.resolve(false);
@@ -383,6 +401,7 @@ export function useGame() {
     setError,
     register,
     command,
+    refillWallet,
     joinBlackjack,
     pokerCommand,
     towerCommand,

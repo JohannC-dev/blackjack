@@ -1,11 +1,17 @@
 import { strict as assert } from "node:assert";
 import { randomUUID } from "node:crypto";
 import { io, type Socket } from "socket.io-client";
-import type { Ack, Command, TableState } from "../src/lib/types";
+import type { Ack, Command, TableState, Wallet } from "../src/lib/types";
 
 const url = process.env.TEST_URL ?? "http://localhost:3000";
 const room = randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
-type Client = { socket: Socket; id: string; token: string; state?: TableState };
+type Client = {
+  socket: Socket;
+  id: string;
+  token: string;
+  state?: TableState;
+  wallet?: Wallet;
+};
 const sockets: Socket[] = [];
 async function until(check: () => boolean, message: string, timeout = 20000) {
   const start = Date.now();
@@ -24,6 +30,9 @@ async function connect(
   const client: Client = { socket, id: "", token };
   socket.on("state", (state: TableState) => {
     client.state = state;
+  });
+  socket.on("wallet", (wallet: Wallet) => {
+    client.wallet = wallet;
   });
   await until(() => socket.connected, "WebSocket did not connect");
   const ack: Ack = await socket
@@ -126,8 +135,30 @@ try {
     );
   }
   await until(() => bob.state?.phase === "betting", "Betting did not reopen");
+  const lowBalance = await connect("Recave test", randomUUID(), 4_500);
+  await until(
+    () => lowBalance.wallet?.balance === 4_500,
+    "Initial wallet missing",
+  );
+  const refill: Ack = await lowBalance.socket
+    .timeout(5000)
+    .emitWithAck("wallet:refill");
+  assert.equal(refill.ok, true);
+  await until(
+    () => lowBalance.wallet?.balance === 10_000,
+    "Recave did not replace the balance",
+  );
+  const repeated: Ack = await lowBalance.socket
+    .timeout(5000)
+    .emitWithAck("wallet:refill");
+  assert.equal(repeated.ok, false, "Recave must be refused at 10 000");
+  const threshold = await connect("Seuil test", randomUUID(), 5_000);
+  const atThreshold: Ack = await threshold.socket
+    .timeout(5000)
+    .emitWithAck("wallet:refill");
+  assert.equal(atThreshold.ok, false, "Recave must be refused at 5 000");
   console.log(
-    "PASS: two real WebSocket clients, three seats, side bets, ownership checks, reconnect, accounting, synchronized settlement and next round.",
+    "PASS: two real WebSocket clients, three seats, side bets, ownership checks, reconnect, accounting, synchronized settlement, next round and shared-wallet recave.",
   );
 } finally {
   sockets.forEach((socket) => socket.disconnect());

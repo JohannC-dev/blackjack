@@ -270,17 +270,11 @@ export class Table {
         }
       }
     } else if (
-      ["claim", "release", "bet", "repeat", "ready", "refill"].includes(
-        command.type,
-      )
+      ["claim", "release", "bet", "repeat", "ready"].includes(command.type)
     ) {
       if (this.state.phase !== "betting")
         throw new Error("Attendez la prochaine manche.");
-      if (command.type === "refill") {
-        if (player.balance >= 5)
-          throw new Error("La recharge est disponible sous 5 crédits.");
-        player.balance = 2000;
-      } else if (command.type === "ready") {
+      if (command.type === "ready") {
         if (typeof command.ready !== "boolean")
           throw new Error("Action invalide.");
         const own = this.state.seats.filter((s) => s.playerId === playerId);
