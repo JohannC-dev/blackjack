@@ -94,15 +94,8 @@ export const RouletteWheel = memo(function RouletteWheel({
 
 export function RoulettePosterArt() {
   return (
-    <div className="roulette-poster-art">
-      <RouletteWheel
-        result={null}
-        spinKey={0}
-        spinning={false}
-        showResult={false}
-        poster
-      />
-      <span className="roulette-poster-ball" />
+    <div className="roulette-poster-art" aria-hidden="true">
+      <img src="/art/roulette-poster.svg?v=2" alt="" draggable={false} />
     </div>
   );
 }

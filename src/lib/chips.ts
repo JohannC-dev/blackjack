@@ -73,11 +73,6 @@ export function mergeChipCounts(
   return merged;
 }
 
-/** A chip that would exceed the limit replaces the current stake. */
-export function nextBetWithChip(bet: number, chip: number, maximum: number) {
-  return bet + chip <= maximum ? bet + chip : chip;
-}
-
 export function chipCountTotal(chips: readonly ChipCount[]) {
   return chips.reduce(
     (total, chip) => total + chip.denomination * chip.count,

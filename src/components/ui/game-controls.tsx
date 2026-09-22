@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  ChevronLeft,
-  ChevronRight,
-  LoaderCircle,
-  RotateCcw,
-  X,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CASINO_CHIP_DENOMINATIONS } from "@/lib/chips";
 import { Chip } from "./chip";
@@ -111,52 +105,25 @@ export function BetChipPicker({
   bet,
   maxBet,
   balance,
-  betSteps,
   disabled,
-  onAdd,
-  onUndo,
-  onClear,
+  onSelect,
 }: {
   bet: number;
   maxBet: number;
   balance: number;
-  betSteps: number[];
   disabled: boolean;
-  onAdd: (amount: number) => void;
-  onUndo: () => void;
-  onClear: () => void;
+  onSelect: (amount: number) => void;
 }) {
   return (
     <div className="chip-picker">
       <ChipSlider
         denominations={CASINO_CHIP_DENOMINATIONS}
         balance={balance}
-        selected={betSteps.at(-1)}
+        selected={bet}
         disabled={disabled}
         canSelect={(amount) => amount <= balance && amount <= maxBet}
-        onSelect={onAdd}
+        onSelect={onSelect}
       />
-      <span className="rack-divider" />
-      <button
-        type="button"
-        className="icon-button"
-        disabled={disabled || !betSteps.length}
-        onClick={onUndo}
-        title="Annuler le dernier jeton"
-        aria-label="Annuler le dernier jeton"
-      >
-        <RotateCcw size={17} />
-      </button>
-      <button
-        type="button"
-        className="icon-button"
-        disabled={disabled || !bet}
-        onClick={onClear}
-        title="Retirer la mise"
-        aria-label="Retirer la mise"
-      >
-        <X size={17} />
-      </button>
     </div>
   );
 }

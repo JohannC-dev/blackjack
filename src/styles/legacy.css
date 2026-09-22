@@ -8693,132 +8693,22 @@ h1 > span:not(.live-tag) {
   inset: 0;
   overflow: hidden;
 }
-.tpa-beam {
-  position: absolute;
-  left: 50%;
-  top: -20px;
-  width: 220px;
-  height: 280px;
-  translate: -50% 0;
-  background: linear-gradient(180deg, #b79afa24, transparent 80%);
-  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
-  filter: blur(6px);
-}
-.tpa-shadow {
-  position: absolute;
-  left: 50%;
-  bottom: 30px;
-  width: 200px;
-  height: 44px;
-  translate: -50% 0;
-  border-radius: 50%;
-  background: radial-gradient(ellipse, #0009, transparent 70%);
-}
-.tpa-fx {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-}
-/* Invisible box matching the drawn tower, used to place the fire. */
-.tpa-bounds {
-  position: absolute;
-  pointer-events: none;
-}
-.tpa-scene {
-  position: absolute;
-  left: 50%;
-  bottom: 44px;
-  translate: -50% 0;
-  z-index: 2;
-  perspective: 900px;
-  transition:
-    transform 0.5s var(--ease),
-    filter 0.5s var(--ease);
-}
-.tpa-scene {
-  filter: drop-shadow(0 0 0 transparent);
-}
-.tower-poster:hover .tpa-scene,
-.tower-poster:focus-visible .tpa-scene {
-  transform: translateY(-5px);
-  filter: drop-shadow(0 0 16px #b79afaaa);
-}
-.tpa-iso {
-  position: relative;
-  width: 88px;
-  height: 66px;
-  transform-style: preserve-3d;
-  transform: rotateX(60deg) rotateZ(-40deg);
-}
-.tpa-block {
-  --depth: 20px;
-  position: absolute;
-  inset: 0;
-  transform-style: preserve-3d;
-  transform: translateZ(calc(var(--i) * 24px));
-}
-.tpa-top {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
-  padding: 9px 8px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, #3a2f52, #241c35);
-  border: 1px solid #b79afa33;
-  transform: translateZ(var(--depth));
-}
-.tpa-top i {
-  border-radius: 3px;
-  background:
-    repeating-linear-gradient(45deg, #ffffff0a 0 3px, transparent 3px 6px),
-    linear-gradient(160deg, #4a3870, #2c2044);
-  border: 1px solid #b79afa40;
-}
-.tpa-top i.picked {
-  background: linear-gradient(160deg, #e2d4ff, #9b74f0);
-  box-shadow: 0 0 10px #b79afa;
-}
-.tpa-front,
-.tpa-side {
-  position: absolute;
-  background: linear-gradient(180deg, #2a2138, #17111f);
-  border: 1px solid #ffffff10;
-}
-.tpa-front {
-  left: 0;
-  bottom: 0;
+.tower-poster-art img {
   width: 100%;
-  height: var(--depth);
-  transform-origin: bottom;
-  transform: rotateX(-90deg);
-}
-.tpa-side {
-  top: 0;
-  right: 0;
-  width: var(--depth);
   height: 100%;
-  background: linear-gradient(90deg, #1d1628, #120d19);
-  transform-origin: right;
-  transform: rotateY(90deg);
+  display: block;
+  object-fit: cover;
+  transition: transform 350ms var(--ease), filter 350ms var(--ease);
 }
-.tpa-crown {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  translate: -50% -50%;
-  color: #f3c969;
-  filter: drop-shadow(0 0 8px #f3c96999);
-  transform: translateZ(calc(4 * 24px + 30px)) rotateZ(40deg) rotateX(-60deg);
+.tower-poster-art.is-hot img {
+  transform: scale(1.05);
+  filter: brightness(1.13) drop-shadow(0 0 12px #b79afa66);
 }
 @media (prefers-reduced-motion: reduce) {
-  .tpa-scene {
+  .tower-poster-art img {
     transition: none;
   }
 }
-
 /* ── MINES / PRIVATE EXTRACTION ─────────────────────────────────────── */
 .mines-shell {
   --mines-accent: #8ee8c4;
@@ -10754,9 +10644,9 @@ h1 > span:not(.live-tag) {
 .mines-shell .game-controls-bar {
   display: grid;
   grid-template-columns:
-    minmax(280px, 360px) minmax(230px, 270px) minmax(250px, 1fr)
-    165px;
-  gap: 20px;
+    minmax(250px, 300px) minmax(290px, 1fr) minmax(190px, 220px)
+    150px;
+  gap: 16px;
   justify-content: space-between;
 }
 .mines-shell .game-controls-bar > * {
@@ -10766,6 +10656,8 @@ h1 > span:not(.live-tag) {
   width: 100%;
   min-width: 0;
   margin-left: 0;
+  gap: 8px;
+  padding: 12px 14px;
 }
 .mines-shell .game-action > span {
   min-width: 0;
@@ -10797,62 +10689,16 @@ h1 > span:not(.live-tag) {
   font-variant-numeric: tabular-nums;
 }
 .mines-difficulty-summary {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(44px, 0.65fr) minmax(
-      108px,
-      1.4fr
-    );
-  align-items: stretch;
+  display: flex;
+  align-items: center;
   min-height: 36px;
 }
-.mines-difficulty-current,
-.mines-difficulty-stat {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-}
-.mines-difficulty-current {
-  padding-right: 10px;
-}
-.mines-difficulty-stat {
-  padding: 0 10px;
-  border-left: 1px solid #ffffff12;
-}
-.mines-difficulty-stat.is-payout {
-  padding-right: 0;
-}
-.mines-difficulty-current span,
-.mines-difficulty-stat span {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 8px;
-  letter-spacing: 0.05em;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.mines-difficulty-current b {
+
+.mines-difficulty-summary b {
   color: var(--mines-accent);
   font-size: 16px;
   font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1;
   font-variant-numeric: tabular-nums;
-}
-.mines-difficulty-stat b {
-  overflow: hidden;
-  color: #ebe5f1;
-  font-size: 13px;
-  font-weight: 750;
-  line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.mines-difficulty-stat.is-payout b {
-  color: var(--tower-gold, #f3c969);
 }
 .mines-difficulty-slider {
   position: relative;
@@ -11476,21 +11322,16 @@ h1 > span:not(.live-tag) {
 }
 .mines-shell .mines-bet-control .chip-picker {
   display: grid;
-  grid-template-columns: 28px repeat(4, minmax(0, 1fr)) 28px 1px 28px 28px;
+  grid-template-columns: 28px repeat(4, minmax(0, 1fr)) 28px;
   align-items: center;
   gap: 4px;
-  width: min(100%, 330px);
+  width: 100%;
 }
 .mines-shell .mines-bet-control .chip-picker .chip {
   width: 100%;
   min-width: 0;
   height: auto;
   aspect-ratio: 1;
-}
-.mines-shell .mines-bet-control .chip-picker .rack-divider {
-  width: 1px;
-  height: 27px;
-  margin: 0;
 }
 .mines-shell .mines-bet-control .chip-picker > .icon-button {
   width: 28px;

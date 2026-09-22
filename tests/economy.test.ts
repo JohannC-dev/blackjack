@@ -14,7 +14,6 @@ import {
   INITIAL_CREDIT_BALANCE,
   chipLabel,
   chipColors,
-  nextBetWithChip,
   chipStackForComposition,
 } from "../src/lib/chips";
 import { isValidRouletteBet, ROULETTE_MAX_PER_SPOT } from "../src/lib/roulette";
@@ -88,31 +87,27 @@ describe("Nouvelle économie", () => {
     expect(chipColors(200_000_000)["--chip-base"]).toBe("#215fc4");
   });
 
-  test("lets a chip equal to the balance replace a smaller initial bet", () => {
-    expect(nextBetWithChip(5_000, 1_000_000_000, 1_000_000_000)).toBe(
-      1_000_000_000,
-    );
-    expect(nextBetWithChip(5_000, 20_000, 1_000_000_000)).toBe(25_000);
-
+  test("shows one selected stake and allows a chip equal to the balance", () => {
     const markup = renderToStaticMarkup(
       createElement(BetChipPicker, {
-        bet: 5_000,
+        bet: 1_000_000_000,
         maxBet: 1_000_000_000,
         balance: 1_000_000_000,
-        betSteps: [],
         disabled: false,
-        onAdd: () => {},
-        onUndo: () => {},
-        onClear: () => {},
+        onSelect: () => {},
       }),
     );
+
     const billionChip = markup.match(
       /<button(?=[^>]*class="chip chip-1000000000)[^>]*>/,
     )?.[0];
+    expect(billionChip).toContain('aria-pressed="true"');
+    expect(markup.match(/aria-pressed="true"/g)).toHaveLength(1);
     expect(billionChip).toBeDefined();
     expect(billionChip).not.toContain("disabled");
+    expect(markup).not.toContain("Annuler le dernier jeton");
+    expect(markup).not.toContain("Retirer la mise");
   });
-
   test("keeps selected blackjack chips on the table and for repeat", () => {
     const member = player();
     const table = new Table("CHIPS");

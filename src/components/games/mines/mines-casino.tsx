@@ -21,7 +21,6 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
-import { nextBetWithChip } from "@/lib/chips";
 import {
   MINES_MAX_BET,
   MINES_MIN_BET,
@@ -65,7 +64,7 @@ const EMPTY_CELLS: MinesCell[] = Array.from({ length: 25 }, (_, index) => ({
 
 function phaseDescription(state: MinesState | null) {
   if (!state || state.phase === "idle")
-    return "Choisissez votre mise et votre retour visé.";
+    return "Choisissez un jeton et le nombre de mines.";
   if (state.phase === "playing") return state.message;
   return state.message;
 }
@@ -122,12 +121,9 @@ function MinesControls({
   state,
   bet,
   maxBet,
-  betSteps,
   target,
   setTarget,
-  onAdd,
-  onUndo,
-  onClear,
+  onSelect,
   onCashout,
   currentPayout,
   targetReached,
@@ -146,12 +142,9 @@ function MinesControls({
   state: MinesState | null;
   bet: number;
   maxBet: number;
-  betSteps: number[];
   target: MinesTarget;
   setTarget: (value: MinesTarget) => void;
-  onAdd: (amount: number) => void;
-  onUndo: () => void;
-  onClear: () => void;
+  onSelect: (amount: number) => void;
   onCashout: () => void;
   currentPayout: number;
   targetReached: boolean;
@@ -170,7 +163,6 @@ function MinesControls({
   const [patternOpen, setPatternOpen] = useState(false);
   const patternControlRef = useRef<HTMLDivElement>(null);
   const balance = getClubBalance(game);
-  const targetMines = minesForTarget(target);
   const targetIndex = Math.max(
     0,
     MINES_TARGET_OPTIONS.findIndex((option) => option.target === target),
@@ -188,8 +180,7 @@ function MinesControls({
     bet <= maxBet &&
     bet <= balance &&
     (!patternMode || patternLength > 0);
-  const previewPayout = minesPayout(bet, target / 100);
-  const difficultyValueText = `${targetOption.target}% de retour, ${targetOption.mines} bombes, gain potentiel ${credits(previewPayout)} crédits`;
+  const difficultyValueText = `${targetOption.mines} mines`;
 
   const setDifficultyFromPointer = (
     event: ReactPointerEvent<HTMLDivElement>,
@@ -252,7 +243,7 @@ function MinesControls({
         : "Sélectionnez des cases sur la grille"
       : active
         ? "Retirez votre gain maintenant"
-        : `${targetMines} bombes · gain potentiel ${credits(previewPayout)} cr.`;
+        : null;
   const patternOptionDisabled = !looping && (active || game.pending);
   const patternStatus = looping
     ? "En cours"
@@ -295,21 +286,10 @@ function MinesControls({
       <GameControlsBar ariaLabel="Réglages de la partie">
         <GameControlGroup
           className="mines-difficulty-control"
-          label="Risque / gain"
+          label="Nombre de mines"
         >
           <div className="mines-difficulty-summary" aria-live="polite">
-            <div className="mines-difficulty-current">
-              <span>Retour visé</span>
-              <b>{targetOption.target}%</b>
-            </div>
-            <div className="mines-difficulty-stat">
-              <span>Bombes</span>
-              <b>{targetOption.mines}</b>
-            </div>
-            <div className="mines-difficulty-stat is-payout">
-              <span>Gain potentiel</span>
-              <b>{credits(previewPayout)} cr.</b>
-            </div>
+            <b>{targetOption.mines} mines</b>
           </div>
           <div
             className={`mines-difficulty-slider ${
@@ -317,10 +297,10 @@ function MinesControls({
             }`.trim()}
             role="slider"
             tabIndex={difficultyDisabled ? -1 : 0}
-            aria-label="Risque et retour visé"
-            aria-valuemin={0}
-            aria-valuemax={MINES_TARGET_OPTIONS.length - 1}
-            aria-valuenow={targetIndex}
+            aria-label="Nombre de mines"
+            aria-valuemin={MINES_TARGET_OPTIONS[0].mines}
+            aria-valuemax={MINES_TARGET_OPTIONS.at(-1)!.mines}
+            aria-valuenow={targetOption.mines}
             aria-valuetext={difficultyValueText}
             aria-disabled={difficultyDisabled}
             onKeyDown={handleDifficultyKeyDown}
@@ -382,36 +362,23 @@ function MinesControls({
                   }%`,
                 }}
               >
-                {option.target}%
+                {option.mines}
               </span>
             ))}
           </div>
           <div className="mines-difficulty-hint" aria-hidden="true">
-            <span>moins de bombes</span>
-            <span>plus de bombes</span>
+            <span>moins de mines</span>
+            <span>plus de mines</span>
           </div>
         </GameControlGroup>
 
-        <GameControlGroup
-          className="mines-bet-control"
-          label={
-            <>
-              Mise{" "}
-              <b className="game-bet-amount">
-                {credits(active && state ? state.bet : bet)} cr.
-              </b>
-            </>
-          }
-        >
+        <GameControlGroup className="mines-bet-control" label="Jetons">
           <BetChipPicker
-            bet={bet}
+            bet={active && state ? state.bet : bet}
             maxBet={maxBet}
             balance={balance}
-            betSteps={betSteps}
             disabled={active || looping}
-            onAdd={onAdd}
-            onUndo={onUndo}
-            onClear={onClear}
+            onSelect={onSelect}
           />
         </GameControlGroup>
 
@@ -635,10 +602,6 @@ export function MinesCasino({
 }) {
   const state = game.minesState;
   const [bet, setBet] = useState<number>(MINES_MIN_BET);
-  const [betSteps, setBetSteps] = useState<number[]>([]);
-  const [betUndo, setBetUndo] = useState<{ bet: number; steps: number[] }[]>(
-    [],
-  );
   const [target, setTarget] = useState<MinesTarget>(200);
   const [sound, setSound] = useState(false);
   const [pattern, setPattern] = useState<number[]>([]);
@@ -746,30 +709,14 @@ export function MinesCasino({
     if (!active || looping || !state?.revealedCount || game.pending) return;
     void game.minesCommand({ type: "cashout" });
   }, [active, game, looping, state?.revealedCount]);
-  const addChip = useCallback(
+  const selectChip = useCallback(
     (amount: number) => {
       if (active || looping || amount > maxBet) return;
-      setBetUndo((history) => [...history, { bet, steps: betSteps }]);
-      setBet(nextBetWithChip(bet, amount, maxBet));
-      setBetSteps(bet + amount > maxBet ? [amount] : [...betSteps, amount]);
+      setBet(amount);
       play("chips");
     },
-    [active, bet, betSteps, looping, maxBet, play],
+    [active, looping, maxBet, play],
   );
-  const undoChip = useCallback(() => {
-    const previous = betUndo.at(-1);
-    if (active || looping || !previous) return;
-    setBet(previous.bet);
-    setBetSteps(previous.steps);
-    setBetUndo((history) => history.slice(0, -1));
-  }, [active, betUndo, looping]);
-  const clearBet = useCallback(() => {
-    if (active || looping) return;
-    setBet(0);
-    setBetSteps([]);
-    setBetUndo([]);
-  }, [active, looping]);
-
   const waitForLoopState = useCallback(
     (runId: number, predicate: (snapshot: MinesState | null) => boolean) =>
       new Promise<boolean>((resolve) => {
@@ -1035,12 +982,9 @@ export function MinesCasino({
               state={state}
               bet={bet}
               maxBet={maxBet}
-              betSteps={betSteps}
               target={target}
               setTarget={setTarget}
-              onAdd={addChip}
-              onUndo={undoChip}
-              onClear={clearBet}
+              onSelect={selectChip}
               onCashout={cashout}
               currentPayout={currentPayout}
               targetReached={targetReached}

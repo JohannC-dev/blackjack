@@ -802,24 +802,24 @@
   background: radial-gradient(circle at 50% 48%, #543069, #291b39 72%);
 }
 .roulette-poster-art {
-  position: relative;
-  transform: rotate(-12deg);
-}
-.roulette-poster-art .roulette-wheel {
-  transition: transform 1600ms var(--ease);
-}
-.roulette-poster:hover .roulette-poster-art .roulette-wheel {
-  transform: rotate(160deg) !important;
-}
-.roulette-poster-ball {
   position: absolute;
-  top: 22px;
-  left: 58%;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fff, #cfc8da 60%, #7f788b);
-  box-shadow: 0 2px 5px #000a;
+  inset: 0;
+}
+.roulette-poster-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 550ms var(--ease), filter 550ms var(--ease);
+}
+.roulette-poster:hover .roulette-poster-art img {
+  transform: scale(1.05) rotate(3deg);
+  filter: brightness(1.1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .roulette-poster-art img {
+    transition: none;
+  }
 }
 .roulette-poster .poster-copy > span,
 .roulette-poster .poster-copy strong {
