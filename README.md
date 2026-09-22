@@ -36,6 +36,16 @@ Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table
 - Chat de table éphémère, limité à cinq messages en dix secondes et sans filtre lexical. Chaque client peut masquer localement un joueur.
 - Les dix dernières mains de la table conservent le board, le pot, les gagnants et uniquement les cartes révélées.
 
+### Roulette européenne
+
+- Table **multijoueur** partagée, sur le même code que la table de Blackjack (`?table=CODE`), jusqu’à 8 joueurs. Reprise de la roulette de Malori, en crédits.
+- Un seul zéro. Plein 35:1, cheval 17:1, carré 8:1, douzaine et colonne 2:1, rouge/noir, pair/impair et manque/passe 1:1. Le zéro fait perdre toutes les chances simples.
+- Choisir un jeton puis cliquer sur le tapis. Viser le **bord** d’un numéro joue le cheval avec son voisin (y compris 0/1, 0/2 et 0/3 sur la ligne du zéro), un **coin** joue le carré ; les numéros couverts s’allument avant le clic. Clic droit pour retirer une mise. Mises par pas de 5, 500 crédits maximum par case.
+- Seule une connexion qui affiche la table peut miser : un onglet resté sur un autre jeu est refusé. Plusieurs onglets ouverts sur la Roulette jouent la même place.
+- Les mises des autres joueurs sont visibles en vert translucide. Après **Je suis prêt**, la bille part 10 secondes plus tard (3 secondes si tous les joueurs de la table sont prêts) ; les joueurs non prêts ne jouent pas.
+- Le serveur tire le numéro. Les mises sont débitées au lancement de la bille et les gains crédités à son arrivée.
+- Au résultat, les cases gagnantes s’allument et un bandeau affiche le retour de la manche, comme au Blackjack. Les jetons perdants se soulèvent puis tombent en pluie ; les gains arrivent ensuite du haut de la table et fusionnent avec les piles gagnantes (même animation de règlement que le Blackjack), qui restent en place jusqu’à la manche suivante.
+
 ### La Tower
 
 - Choisir une difficulté : **Facile** (5 cartes par étage), **Normal** (4), **Difficile** (3) ou **Impossible** (2). Chaque étage cache toujours **un seul piège**, placé par le serveur au lancement.
@@ -122,6 +132,7 @@ Les tests couvrent les deux moteurs, toutes les catégories de mains Poker, la c
 
 - `server/engine.ts` : moteur et phases du Blackjack.
 - `server/poker.ts` : moteur Hold’em, matchmaking, files et tables Poker.
+- `server/roulette/` : Roulette écrite avec [Effect](https://effect.website) — erreurs typées (`errors.ts`), validation des commandes par `Schema` (`schema.ts`), table immuable (`table.ts`), registre transactionnel des tables (`service.ts`) et runtime synchrone branché sur Socket.IO (`index.ts`). Joueurs, roue, horloge et transport sont des services injectés, remplacés par des doubles dans les tests.
 - `server/index.ts` : serveur Bun/Next.js et protocole Socket.IO.
 - `src/lib/rules.ts` : valeurs des cartes et évaluation des paris annexes.
 - `src/lib/use-game.ts` : connexion, reconnexion et sauvegarde du profil.
