@@ -74,7 +74,7 @@ export const CasinoRail = memo(function CasinoRail({
         {item(
           "mines",
           "Jeu de la mine",
-          <MineBomb className="!static !h-[22px] !w-[22px]" />,
+          <MineBomb className="!static !h-[28px] !w-[28px]" />,
         )}
         {item("poker", "Poker", <Spade size={21} />)}
         {item("tower", "La Tower", <Castle size={21} />)}

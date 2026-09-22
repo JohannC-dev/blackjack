@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="body" cx=".3" cy=".24" r=".78">
+      <stop stop-color="#79556f"/>
+      <stop offset=".38" stop-color="#483044"/>
+      <stop offset="1" stop-color="#211827"/>
+    </radialGradient>
+    <linearGradient id="collar" x2="0" y2="1">
+      <stop stop-color="#f5d68f"/>
+      <stop offset="1" stop-color="#9b6949"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="37" r="21" fill="#0e0b18" opacity=".45"/>
+  <circle cx="32" cy="36" r="20" fill="url(#body)" stroke="#c993a3" stroke-width="2"/>
+  <path d="M21 28c3-5 7-8 12-8" fill="none" stroke="#f8c9cc" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+  <path d="M27 51c6 3 13 1 17-4" fill="none" stroke="#0f101b" stroke-width="2.5" stroke-linecap="round" opacity=".55"/>
+  <path d="M27 16v-4h10v4" fill="url(#collar)" stroke="#f7dfae" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M32 12c0-6 5-8 10-7" fill="none" stroke="#e3b977" stroke-width="3" stroke-linecap="round"/>
+  <path d="m45 4 2-3m0 8 4 1m-8 0-2 4" stroke="#ffe39a" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="45" cy="7" r="3.5" fill="#fff0b5"/>
+</svg>
