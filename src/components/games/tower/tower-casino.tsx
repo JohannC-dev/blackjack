@@ -406,6 +406,7 @@ export function TowerCasino({
         <ClubHeader
           balance={getClubBalance(game)}
           name={game.profile?.name ?? ""}
+          onSignOut={game.signOut}
         />
         <main className={styles.page}>
           <header className={styles.strip}>

@@ -1,6 +1,10 @@
 import { strict as assert } from "node:assert";
-import { randomUUID } from "node:crypto";
 import { io, type Socket } from "socket.io-client";
+import {
+  createTestSession,
+  socketAuth,
+  type TestSession,
+} from "./auth-session";
 import type {
   Ack,
   RouletteCommand,
@@ -26,8 +30,9 @@ async function until(check: () => boolean, message: string, timeout = 20_000) {
   }
 }
 
-async function connect(name: string, token = randomUUID()) {
-  const socket = io(url, { transports: ["websocket"], reconnection: false });
+async function connect(name: string, existingSession?: TestSession) {
+  const session = existingSession ?? (await createTestSession(url, name));
+  const socket = io(url, socketAuth(session, url));
   const client: Client = { socket, id: "", wallets: [] };
   clients.push(client);
   socket.on("wallet", (wallet: Wallet) => client.wallets.push(wallet));
@@ -36,10 +41,7 @@ async function connect(name: string, token = randomUUID()) {
     (state: RouletteTableState) => (client.roulette = state),
   );
   await until(() => socket.connected, `${name} ne se connecte pas`);
-  const ack: Ack = await socket.timeout(5_000).emitWithAck("join", {
-    tableId,
-    profile: { token, name, balance: 10_000 },
-  });
+  const ack: Ack = await socket.timeout(5_000).emitWithAck("join", { tableId });
   assert(ack.ok, `${name} ne rejoint pas le club`);
   client.id = ack.playerId!;
   return client;
@@ -54,8 +56,8 @@ const command = (client: Client, payload: RouletteCommand | unknown) =>
 const balanceOf = (client: Client) => client.wallets.at(-1)?.balance;
 
 try {
-  const aliceToken = randomUUID();
-  const alice = await connect("Alice", aliceToken);
+  const aliceSession = await createTestSession(url, "Alice");
+  const alice = await connect("Alice", aliceSession);
   const bob = await connect("Bob");
   await until(
     () => balanceOf(alice) !== undefined && balanceOf(bob) !== undefined,
@@ -78,7 +80,7 @@ try {
   assert.equal(alice.roulette!.id, tableId);
 
   // Another tab of Alice left on another game is refused too.
-  const otherTab = await connect("Alice", aliceToken);
+  const otherTab = await connect("Alice", aliceSession);
   const otherTabAck = await command(otherTab, { type: "repeat" });
   assert(
     !otherTabAck.ok && otherTabAck.error === "Ouvrez la roulette pour jouer.",

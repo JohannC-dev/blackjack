@@ -1,27 +1,30 @@
 # MINUIT · Casino multijoueur
 
-Blackjack européen, Texas Hold’em et La Tower, multijoueurs en crédits fictifs. Next.js **16.3.5**, React, TypeScript, **Bun**, Socket.IO. Aucune base de données.
+Blackjack européen, Texas Hold’em, La Tower, Mines et Roulette, multijoueurs en crédits fictifs. Next.js **16.3.5**, React, TypeScript, **Bun**, Socket.IO, Effect TS, Drizzle et PostgreSQL 18.
 
 ## Lancer le jeu
 
 ```sh
 bun install
+cp .env.example .env
+# Renseigner DATABASE_URL et un BETTER_AUTH_SECRET aléatoire d’au moins 32 caractères.
+bun run db:migrate
 bun run dev
 ```
 
-Ouvrir `http://localhost:3000`. Pour changer de port : `PORT=3001 bun run dev`.
+`DATABASE_SSL=disable` convient à PostgreSQL local. Supprimer cette surcharge et utiliser le mode SSL fourni dans `DATABASE_URL` lorsque le serveur accepte TLS. Ouvrir `http://localhost:3000`. Pour changer de port : `PORT=3001 bun run dev`.
 
 Next.js recharge automatiquement les composants et le CSS. Après une modification de `server/`, redémarrer le serveur : ses tables sont conservées en mémoire. Le mode `bun --watch` est volontairement absent, car il redémarre le serveur lorsque Next charge ses fichiers générés.
 
 ## Jouer à plusieurs
 
-1. Choisir un pseudo à la première visite : le profil reçoit 2 000 crédits.
+1. Créer un compte avec un pseudo, une adresse e-mail et un mot de passe. Le portefeuille reçoit 2 000 crédits à sa création.
 2. Choisir un jeton dans le porte-jetons, puis cliquer sur une zone **Blackjack**, **21+3** ou **Super Pairs directement sur le tapis**. Le jeton sélectionné reste actif pour les mises suivantes. Une mise Blackjack est nécessaire pour ajouter les paris annexes.
 3. Prendre plusieurs places libres pour jouer plusieurs mains. La table offre 5 places partagées. Le bouton d’annulation retire le dernier jeton posé ; la croix retire toutes vos mises.
 4. Cliquer sur **Je suis prêt** pour valider l’ensemble des mises. Si tous les joueurs ayant misé sont prêts, la manche démarre en 3 secondes. Sinon, les joueurs prêts démarrent après 12 secondes, les autres attendent la prochaine manche.
 5. Inviter des amis avec le bouton du haut. Le menu de table propose plusieurs tables publiques (`MINUIT`, `LUNA`, `NOVA` et `OPALE`) et permet aussi de créer une table avec un code ou d’en rejoindre une. Une table « privée » est accessible à toute personne qui connaît son code ; elle n’a pas de mot de passe.
 
-Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table=CODE`. Remplacer `localhost` dans le lien partagé par l’adresse IP du serveur. Le serveur écoute sur `0.0.0.0` par défaut. Pour simuler deux joueurs sur un ordinateur, utiliser deux profils de navigateur ou une fenêtre privée : deux onglets ordinaires partagent la même identité locale.
+Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table=CODE`. Remplacer `localhost` dans le lien partagé par l’adresse IP du serveur. Le serveur écoute sur `0.0.0.0` par défaut. Pour simuler deux joueurs sur un ordinateur, utiliser deux profils de navigateur ou une fenêtre privée : deux onglets ordinaires partagent la même session Better Auth.
 
 ## Règles implémentées
 
@@ -76,27 +79,29 @@ Seule la meilleure combinaison est payée. « Pour 1 » désigne le gain net, av
 
 ## État, sauvegarde et limites
 
-- `localStorage["minuit.profile.v1"]` conserve le pseudo, un jeton de session aléatoire et le dernier solde reçu. La première arrivée sans profil donne 2 000 crédits.
-- Le serveur fait autorité sur les cartes, les mises, les tours, les gains et les soldes de la session. Il ne transmet ni le sabot ni les jetons privés dans les états publics.
-- Une reconnexion retrouve les mains et le solde du serveur. Modifier le localStorage pendant une session connue ne modifie pas le solde serveur.
-- Les profils inconnus sont restaurés depuis le stockage local : les crédits restent modifiables par le propriétaire du navigateur, conformément au choix d’un jeu fictif sans base de données.
-- Les tables, manches et historiques sont en mémoire : un redémarrage les réinitialise. Les mises déjà débitées d’une manche interrompue ne sont pas récupérables automatiquement après un crash. Le solde restauré est le dernier reçu par le navigateur.
-- Une place déconnectée est libérée après 60 secondes lors de la phase de mise. Une table vide expire après 30 minutes ; les sessions déconnectées expirent après 24 heures.
-- Une seule instance serveur doit héberger les tables. Plusieurs réplicas nécessiteraient un stockage et une coordination partagés.
+- Better Auth 1.7.5 gère les comptes e-mail/mot de passe et les sessions dans PostgreSQL. Le navigateur ne conserve plus de profil ni de solde dans `localStorage`.
+- PostgreSQL est la source de vérité du portefeuille. Chaque variation est atomique, refuse un débit qui rendrait le solde négatif et crée une ligne de journal avec un identifiant d’opération.
+- Le serveur recharge le portefeuille avant toute commande financière. Les moteurs gardent un solde chaud pendant la commande, puis écrivent seulement si le solde a réellement changé : réservation de mise, double ou split, règlement ou encaissement.
+- Le client reçoit le solde par `GET /api/profile` et par l’événement Socket.IO `wallet`. Ces valeurs servent à l’affichage et à désactiver des actions impossibles ; elles ne sont jamais acceptées comme autorité par le serveur.
+- Les cartes, tables, manches et historiques restent en mémoire dans cette version. Un seul processus serveur doit donc héberger les parties. Les comptes, sessions, soldes et écritures du portefeuille survivent aux redémarrages.
+- Une place déconnectée est libérée après 60 secondes lors de la phase de mise. Une table vide expire après 30 minutes ; un profil de jeu inactif est retiré de la mémoire après 24 heures, sans supprimer son compte ni son portefeuille.
 
 ## Production
 
 ```sh
 bun install --frozen-lockfile
+bun run db:migrate
 bun run build
 PORT=3000 bun run start
 ```
+
+Définir `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` et `BETTER_AUTH_TRUSTED_ORIGINS` dans l’environnement de production. Exécuter les migrations une seule fois avant de démarrer la nouvelle version.
 
 Héberger ce processus Bun persistant sur un serveur ou un service supportant les WebSockets. Le point de contrôle `GET /api/health` renvoie `{ "ok": true }`. Un proxy doit transmettre les en-têtes `Host`, `Upgrade` et `Connection`, et permettre les connexions persistantes. Utiliser HTTPS pour une adresse publique. Le serveur personnalisé ne peut pas être remplacé par un simple export statique ni par des fonctions serverless éphémères.
 
 Les dépendances, scripts, tests et le développement sont gérés avec Bun. En production, `bun run start` lance toutefois le serveur TypeScript avec Node via `tsx` : Next.js 16.3.5 déclenche actuellement une erreur de chargement CommonJS lorsque son rendu de production est exécuté directement par Bun 1.3.9. Socket.IO et le reste de l’application restent inchangés.
 
-Les polices sont servies localement. Aucun service externe n’est nécessaire pour jouer.
+Les polices sont servies localement. Le serveur PostgreSQL doit rester joignable pendant le jeu.
 
 ## Vérifier
 
@@ -104,6 +109,7 @@ Les polices sont servies localement. Aucun service externe n’est nécessaire p
 bun run typecheck
 bun run test
 bun run build
+bun run db:migrate
 # Serveur lancé dans un autre terminal :
 bun run test:multiplayer
 bun run test:poker-multiplayer
@@ -122,9 +128,13 @@ Les tests couvrent les deux moteurs, toutes les catégories de mains Poker, la c
 
 - `server/engine.ts` : moteur et phases du Blackjack.
 - `server/poker.ts` : moteur Hold’em, matchmaking, files et tables Poker.
-- `server/index.ts` : serveur Bun/Next.js et protocole Socket.IO.
+- `server/index.ts` : serveur Bun/Next.js, sessions HTTP et protocole Socket.IO.
+- `server/auth.ts` : configuration Better Auth.
+- `server/db/schema.ts` : tables Better Auth, portefeuille et journal comptable.
+- `server/db/wallet.ts` : opérations atomiques Effect TS/Drizzle sur le portefeuille.
 - `src/lib/rules.ts` : valeurs des cartes et évaluation des paris annexes.
-- `src/lib/use-game.ts` : connexion, reconnexion et sauvegarde du profil.
+- `src/lib/profile-context.tsx` : session Better Auth et solde d’affichage.
+- `src/lib/use-game.ts` : connexion Socket.IO et commandes de jeu.
 - `src/components/casino.tsx` : shell du casino et table Blackjack.
 - `src/components/poker-casino.tsx` : accueil, lobby, table, chat et commandes Poker.
 - `src/components/poker-lobby.tsx` : cartes d’entrée Cash Game et Spin & Play, choix du plafond et du tapis.

@@ -54,7 +54,7 @@ export function Casino() {
     ? "Votre recherche sera annul\u00e9e et votre buy-in sera r\u00e9cup\u00e9r\u00e9."
     : game.pokerState?.table?.mode === "cash"
       ? "Votre place sera lib\u00e9r\u00e9e et votre stack restant sera recr\u00e9dit\u00e9."
-      : "Vous abandonnerez le tournoi et votre buy-in ne sera pas rÃ©cupÃ©rÃ©.";
+      : "Vous abandonnerez le tournoi et votre buy-in ne sera pas récupéré.";
   const pokerExitDestination =
     pendingView === "mines"
       ? "le jeu de la Mine"

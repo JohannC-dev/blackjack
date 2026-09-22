@@ -1,11 +1,21 @@
 import { strict as assert } from "node:assert";
 import { randomUUID } from "node:crypto";
 import { io, type Socket } from "socket.io-client";
+import {
+  createTestSession,
+  socketAuth,
+  type TestSession,
+} from "./auth-session";
 import type { Ack, Command, TableState } from "../src/lib/types";
 
 const url = process.env.TEST_URL ?? "http://localhost:3000";
 const room = randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
-type Client = { socket: Socket; id: string; token: string; state?: TableState };
+type Client = {
+  socket: Socket;
+  id: string;
+  session: TestSession;
+  state?: TableState;
+};
 const sockets: Socket[] = [];
 async function until(check: () => boolean, message: string, timeout = 20000) {
   const start = Date.now();
@@ -16,19 +26,19 @@ async function until(check: () => boolean, message: string, timeout = 20000) {
 }
 async function connect(
   name: string,
-  token: string = randomUUID(),
-  balance = 2000,
+  existingSession?: TestSession,
 ): Promise<Client> {
-  const socket = io(url, { transports: ["websocket"], reconnection: false });
+  const session = existingSession ?? (await createTestSession(url, name));
+  const socket = io(url, socketAuth(session, url));
   sockets.push(socket);
-  const client: Client = { socket, id: "", token };
+  const client: Client = { socket, id: "", session };
   socket.on("state", (state: TableState) => {
     client.state = state;
   });
   await until(() => socket.connected, "WebSocket did not connect");
   const ack: Ack = await socket
     .timeout(5000)
-    .emitWithAck("join", { tableId: room, profile: { token, name, balance } });
+    .emitWithAck("join", { tableId: room });
   assert(ack.ok);
   client.id = ack.playerId!;
   await until(() => !!client.state, "No initial snapshot");
@@ -74,9 +84,9 @@ try {
   );
   assert.equal(alice.state!.seats.filter((s) => s.hands.length).length, 3);
   const savedId = alice.id;
-  const savedToken = alice.token;
+  const savedSession = alice.session;
   alice.socket.disconnect();
-  const rejoined = await connect("Alice test", savedToken, 999999);
+  const rejoined = await connect("Alice test", savedSession);
   assert.equal(rejoined.id, savedId);
   const bonuses = rejoined
     .state!.seats.filter((s) => s.playerId === savedId)
@@ -121,8 +131,8 @@ try {
       2000 + state.history.find((h) => h.playerId === client.id)!.net,
     );
     assert(
-      !JSON.stringify(state).includes(client.token),
-      "Snapshots must not expose authentication tokens",
+      !JSON.stringify(state).includes(client.session.email),
+      "Snapshots must not expose authentication details",
     );
   }
   await until(() => bob.state?.phase === "betting", "Betting did not reopen");

@@ -1,4 +1,10 @@
 import { Casino } from "@/components/casino";
+import { ProfileProvider } from "@/lib/profile-context";
+
 export default function Page() {
-  return <Casino />;
+  return (
+    <ProfileProvider>
+      <Casino />
+    </ProfileProvider>
+  );
 }

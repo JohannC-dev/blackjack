@@ -925,7 +925,11 @@ export function MinesCasino({
     <div className="casino-shell mines-shell">
       <CasinoRail active="mines" onNavigate={onNavigate} />
       <div className="ml-[76px] max-[700px]:ml-[55px] max-[450px]:ml-0">
-        <ClubHeader balance={balance} name={game.profile?.name ?? ""} />
+        <ClubHeader
+          balance={balance}
+          name={game.profile?.name ?? ""}
+          onSignOut={game.signOut}
+        />
         <main className="mines-page">
           <header className="mines-page-heading">
             <div className="mines-title-block">

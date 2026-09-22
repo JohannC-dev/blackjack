@@ -9,7 +9,6 @@ import type {
   MinesState,
   PokerClientState,
   PokerCommand,
-  Profile,
   RouletteCommand,
   RouletteTableState,
   TableState,
@@ -18,21 +17,18 @@ import type {
   TowerPublicState,
   Wallet,
 } from "./types";
-import { newToken } from "./identity";
+import { useProfile, type Credentials } from "./profile-context";
 import type { EmoteEvent, EmoteRequest, ReceivedEmote } from "./emotes";
 
-const STORAGE_KEY = "minuit.profile.v1";
 export function useGame() {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const { profile, loaded, balance, setBalance, authenticate, signOut } =
+    useProfile();
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState<TableState | null>(null);
   const [pokerState, setPokerState] = useState<PokerClientState | null>(null);
   const [towerState, setTowerState] = useState<TowerClientState | null>(null);
   /** Difference to add to the browser clock to compare it with server deadlines. */
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
-  /** Shared wallet: only the server's wallet event sets it, never a game snapshot. */
-  const [balance, setBalance] = useState<number | null>(null);
   const [minesState, setMinesState] = useState<MinesState | null>(null);
   const [rouletteState, setRouletteState] = useState<RouletteTableState | null>(
     null,
@@ -43,57 +39,14 @@ export function useGame() {
   /** Emotes received and not yet animated. */
   const [emotes, setEmotes] = useState<ReceivedEmote[]>([]);
   const socketRef = useRef<Socket | null>(null);
-  const profileRef = useRef<Profile | null>(null);
   const idRef = useRef("");
   const roomRef = useRef("MINUIT");
-  const storageWarned = useRef(false);
   const walletSeq = useRef(0);
   const clockSyncTimer = useRef<number | null>(null);
   /** Whether the Tower view is open, so a reconnection re-enters its room. */
   const towerOpen = useRef(false);
   /** Whether the Roulette view is open, so a reconnection re-enters its room. */
   const rouletteOpen = useRef(false);
-
-  const save = useCallback((p: Profile) => {
-    profileRef.current = p;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
-    } catch {
-      if (!storageWarned.current) {
-        setError(
-          "Le stockage local est indisponible : le profil sera perdu à la fermeture.",
-        );
-        storageWarned.current = true;
-      }
-    }
-  }, []);
-  useEffect(() => {
-    const room = new URLSearchParams(window.location.search)
-      .get("table")
-      ?.toUpperCase();
-    if (room && /^[A-Z0-9]{4,12}$/.test(room)) roomRef.current = room;
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const p = JSON.parse(stored);
-        if (
-          typeof p.token === "string" &&
-          /^[a-f0-9-]{36}$/i.test(p.token) &&
-          typeof p.name === "string" &&
-          p.name.trim() &&
-          typeof p.balance === "number" &&
-          Number.isFinite(p.balance) &&
-          p.balance >= 0
-        ) {
-          profileRef.current = p;
-          setProfile(p);
-        }
-      }
-    } catch {
-      /* A missing or damaged profile opens onboarding. */
-    }
-    setLoaded(true);
-  }, []);
 
   const token = profile?.token;
   useEffect(() => {
@@ -139,7 +92,7 @@ export function useGame() {
         .timeout(8000)
         .emit(
           "join",
-          { profile: profileRef.current, tableId: roomRef.current },
+          { tableId: roomRef.current },
           (timeout: Error | null, ack: Ack) => {
             if (timeout || !ack?.ok) {
               setConnected(false);
@@ -161,16 +114,11 @@ export function useGame() {
     socket.on("state", (snapshot: TableState) => {
       if (!snapshot) return;
       setState(snapshot);
-      const me = snapshot.players.find((p) => p.id === idRef.current);
-      if (me && profileRef.current && me.name !== profileRef.current.name)
-        save({ ...profileRef.current, name: me.name });
     });
     socket.on("wallet", (wallet: Wallet) => {
       if (!wallet || wallet.seq <= walletSeq.current) return;
       walletSeq.current = wallet.seq;
       setBalance(wallet.balance);
-      if (profileRef.current)
-        save({ ...profileRef.current, balance: wallet.balance });
     });
     socket.on("poker:state", (snapshot: PokerClientState) => {
       if (!snapshot) return;
@@ -213,13 +161,9 @@ export function useGame() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [token, save]);
+  }, [setBalance, token]);
 
-  const register = (name: string) => {
-    const p = { token: newToken(), name: name.trim(), balance: 2000 };
-    save(p);
-    setProfile(p);
-  };
+  const register = (credentials: Credentials) => authenticate(credentials);
   const command = useCallback((action: Command): Promise<boolean> => {
     const socket = socketRef.current;
     if (!socket?.connected) {
@@ -379,25 +323,21 @@ export function useGame() {
     }
     socket
       .timeout(6000)
-      .emit(
-        "join",
-        { profile: profileRef.current, tableId },
-        (timeout: Error | null, ack: Ack) => {
-          if (timeout || !ack?.ok) {
-            setError(
-              timeout
-                ? "La table ne répond pas."
-                : (ack as { error: string }).error,
-            );
-            return;
-          }
-          roomRef.current = tableId;
-          const url = new URL(window.location.href);
-          url.searchParams.set("table", tableId);
-          window.history.replaceState({}, "", url);
-          if (rouletteOpen.current) socket.emit("roulette:join");
-        },
-      );
+      .emit("join", { tableId }, (timeout: Error | null, ack: Ack) => {
+        if (timeout || !ack?.ok) {
+          setError(
+            timeout
+              ? "La table ne répond pas."
+              : (ack as { error: string }).error,
+          );
+          return;
+        }
+        roomRef.current = tableId;
+        const url = new URL(window.location.href);
+        url.searchParams.set("table", tableId);
+        window.history.replaceState({}, "", url);
+        if (rouletteOpen.current) socket.emit("roulette:join");
+      });
   };
   return {
     profile,
@@ -418,6 +358,7 @@ export function useGame() {
     dismissEmote,
     setError,
     register,
+    signOut,
     command,
     joinBlackjack,
     pokerCommand,

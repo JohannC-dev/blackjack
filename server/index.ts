@@ -3,7 +3,16 @@ import { randomUUID } from "node:crypto";
 import next from "next";
 import { Server } from "socket.io";
 import { Effect, Option, Schema } from "effect";
+import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import { Table, type Player } from "./engine";
+import { auth } from "./auth";
+import { runDatabase } from "./db/client";
+import {
+  applyWalletDelta,
+  getOrCreateWallet,
+  readWallet,
+  type GameId,
+} from "./db/wallet";
 import { PokerManager } from "./poker";
 import { TowerManager } from "./tower";
 import { MinesGame } from "./mines";
@@ -32,7 +41,6 @@ import type {
   Command,
   MinesCommand,
   PokerCommand,
-  Profile,
   TowerCommand,
   Wallet,
 } from "../src/lib/types";
@@ -50,10 +58,44 @@ await Effect.runPromise(
   Effect.tryPromise({ try: () => app.prepare(), catch: toGameError }),
 );
 const handler = app.getRequestHandler();
-const http = createServer((req, res) => {
+const authHandler = toNodeHandler(auth);
+const http = createServer(async (req, res) => {
+  if (req.url?.startsWith("/api/auth/")) {
+    await authHandler(req, res);
+    return;
+  }
   if (req.url === "/api/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+  if (req.url === "/api/profile" && req.method === "GET") {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+    if (!session) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Non authentifié." }));
+      return;
+    }
+    try {
+      const wallet = await runDatabase(getOrCreateWallet(session.user.id));
+      res.writeHead(200, {
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json",
+      });
+      res.end(
+        JSON.stringify({
+          id: session.user.id,
+          name: session.user.name,
+          email: session.user.email,
+          balance: wallet.balance,
+        }),
+      );
+    } catch {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Profil indisponible." }));
+    }
     return;
   }
   handler(req, res);
@@ -72,6 +114,22 @@ const io = new Server(http, {
     }
   },
 });
+io.use(async (socket, next) => {
+  try {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(socket.request.headers),
+    });
+    if (!session) {
+      next(new Error("AUTH_REQUIRED"));
+      return;
+    }
+    socket.data.session = session;
+    next();
+  } catch {
+    next(new Error("AUTH_UNAVAILABLE"));
+  }
+});
+
 const tables = new Map<string, Table>();
 const profiles = new Map<string, Player>();
 const playersById = new Map<string, Player>();
@@ -166,11 +224,58 @@ function getTable(id: string) {
   return table;
 }
 /**
- * The balance is shared by the three games but only the wallet event carries
- * it to the client. It is pushed after every command and every tick, from the
- * server's current value, so snapshots of different games can no longer
- * overwrite each other with an older balance.
+ * Game engines use a hot balance. PostgreSQL remains authoritative: commands
+ * refresh before acting and only actual balance changes create a transaction.
  */
+const persistedBalances = new Map<string, number>();
+let financialQueue: Promise<unknown> = Promise.resolve();
+
+function serializeFinancial<A>(task: () => Promise<A>): Promise<A> {
+  const result = financialQueue.then(task, task);
+  financialQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+function refreshWalletEffect(player: Player) {
+  return Effect.tryPromise({
+    try: async () => {
+      const wallet = await runDatabase(readWallet(player.token));
+      player.balance = wallet.balance;
+      persistedBalances.set(player.id, wallet.balance);
+    },
+    catch: toGameError,
+  });
+}
+
+function persistWalletsEffect(game: GameId, reason: string) {
+  return Effect.tryPromise({
+    try: async () => {
+      for (const player of playersById.values()) {
+        const persisted = persistedBalances.get(player.id);
+        if (persisted === undefined || persisted === player.balance) continue;
+        const requestedBalance = player.balance;
+        const wallet = await runDatabase(
+          applyWalletDelta({
+            operationId: randomUUID(),
+            userId: player.token,
+            delta: requestedBalance - persisted,
+            game,
+            reason,
+            referenceId: player.roomId,
+          }),
+        );
+        player.balance = wallet.balance;
+        persistedBalances.set(player.id, wallet.balance);
+      }
+      syncWallets();
+    },
+    catch: toGameError,
+  });
+}
+
 function syncWallets() {
   for (const [playerId, player] of online) {
     const wallet = wallets.get(playerId);
@@ -182,9 +287,6 @@ function syncWallets() {
   }
 }
 
-function syncWalletsEffect() {
-  return gameEffect(() => syncWallets());
-}
 function leaveTowerEffect(socketId: string, player: Player, abandon: boolean) {
   return Effect.gen(function* () {
     const shouldLeave = yield* gameEffect(() => {
@@ -207,14 +309,30 @@ function replyError(ack: unknown, error: unknown) {
     } satisfies Ack);
 }
 
+async function executeReply<A, E, R>(
+  ack: unknown,
+  effect: Effect.Effect<A, E, never>,
+  onSuccess: (value: A) => R,
+) {
+  const result = await Effect.runPromise(Effect.either(effect));
+  if (isFailure(result)) replyError(ack, result.left);
+  else if (typeof ack === "function") ack(onSuccess(result.right));
+}
+
 function replyEffect<A, E, R = Ack>(
   ack: unknown,
   effect: Effect.Effect<A, E, never>,
   onSuccess: (value: A) => R = () => ({ ok: true }) as R,
 ) {
-  const result = runEffect(effect);
-  if (isFailure(result)) replyError(ack, result.left);
-  else if (typeof ack === "function") ack(onSuccess(result.right));
+  void executeReply(ack, effect, onSuccess);
+}
+
+function replyWalletEffect<A, E, R = Ack>(
+  ack: unknown,
+  effect: Effect.Effect<A, E, never>,
+  onSuccess: (value: A) => R = () => ({ ok: true }) as R,
+) {
+  void serializeFinancial(() => executeReply(ack, effect, onSuccess));
 }
 
 function runOrThrow<A, E>(effect: Effect.Effect<A, E, never>): A {
@@ -256,28 +374,37 @@ io.on("connection", (socket) => {
     );
   });
   socket.on("join", (data: unknown, ack: (value: Ack) => void) => {
-    const decoded = runEffect(
-      decodeInput(JoinSchema, data, "Le profil est invalide."),
-    );
-    if (isFailure(decoded)) {
-      replyError(ack, decoded.left);
-      return;
-    }
-    const safeData = decoded.right;
-    replyEffect(
+    replyWalletEffect(
       ack,
-      gameEffect((clock) => {
+      Effect.gen(function* () {
+        const safeData = yield* decodeInput(
+          JoinSchema,
+          data,
+          "La table demandée est invalide.",
+        );
+        const clock = yield* ServerClock;
         throttle(clock.now());
-        const profile = safeData.profile;
-        const name = profile.name
+        const session = socket.data.session as
+          { user: { id: string; name: string; email: string } } | undefined;
+        if (!session)
+          return yield* Effect.fail(new GameError("Session expirée."));
+
+        const name = session.user.name
           .trim()
           .replace(/[\u0000-\u001f\u007f]/g, "")
           .slice(0, 18);
-        if (!name) throw new Error("Choisissez un pseudo.");
-        if (player && player.token !== profile.token)
-          throw new Error("Reconnectez-vous pour changer de profil.");
+        if (!name)
+          return yield* Effect.fail(new GameError("Choisissez un pseudo."));
+        if (player && player.token !== session.user.id)
+          return yield* Effect.fail(
+            new GameError("Reconnectez-vous pour changer de profil."),
+          );
 
-        let known = profiles.get(profile.token);
+        const wallet = yield* Effect.tryPromise({
+          try: () => runDatabase(getOrCreateWallet(session.user.id)),
+          catch: toGameError,
+        });
+        let known = profiles.get(session.user.id);
         if (known && known.roomId !== safeData.tableId) {
           const connections = playerSockets.get(known.id);
           if (
@@ -285,8 +412,10 @@ io.on("connection", (socket) => {
             (connections.size > 1 ||
               (connections.size === 1 && !connections.has(socket.id)))
           )
-            throw new Error(
-              "Fermez votre autre onglet avant de changer de table.",
+            return yield* Effect.fail(
+              new GameError(
+                "Fermez votre autre onglet avant de changer de table.",
+              ),
             );
           const oldTable = tables.get(known.roomId);
           if (oldTable) runOrThrow(oldTable.removeEffect(known.id));
@@ -296,23 +425,22 @@ io.on("connection", (socket) => {
 
         const table = getTable(safeData.tableId);
         if (!known) {
-          const balance = Math.min(
-            1_000_000,
-            Math.round(profile.balance * 2) / 2,
-          );
           known = {
-            id: randomUUID(),
-            token: profile.token,
+            id: session.user.id,
+            token: session.user.id,
             name,
-            balance,
+            balance: wallet.balance,
             ready: false,
             connected: true,
             roomId: safeData.tableId,
             lastSeen: clock.now(),
           };
-          profiles.set(profile.token, known);
+          profiles.set(session.user.id, known);
           playersById.set(known.id, known);
         }
+        known.name = name;
+        known.balance = wallet.balance;
+        persistedBalances.set(known.id, wallet.balance);
         player = known;
         player.connected = true;
         player.lastSeen = clock.now();
@@ -322,22 +450,16 @@ io.on("connection", (socket) => {
         playerSockets.set(player.id, connections);
         online.set(player.id, player);
         socket.join(safeData.tableId);
-        // The shared socket is also used by Poker. Joining the room only adds
-        // a Blackjack spectator; the Blackjack view explicitly reserves a
-        // seat below.
         runOrThrow(table.observeEffect(player));
         runOrThrow(poker.connectEffect(player));
-        const wallet = wallets.get(player.id);
-        runOrThrow(syncWalletsEffect());
-        if (wallet && wallets.get(player.id) === wallet)
-          socket.emit("wallet", wallet);
+        syncWallets();
         publishMines(player.id);
         return {
           ok: true,
           playerId: player.id,
           tableId: safeData.tableId,
         } satisfies Ack;
-      }),
+      }).pipe(Effect.provide(ServerClockLive)),
       (value) => value,
     );
   });
@@ -355,7 +477,7 @@ io.on("connection", (socket) => {
     );
   });
   socket.on("command", (command: unknown, ack: (value: Ack) => void) => {
-    replyEffect(
+    replyWalletEffect(
       ack,
       inputEffect(
         BlackjackCommandSchema,
@@ -378,17 +500,20 @@ io.on("connection", (socket) => {
                 runOrThrow(blackjackTable.addEffect(player));
               return { blackjackTable, blackjackPlayerId };
             });
+            yield* refreshWalletEffect(
+              playersById.get(context.blackjackPlayerId)!,
+            );
             yield* context.blackjackTable.commandEffect(
               context.blackjackPlayerId,
               parsed as Command,
             );
-            yield* syncWalletsEffect();
+            yield* persistWalletsEffect("blackjack", parsed.type);
           }),
       ),
     );
   });
   socket.on("poker:command", (command: unknown, ack: (value: Ack) => void) => {
-    replyEffect(
+    replyWalletEffect(
       ack,
       inputEffect(
         PokerCommandSchema,
@@ -401,6 +526,7 @@ io.on("connection", (socket) => {
               if (!player) throw new Error("Vous n’êtes pas connecté au club.");
               return player;
             });
+            yield* refreshWalletEffect(currentPlayer);
             yield* poker.commandEffect(currentPlayer, parsed as PokerCommand);
             const blackjackTable = tables.get(currentPlayer.roomId);
             if (blackjackTable)
@@ -408,13 +534,13 @@ io.on("connection", (socket) => {
                 "state",
                 blackjackTable.snapshot(),
               );
-            yield* syncWalletsEffect();
+            yield* persistWalletsEffect("poker", parsed.type);
           }),
       ),
     );
   });
   socket.on("tower:command", (command: unknown, ack: (value: Ack) => void) => {
-    replyEffect(
+    replyWalletEffect(
       ack,
       inputEffect(
         TowerCommandSchema,
@@ -427,14 +553,15 @@ io.on("connection", (socket) => {
               if (!player) throw new Error("Vous n’êtes pas connecté au club.");
               return player;
             });
+            yield* refreshWalletEffect(currentPlayer);
             yield* tower.commandEffect(currentPlayer, parsed as TowerCommand);
-            yield* syncWalletsEffect();
+            yield* persistWalletsEffect("tower", parsed.type);
           }),
       ),
     );
   });
   socket.on("mines:command", (command: unknown, ack: (value: Ack) => void) => {
-    replyEffect(
+    replyWalletEffect(
       ack,
       inputEffect(
         MinesCommandSchema,
@@ -447,12 +574,13 @@ io.on("connection", (socket) => {
               if (!player) throw new Error("Vous n’êtes pas connecté au club.");
               return player;
             });
+            yield* refreshWalletEffect(currentPlayer);
             const minesGame = yield* getMinesEffect(currentPlayer.id);
             yield* minesGame.commandEffect(
               currentPlayer,
               parsed as MinesCommand,
             );
-            yield* syncWalletsEffect();
+            yield* persistWalletsEffect("mines", parsed.type);
           }),
       ),
     );
@@ -460,14 +588,21 @@ io.on("connection", (socket) => {
   socket.on(
     "roulette:command",
     (command: unknown, ack: (value: Ack) => void) => {
-      replyEffect(
+      replyWalletEffect(
         ack,
-        gameEffect((clock) => {
-          throttle(clock.now());
-          const currentPlayer = player;
-          if (!currentPlayer) throw new Error("Connectez-vous au club.");
-          roulette.run((r) => r.command(socket.id, currentPlayer.id, command));
-          syncWallets();
+        Effect.gen(function* () {
+          const currentPlayer = yield* gameEffect((clock) => {
+            throttle(clock.now());
+            if (!player) throw new Error("Connectez-vous au club.");
+            return player;
+          });
+          yield* refreshWalletEffect(currentPlayer);
+          yield* gameEffect(() => {
+            roulette.run((runtime) =>
+              runtime.command(socket.id, currentPlayer.id, command),
+            );
+          });
+          yield* persistWalletsEffect("roulette", "command");
         }),
       );
     },
@@ -512,13 +647,17 @@ io.on("connection", (socket) => {
   // Leaving the Tower view settles the climb: nothing stays at risk while the
   // player is in another game.
   socket.on("tower:leave", (ack: (value: Ack) => void) => {
-    replyEffect(
+    replyWalletEffect(
       ack,
-      gameEffect((clock) => {
-        throttle(clock.now());
-        if (!player) throw new Error("Vous n’êtes pas connecté au club.");
-        runOrThrow(leaveTowerEffect(socket.id, player, true));
-        runOrThrow(syncWalletsEffect());
+      Effect.gen(function* () {
+        const currentPlayer = yield* gameEffect((clock) => {
+          throttle(clock.now());
+          if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+          return player;
+        });
+        yield* refreshWalletEffect(currentPlayer);
+        yield* leaveTowerEffect(socket.id, currentPlayer, true);
+        yield* persistWalletsEffect("tower", "leave");
       }),
     );
   });
@@ -629,7 +768,7 @@ const maintenanceEffect = Effect.provide(
     yield* Effect.either(poker.tickEffect(now));
     yield* Effect.either(gameEffect(() => roulette.run((r) => r.tick)));
     yield* Effect.either(tower.tickEffect(now));
-    yield* Effect.either(syncWalletsEffect());
+    yield* Effect.either(persistWalletsEffect("system", "maintenance"));
     for (const [token, profile] of profiles)
       if (!profile.connected && now - profile.lastSeen > 24 * 60 * 60_000) {
         yield* Effect.either(
@@ -641,6 +780,7 @@ const maintenanceEffect = Effect.provide(
             profiles.delete(token);
             wallets.delete(profile.id);
             playersById.delete(profile.id);
+            persistedBalances.delete(profile.id);
             mines.delete(profile.id);
           }),
         );
@@ -657,6 +797,6 @@ console.log(
   `MINUIT · http://localhost:${port} · ${dev ? "development" : "production"}`,
 );
 const maintenanceTimer = setInterval(() => {
-  void Effect.runPromise(maintenanceEffect);
+  void serializeFinancial(() => Effect.runPromise(maintenanceEffect));
 }, 100);
 maintenanceTimer.unref();

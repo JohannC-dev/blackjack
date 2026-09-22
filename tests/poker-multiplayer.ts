@@ -1,13 +1,12 @@
 import { strict as assert } from "node:assert";
-import { randomUUID } from "node:crypto";
 import { io, type Socket } from "socket.io-client";
+import { createTestSession, socketAuth } from "./auth-session";
 import type { Ack, PokerClientState, PokerCommand } from "../src/lib/types";
 
 const url = process.env.TEST_URL ?? "http://localhost:3000";
 type Client = {
   socket: Socket;
   id: string;
-  token: string;
   poker?: PokerClientState;
 };
 const sockets: Socket[] = [];
@@ -20,16 +19,16 @@ async function until(check: () => boolean, message: string, timeout = 15_000) {
   }
 }
 
-async function connect(name: string, token = randomUUID()): Promise<Client> {
-  const socket = io(url, { transports: ["websocket"], reconnection: false });
+async function connect(name: string): Promise<Client> {
+  const session = await createTestSession(url, name);
+  const socket = io(url, socketAuth(session, url));
   sockets.push(socket);
-  const client: Client = { socket, id: "", token };
+  const client: Client = { socket, id: "" };
   socket.on("poker:state", (state: PokerClientState) => (client.poker = state));
   await until(() => socket.connected, `${name} ne se connecte pas`);
-  const ack: Ack = await socket.timeout(5_000).emitWithAck("join", {
-    tableId: "POKERTEST",
-    profile: { token, name, balance: 10_000 },
-  });
+  const ack: Ack = await socket
+    .timeout(5_000)
+    .emitWithAck("join", { tableId: "POKERTEST" });
   assert(ack.ok);
   client.id = ack.playerId!;
   await until(() => !!client.poker, `${name} ne reçoit pas l’état Poker`);
@@ -59,8 +58,8 @@ try {
       bob.poker?.table?.phase === "preflop",
     "La main cash ne démarre pas",
   );
-  assert.equal(alice.poker!.balance, 8_000);
-  assert.equal(bob.poker!.balance, 8_000);
+  assert.equal(alice.poker!.balance, 0);
+  assert.equal(bob.poker!.balance, 0);
   assert.equal(alice.poker!.table!.id, bob.poker!.table!.id);
 
   const aliceViewOfBob = alice.poker!.table!.seats.find(

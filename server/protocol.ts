@@ -1,7 +1,6 @@
 import { Schema } from "effect";
 import { MINES_TARGETS } from "../src/lib/mines";
 
-const Token = Schema.String.pipe(Schema.pattern(/^[a-f0-9-]{36}$/i));
 const TableId = Schema.String.pipe(Schema.pattern(/^[A-Z0-9]{4,12}$/));
 const Name = Schema.String.pipe(Schema.minLength(1));
 const NonNegativeNumber = Schema.Number.pipe(
@@ -13,14 +12,7 @@ const Index = Schema.Int.pipe(Schema.between(0, 24));
 const MinesTarget = Schema.Literal(...MINES_TARGETS);
 const HandId = Schema.String.pipe(Schema.minLength(1));
 
-export const ProfileSchema = Schema.Struct({
-  token: Token,
-  name: Name,
-  balance: NonNegativeNumber,
-});
-
 export const JoinSchema = Schema.Struct({
-  profile: ProfileSchema,
   tableId: TableId,
 });
 

@@ -1,14 +1,17 @@
 import { chromium } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { authenticateContext } from "./auth-session";
 
 const baseUrl = process.env.TEST_URL ?? "http://localhost:3000";
 const table = randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase();
 const browser = await chromium.launch({ headless: true });
 
 try {
-  const page = await browser.newPage({
+  const context = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
   });
+  await authenticateContext(context, baseUrl, "Test visuel");
+  const page = await context.newPage();
   page.on("console", (message) =>
     console.log(`[browser:${message.type()}] ${message.text()}`),
   );
@@ -19,12 +22,6 @@ try {
     console.log(
       `[request:failed] ${request.url()} ${request.failure()?.errorText}`,
     ),
-  );
-  await page.addInitScript(
-    (profile) => {
-      localStorage.setItem("minuit.profile.v1", JSON.stringify(profile));
-    },
-    { token: randomUUID(), name: "Test visuel", balance: 2000 },
   );
   await page.goto(`${baseUrl}/?table=${table}`);
   await page.getByTitle("Blackjack").click();

@@ -190,7 +190,11 @@ export function RouletteCasino({
     <div className="casino-shell roulette-shell">
       <CasinoRail active="roulette" onNavigate={onNavigate} />
       <div className="workspace">
-        <ClubHeader balance={balance} name={game.profile?.name ?? ""} />
+        <ClubHeader
+          balance={balance}
+          name={game.profile?.name ?? ""}
+          onSignOut={game.signOut}
+        />
         <main className="roulette-page">
           <div className="page-heading">
             <div>

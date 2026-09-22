@@ -47,19 +47,12 @@ import { useGame } from "@/lib/use-game";
 import { CasinoRail, ClubHeader, getClubBalance } from "../../ui";
 import type { CasinoView } from "@/lib/navigation";
 import { BlackjackIcon } from "../../ui/blackjack-icon";
-import {
-  useCountdownSeconds,
-  useServerClockNow,
-} from "../../ui/countdown";
+import { useCountdownSeconds, useServerClockNow } from "../../ui/countdown";
 import { PlayingCard } from "../../ui/playing-card";
 import { PokerLobby } from "./poker-lobby";
 import { PokerShuffleAnimation } from "../../ui/poker-shuffle";
 import { RoomArt } from "./room-art";
-import {
-  EmoteButton,
-  EmoteLayer,
-  type EmotePlayer,
-} from "../../ui/emotes";
+import { EmoteButton, EmoteLayer, type EmotePlayer } from "../../ui/emotes";
 import { GamePoster } from "../../ui/game-poster";
 import { MineBomb, MineDiamond } from "../mines/mine-art";
 import { TowerPosterArt } from "../tower/tower-art";
@@ -99,6 +92,7 @@ export function CasinoHome({
         <ClubHeader
           balance={getClubBalance(game)}
           name={game.profile?.name ?? ""}
+          onSignOut={game.signOut}
         />
         <main className="club-lobby">
           <section className="club-hero">
@@ -258,6 +252,7 @@ export function PokerCasino({
         <ClubHeader
           balance={getClubBalance(game)}
           name={game.profile?.name ?? ""}
+          onSignOut={game.signOut}
         />
         {poker?.status === "table" && poker.table ? (
           <PokerTable game={game} />

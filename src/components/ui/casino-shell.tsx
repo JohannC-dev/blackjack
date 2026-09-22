@@ -147,10 +147,12 @@ export const ClubHeader = memo(function ClubHeader({
   balance,
   name,
   href,
+  onSignOut,
 }: {
   balance: number;
   name: string;
   href?: string;
+  onSignOut?: () => void | Promise<void>;
 }) {
   const brand = (
     <>
@@ -175,9 +177,16 @@ export const ClubHeader = memo(function ClubHeader({
           <span>cr&#233;dits</span>
           <Coins size={16} className="wallet-coin" />
         </div>
-        <div className="profile-avatar" title={name || "Votre profil"}>
+        <button
+          type="button"
+          className="profile-avatar"
+          title={onSignOut ? "Se déconnecter" : name || "Votre profil"}
+          aria-label={onSignOut ? "Se déconnecter" : name || "Votre profil"}
+          onClick={onSignOut}
+          disabled={!onSignOut}
+        >
           {(name || "M").slice(0, 1).toUpperCase()}
-        </div>
+        </button>
       </div>
     </header>
   );

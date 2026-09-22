@@ -78,11 +78,7 @@ import {
   SettlementChipAnimation,
 } from "../../ui/table-chips";
 import { PokerShuffleAnimation } from "../../ui/poker-shuffle";
-import {
-  EmoteButton,
-  EmoteLayer,
-  type EmotePlayer,
-} from "../../ui/emotes";
+import { EmoteButton, EmoteLayer, type EmotePlayer } from "../../ui/emotes";
 import type { EmoteRequest } from "@/lib/emotes";
 
 const THREE_PAYOUTS = [
@@ -921,11 +917,15 @@ const BlackjackSidebar = memo(function BlackjackSidebar({
 const BlackjackTopbar = memo(function BlackjackTopbar({
   balance,
   name,
+  onSignOut,
 }: {
   balance: number;
   name: string;
+  onSignOut: () => Promise<void>;
 }) {
-  return <ClubHeader balance={balance} name={name} href="/" />;
+  return (
+    <ClubHeader balance={balance} name={name} href="/" onSignOut={onSignOut} />
+  );
 });
 const BlackjackPageHeading = memo(function BlackjackPageHeading({
   onInvite,
@@ -1061,6 +1061,10 @@ export function BlackjackCasino({
     "rules" | "tables" | "history" | "invite" | null
   >(null);
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"sign-in" | "sign-up">("sign-up");
+  const [authPending, setAuthPending] = useState(false);
   const [tableCode, setTableCode] = useState("");
   const [selectedSeat, setSelectedSeat] = useState(2);
   const [betHistory, setBetHistory] = useState<{ seat: number; before: Bet }[]>(
@@ -1512,6 +1516,7 @@ export function BlackjackCasino({
         <BlackjackTopbar
           balance={balance}
           name={me?.name ?? profile?.name ?? "M"}
+          onSignOut={game.signOut}
         />
 
         <main>
@@ -2108,35 +2113,93 @@ export function BlackjackCasino({
               On s’occupe des cartes.
             </p>
             <form
-              onSubmit={(event) => {
+              onSubmit={async (event) => {
                 event.preventDefault();
-                if (name.trim()) game.register(name);
+                setAuthPending(true);
+                const message = await game.register({
+                  mode: authMode,
+                  name: authMode === "sign-up" ? name : undefined,
+                  email,
+                  password,
+                });
+                setAuthPending(false);
+                if (message) game.setError(message);
               }}
             >
-              <label htmlFor="player-name">Votre pseudo</label>
+              {authMode === "sign-up" && (
+                <>
+                  <label htmlFor="player-name">Votre pseudo</label>
+                  <input
+                    autoFocus
+                    id="player-name"
+                    placeholder="Comment vous appelle-t-on ?"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    minLength={1}
+                    maxLength={18}
+                    required
+                    autoComplete="nickname"
+                  />
+                </>
+              )}
+              <label htmlFor="player-email">Votre email</label>
               <input
-                autoFocus
-                id="player-name"
-                placeholder="Comment vous appelle-t-on ?"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                minLength={1}
-                maxLength={18}
+                autoFocus={authMode === "sign-in"}
+                id="player-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
                 required
-                autoComplete="nickname"
+                autoComplete="email"
+              />
+              <label htmlFor="player-password">Votre mot de passe</label>
+              <input
+                id="player-password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                minLength={8}
+                maxLength={128}
+                required
+                autoComplete={
+                  authMode === "sign-up" ? "new-password" : "current-password"
+                }
               />
               <button
                 className="button primary"
                 type="submit"
-                disabled={!name.trim()}
+                disabled={
+                  authPending ||
+                  !email.trim() ||
+                  password.length < 8 ||
+                  (authMode === "sign-up" && !name.trim())
+                }
               >
-                Entrer dans le club
+                {authPending
+                  ? "Connexion..."
+                  : authMode === "sign-up"
+                    ? "Créer mon compte"
+                    : "Entrer dans le club"}
                 <ArrowRight size={18} />
               </button>
             </form>
+            <button
+              type="button"
+              className="welcome-auth-switch"
+              onClick={() => {
+                game.setError("");
+                setAuthMode((mode) =>
+                  mode === "sign-up" ? "sign-in" : "sign-up",
+                );
+              }}
+            >
+              {authMode === "sign-up"
+                ? "J’ai déjà un compte"
+                : "Créer un compte"}
+            </button>
             <div className="welcome-note">
               <ShieldCheck size={13} />
-              Sans inscription. Uniquement des crédits fictifs.
+              Compte protégé. Uniquement des crédits fictifs.
             </div>
           </div>
         </Modal>

@@ -2127,6 +2127,10 @@ button:disabled:active {
   color: #d1c1ee;
   font-size: 12px;
   font-weight: 700;
+  cursor: pointer;
+}
+.profile-avatar:disabled {
+  cursor: default;
 }
 main {
   max-width: 1640px;
@@ -11769,4 +11773,22 @@ h1 > span:not(.live-tag) {
   bottom: auto;
   width: 22px;
   height: 22px;
+}
+
+.welcome-content form label:not(:first-child) {
+  display: block;
+  margin-top: 12px;
+}
+.welcome-auth-switch {
+  margin-top: 12px;
+  border: 0;
+  background: transparent;
+  color: #bda5d4;
+  font:
+    500 11px "DM Sans",
+    sans-serif;
+  cursor: pointer;
+}
+.welcome-auth-switch:hover {
+  color: #eadcf6;
 }
