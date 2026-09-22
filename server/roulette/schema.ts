@@ -2,9 +2,8 @@ import { Effect, Either, Schema } from "effect";
 import {
   isValidRouletteBet,
   rouletteBetId,
-  rouletteTotal,
   ROULETTE_MAX_BETS,
-  ROULETTE_MAX_TOTAL,
+  ROULETTE_MAX_PER_SPOT,
   type RouletteBet,
 } from "../../src/lib/roulette";
 import type { RouletteCommand } from "../../src/lib/types";
@@ -62,9 +61,9 @@ export const decodeBets = (input: unknown) =>
       return yield* new InvalidBets({
         message: "Trop de mises différentes sur le tapis.",
       });
-    if (rouletteTotal(bets) > ROULETTE_MAX_TOTAL)
+    if (bets.some((bet) => bet.amount > ROULETTE_MAX_PER_SPOT))
       return yield* new InvalidBets({
-        message: `La mise totale est limitée à ${ROULETTE_MAX_TOTAL} crédits.`,
+        message: `La mise est limitée à ${ROULETTE_MAX_PER_SPOT} crédits par case.`,
       });
     return bets;
   });

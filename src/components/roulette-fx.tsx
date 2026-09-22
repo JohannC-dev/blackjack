@@ -8,7 +8,7 @@ import {
 } from "react";
 import { CASINO_CHIP_DENOMINATIONS } from "@/lib/chips";
 import {
-  ROULETTE_MAX_TOTAL,
+  ROULETTE_MAX_PER_SPOT,
   rouletteBetId,
   rouletteBetWins,
 } from "@/lib/roulette";
@@ -146,7 +146,7 @@ export function RouletteFx({
         >
           <TableChipStack
             amount={amount}
-            maximum={ROULETTE_MAX_TOTAL / 2}
+            maximum={ROULETTE_MAX_PER_SPOT / 2}
             className="roulette-chip"
           />
         </span>
