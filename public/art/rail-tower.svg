@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="floor" x2="0" y2="1">
+      <stop stop-color="#5d477d"/>
+      <stop offset="1" stop-color="#2e223d"/>
+    </linearGradient>
+    <linearGradient id="gold" x2="0" y2="1">
+      <stop stop-color="#fff0b5"/>
+      <stop offset="1" stop-color="#c58e54"/>
+    </linearGradient>
+  </defs>
+  <path d="m24 12-3-8 7 4 4-7 4 7 7-4-3 8z" fill="url(#gold)" stroke="#ffe8aa" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="9" y="46" width="46" height="13" rx="3" fill="#1a1425" stroke="#b79afa" stroke-width="2"/>
+  <rect x="12" y="43" width="12" height="12" rx="2" fill="url(#floor)" stroke="#c7a9ff" stroke-width="1.5"/>
+  <rect x="26" y="43" width="12" height="12" rx="2" fill="url(#gold)" stroke="#fff0bd" stroke-width="1.5"/>
+  <rect x="40" y="43" width="12" height="12" rx="2" fill="url(#floor)" stroke="#c7a9ff" stroke-width="1.5"/>
+  <rect x="9" y="31" width="46" height="13" rx="3" fill="#1a1425" stroke="#b79afa" stroke-width="2"/>
+  <rect x="12" y="28" width="12" height="12" rx="2" fill="url(#gold)" stroke="#fff0bd" stroke-width="1.5"/>
+  <rect x="26" y="28" width="12" height="12" rx="2" fill="url(#floor)" stroke="#c7a9ff" stroke-width="1.5"/>
+  <rect x="40" y="28" width="12" height="12" rx="2" fill="url(#floor)" stroke="#c7a9ff" stroke-width="1.5"/>
+  <rect x="9" y="16" width="46" height="13" rx="3" fill="#1a1425" stroke="#b79afa" stroke-width="2"/>
+  <rect x="12" y="13" width="12" height="12" rx="2" fill="url(#floor)" stroke="#c7a9ff" stroke-width="1.5"/>
+  <rect x="26" y="13" width="12" height="12" rx="2" fill="url(#floor)" stroke="#c7a9ff" stroke-width="1.5"/>
+  <rect x="40" y="13" width="12" height="12" rx="2" fill="url(#gold)" stroke="#fff0bd" stroke-width="1.5"/>
+</svg>

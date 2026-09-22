@@ -2927,9 +2927,8 @@ h1 > span:not(.live-tag) {
 }
 .game-controls-bar .chip-picker {
   max-width: 100%;
-  overflow-x: auto;
+  overflow: visible;
   padding: 4px 2px 7px;
-  scrollbar-width: thin;
 }
 .chip-range-button {
   flex: 0 0 auto;
@@ -11240,17 +11239,10 @@ h1 > span:not(.live-tag) {
   color: var(--tower-gold, #f3c969);
 }
 .mines-shell .mines-bet-control .chip-picker {
-  display: grid;
-  grid-template-columns: 28px repeat(4, minmax(0, 1fr)) 28px;
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 10px;
   width: 100%;
-}
-.mines-shell .mines-bet-control .chip-picker .chip {
-  width: 100%;
-  min-width: 0;
-  height: auto;
-  aspect-ratio: 1;
 }
 .mines-shell .mines-bet-control .chip-picker > .icon-button {
   width: 28px;
@@ -11304,7 +11296,7 @@ h1 > span:not(.live-tag) {
 
 @media (max-width: 1180px) {
   .mines-shell .game-controls-bar {
-    grid-template-columns: minmax(0, 1fr) minmax(230px, 0.8fr);
+    grid-template-columns: minmax(0, 1fr) minmax(290px, 0.8fr);
     gap: 16px;
   }
   .mines-shell .game-controls-bar .game-action,

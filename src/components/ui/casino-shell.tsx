@@ -1,10 +1,8 @@
 "use client";
 
 import {
-  Castle,
   CircleHelp,
   Coins,
-  Disc3,
   History,
   House,
   Settings2,
@@ -22,6 +20,25 @@ type Navigate = (view: CasinoView) => void;
 
 const railButton =
   "relative grid h-[43px] w-[43px] place-items-center rounded-xl border-0 bg-transparent text-[#777185] transition-colors hover:text-[#c7a9ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b79afa]/60 before:pointer-events-none before:absolute before:-left-[17px] before:top-1/2 before:h-[22px] before:w-[3px] before:-translate-y-1/2 before:rounded-r-[3px] before:bg-[#c7a9ff] before:opacity-0 before:shadow-[0_0_14px_#c7a9ff80] before:transition-opacity data-[active=true]:bg-[#9f79ea19] data-[active=true]:text-[#bd9dff] data-[active=true]:before:opacity-100";
+
+const railGameArt = {
+  poker: "/art/rail-poker.svg?v=2",
+  tower: "/art/rail-tower.svg",
+  roulette: "/art/rail-roulette.svg",
+} as const;
+
+function RailGameIcon({ game }: { game: "poker" | "tower" | "roulette" }) {
+  return (
+    <img
+      src={railGameArt[game]}
+      alt=""
+      width={28}
+      height={28}
+      aria-hidden="true"
+      draggable={false}
+    />
+  );
+}
 
 export const CasinoRail = memo(function CasinoRail({
   active,
@@ -76,9 +93,9 @@ export const CasinoRail = memo(function CasinoRail({
           "Jeu de la mine",
           <MineBomb className="!static !h-[28px] !w-[28px]" />,
         )}
-        {item("poker", "Poker", <Spade size={21} />)}
-        {item("tower", "La Tower", <Castle size={21} />)}
-        {item("roulette", "Roulette", <Disc3 size={21} />)}
+        {item("poker", "Poker", <RailGameIcon game="poker" />)}
+        {item("tower", "La Tower", <RailGameIcon game="tower" />)}
+        {item("roulette", "Roulette", <RailGameIcon game="roulette" />)}
         {onTables && (
           <button
             type="button"

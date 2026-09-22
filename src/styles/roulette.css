@@ -721,6 +721,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  overflow-x: auto;
+  padding: 10px 8px 12px;
+  scrollbar-width: thin;
 }
 .roulette-players {
   display: flex;
