@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { gameEffect } from "./effect";
 import type { Player } from "./engine";
+import { inMemoryGameWallet, type GameWallet } from "./game-wallet";
 import type {
   TowerCell,
   TowerClientState,
@@ -82,6 +83,7 @@ export class TowerManager {
     private random: TowerRandom = randomInt,
     /** Development aid: ordinary climbs without any trap. */
     private noTraps = false,
+    private readonly wallet: GameWallet = inMemoryGameWallet,
   ) {}
 
   publicState(roomId: string | undefined): TowerPublicState {
@@ -251,9 +253,19 @@ export class TowerManager {
       );
     if (this.runs.get(player.id)?.status === "playing")
       throw new Error("Terminez d’abord votre ascension en cours.");
-    if (player.balance < bet) throw new Error("Votre solde est insuffisant.");
+    if (this.wallet.balance(player) < bet)
+      throw new Error("Votre solde est insuffisant.");
 
-    player.balance -= bet;
+    const runId = randomUUID();
+    this.wallet.debit(player, {
+      operationId: `tower:${runId}:wager`,
+      game: "tower",
+      kind: "wager",
+      reason: "start",
+      referenceId: runId,
+      amount: bet,
+      metadata: { difficulty },
+    });
     this.pots.set(
       player.id,
       Math.round(
@@ -279,7 +291,7 @@ export class TowerManager {
       };
     }
     this.runs.set(player.id, {
-      id: randomUUID(),
+      id: runId,
       difficulty,
       cols,
       bet,
@@ -398,7 +410,26 @@ export class TowerManager {
     run.status = status;
     run.payout = payout;
     run.endedAt = now;
-    run.player.balance += payout;
+    if (payout > 0) {
+      const refund = run.floor === 0 && payout === run.bet;
+      let reason = "cashout";
+      if (refund) reason = "abandoned-before-first-floor";
+      else if (run.lucky) reason = "lucky-payout";
+      else if (status === "topped") reason = "top";
+      this.wallet.credit(run.player, {
+        operationId: `tower:${run.id}:settlement`,
+        game: "tower",
+        kind: refund ? "refund" : "payout",
+        reason,
+        referenceId: run.id,
+        amount: payout,
+        metadata: {
+          difficulty: run.difficulty,
+          floor: run.floor,
+          lucky: run.lucky,
+        },
+      });
+    }
     for (let floor = 0; floor < TOWER_FLOORS; floor++)
       run.rows[floor].cells ??= this.cells(run, floor);
 

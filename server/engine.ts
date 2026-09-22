@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { gameEffect } from "./effect";
+import { inMemoryGameWallet, type GameWallet } from "./game-wallet";
 import {
   betTotal,
   canSplitCards,
@@ -61,6 +62,7 @@ export class Table {
     id: string,
     private publish: () => void = () => {},
     shoe?: Card[],
+    private readonly wallet: GameWallet = inMemoryGameWallet,
   ) {
     this.shoe = shoe ?? makeShoe();
     this.state = {
@@ -237,7 +239,7 @@ export class Table {
       } else {
         if (command.color !== "red" && command.color !== "black")
           throw new Error("Choisissez rouge ou noir.");
-        if (player.balance < gamble.stake)
+        if (this.wallet.balance(player) < gamble.stake)
           throw new Error(
             "Ces gains ont déjà été engagés dans la partie. Encaissez cette option.",
           );
@@ -261,12 +263,22 @@ export class Table {
         gamble.choice = command.color;
         gamble.card = card;
         gamble.result = won ? "win" : "lose";
+        const gambleNumber = gamble.streak + 1;
+        const change = {
+          operationId: `blackjack:${this.state.id}:${gamble.round}:${playerId}:gamble:${gambleNumber}`,
+          game: "blackjack" as const,
+          kind: won ? ("payout" as const) : ("additional-wager" as const),
+          reason: won ? "gamble-win" : "gamble-loss",
+          referenceId: `${this.state.id}:${gamble.round}`,
+          amount: stake,
+          metadata: { color: command.color, gambleNumber },
+        };
         if (won) {
-          player.balance += stake;
+          this.wallet.credit(player, change);
           gamble.stake *= 2;
           gamble.streak += 1;
         } else {
-          player.balance -= stake;
+          this.wallet.debit(player, change);
           gamble.status = "lost";
         }
       }
@@ -278,9 +290,17 @@ export class Table {
       if (this.state.phase !== "betting")
         throw new Error("Attendez la prochaine manche.");
       if (command.type === "refill") {
-        if (player.balance >= 5)
+        const balance = this.wallet.balance(player);
+        if (balance >= 5)
           throw new Error("La recharge est disponible sous 5 crédits.");
-        player.balance = 2000;
+        this.wallet.credit(player, {
+          operationId: `blackjack:${this.state.id}:${playerId}:refill:${randomUUID()}`,
+          game: "blackjack",
+          kind: "grant",
+          reason: "refill",
+          referenceId: playerId,
+          amount: 2000 - balance,
+        });
       } else if (command.type === "ready") {
         if (typeof command.ready !== "boolean")
           throw new Error("Action invalide.");
@@ -288,7 +308,8 @@ export class Table {
         const total = own.reduce((sum, s) => sum + betTotal(s.bet), 0);
         if (
           command.ready &&
-          (!own.some((s) => s.bet.main >= 5) || total > player.balance)
+          (!own.some((s) => s.bet.main >= 5) ||
+            total > this.wallet.balance(player))
         )
           throw new Error("Vérifiez vos mises et votre solde.");
         player.ready = command.ready;
@@ -301,7 +322,7 @@ export class Table {
           0,
         );
         if (!total) throw new Error("Aucune mise précédente à répéter.");
-        if (total > player.balance)
+        if (total > this.wallet.balance(player))
           throw new Error("Vous n’avez pas assez de crédits.");
         for (const seat of own) seat.bet = { ...seat.previousBet! };
         player.ready = false;
@@ -347,7 +368,7 @@ export class Table {
             const reserved = this.state.seats
               .filter((s) => s.playerId === playerId && s !== seat)
               .reduce((sum, s) => sum + betTotal(s.bet), 0);
-            if (reserved + betTotal(b) > player.balance)
+            if (reserved + betTotal(b) > this.wallet.balance(player))
               throw new Error("Vous n’avez pas assez de crédits.");
             seat.bet = { main: b.main, three: b.three, pairs: b.pairs };
           }
@@ -382,10 +403,18 @@ export class Table {
         if (
           hand.cards.length !== 2 ||
           hand.splitAces ||
-          player.balance < hand.bet
+          this.wallet.balance(player) < hand.bet
         )
           throw new Error("Impossible de doubler cette main.");
-        player.balance -= hand.bet;
+        this.wallet.debit(player, {
+          operationId: `blackjack:${this.state.id}:${this.state.round}:${hand.id}:double`,
+          game: "blackjack",
+          kind: "additional-wager",
+          reason: "double",
+          referenceId: `${this.state.id}:${this.state.round}`,
+          amount: hand.bet,
+          metadata: { handId: hand.id, seat: seat.index },
+        });
         seat.committed += hand.bet;
         hand.bet *= 2;
         hand.cards.push(this.draw());
@@ -398,10 +427,18 @@ export class Table {
           !canSplitCards(hand.cards) ||
           hand.splitAces ||
           seat.hands.length >= 4 ||
-          player.balance < hand.bet
+          this.wallet.balance(player) < hand.bet
         )
           throw new Error("Impossible de séparer cette main.");
-        player.balance -= hand.bet;
+        this.wallet.debit(player, {
+          operationId: `blackjack:${this.state.id}:${this.state.round}:${hand.id}:split:${seat.hands.length}`,
+          game: "blackjack",
+          kind: "additional-wager",
+          reason: "split",
+          referenceId: `${this.state.id}:${this.state.round}`,
+          amount: hand.bet,
+          metadata: { handId: hand.id, seat: seat.index },
+        });
         seat.committed += hand.bet;
         const card = hand.cards.pop()!;
         hand.split = true;
@@ -495,7 +532,8 @@ export class Table {
         );
     for (const [playerId, total] of reserved) {
       const player = this.players.get(playerId);
-      if (player?.ready && total > player.balance) player.ready = false;
+      if (player?.ready && total > this.wallet.balance(player))
+        player.ready = false;
     }
     const seats = this.state.seats.filter(
       (s) =>
@@ -513,6 +551,27 @@ export class Table {
       this.startShuffle(Date.now(), true);
       return;
     }
+    const nextRound = this.state.round + 1;
+    const committedByPlayer = new Map<string, number>();
+    for (const seat of seats)
+      committedByPlayer.set(
+        seat.playerId!,
+        (committedByPlayer.get(seat.playerId!) ?? 0) + betTotal(seat.bet),
+      );
+    for (const [playerId, amount] of committedByPlayer)
+      this.wallet.debit(this.players.get(playerId)!, {
+        operationId: `blackjack:${this.state.id}:${nextRound}:${playerId}:wager`,
+        game: "blackjack",
+        kind: "wager",
+        reason: "round-start",
+        referenceId: `${this.state.id}:${nextRound}`,
+        amount,
+        metadata: {
+          seats: seats
+            .filter((seat) => seat.playerId === playerId)
+            .map((seat) => seat.index),
+        },
+      });
     this.expireIdleSeats(new Set(seats.map((seat) => seat.index)));
     this.state.gambles = this.state.gambles.filter(
       (entry) => entry.status === "available",
@@ -532,7 +591,6 @@ export class Table {
       const player = this.players.get(seat.playerId!)!;
       seat.previousBet = { ...seat.bet };
       seat.committed = betTotal(seat.bet);
-      player.balance -= seat.committed;
       seat.hands = [
         {
           id: randomUUID(),
@@ -555,6 +613,7 @@ export class Table {
   private finishDeal() {
     this.turnOrder = [];
     let hasSideBets = false;
+    const payouts = new Map<string, number>();
     for (const seat of this.state.seats) {
       if (!seat.hands.length) continue;
       const hand = seat.hands[0];
@@ -563,12 +622,26 @@ export class Table {
         three: evaluate21Plus3(cards, seat.bet.three),
         pairs: evaluateSuperPairs(cards, seat.bet.pairs),
       };
-      this.players.get(seat.playerId!)!.balance +=
+      const payout =
         (seat.sides.three?.payout ?? 0) + (seat.sides.pairs?.payout ?? 0);
+      if (payout > 0)
+        payouts.set(
+          seat.playerId!,
+          (payouts.get(seat.playerId!) ?? 0) + payout,
+        );
       hasSideBets ||= seat.bet.three > 0 || seat.bet.pairs > 0;
       this.updateHand(hand);
       this.turnOrder.push(hand.id);
     }
+    for (const [playerId, amount] of payouts)
+      this.wallet.credit(this.players.get(playerId)!, {
+        operationId: `blackjack:${this.state.id}:${this.state.round}:${playerId}:side-payout`,
+        game: "blackjack",
+        kind: "payout",
+        reason: "side-bets",
+        referenceId: `${this.state.id}:${this.state.round}`,
+        amount,
+      });
     if (hasSideBets) {
       this.state.phase = "bonuses";
       this.state.message =
@@ -598,6 +671,7 @@ export class Table {
     const dealerTotal = score(this.state.dealer).total;
     const dealerBJ = isBlackjack(this.state.dealer);
     const nets = new Map<string, number>();
+    const payouts = new Map<string, number>();
     const historyBets = new Map<string, HistoryBet[]>();
     for (const seat of this.state.seats) {
       if (!seat.hands.length) continue;
@@ -653,13 +727,26 @@ export class Table {
         });
       }
       historyBets.set(seat.playerId!, bets);
-      this.players.get(seat.playerId!)!.balance += mainPayout;
+      if (mainPayout > 0)
+        payouts.set(
+          seat.playerId!,
+          (payouts.get(seat.playerId!) ?? 0) + mainPayout,
+        );
       nets.set(
         seat.playerId!,
         (nets.get(seat.playerId!) ?? 0) +
           bets.slice(seatBetsStart).reduce((sum, bet) => sum + bet.net, 0),
       );
     }
+    for (const [playerId, amount] of payouts)
+      this.wallet.credit(this.players.get(playerId)!, {
+        operationId: `blackjack:${this.state.id}:${this.state.round}:${playerId}:settlement`,
+        game: "blackjack",
+        kind: "payout",
+        reason: "round-settlement",
+        referenceId: `${this.state.id}:${this.state.round}`,
+        amount,
+      });
     for (const [playerId, net] of nets)
       this.state.history.unshift({
         round: this.state.round,

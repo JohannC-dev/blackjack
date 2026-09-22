@@ -13,13 +13,17 @@ import {
   UnknownCommand,
   ROULETTE_SPIN_MS,
 } from "../server/roulette";
-import { targetAt, zeroTargetAt } from "../src/components/games/roulette/roulette-casino";
+import {
+  targetAt,
+  zeroTargetAt,
+} from "../src/components/games/roulette/roulette-casino";
 import {
   isValidRouletteBet,
   rouletteBetWins,
   rouletteReturn,
 } from "../src/lib/roulette";
 import type { RouletteTableState } from "../src/lib/types";
+import { inMemoryGameWallet } from "../server/game-wallet";
 
 type Member = {
   id: string;
@@ -50,19 +54,8 @@ function club(draw: () => number = () => 17, tableId = "MINUIT") {
     wheel: { spin: Effect.sync(draw) },
     players: {
       get: (id) => Effect.sync(() => Option.fromNullable(members.get(id))),
-      debit: (id, amount) =>
-        Effect.suspend(() => {
-          const member = members.get(id);
-          if (!member || member.balance < amount)
-            return Effect.fail(new InsufficientCredits());
-          member.balance -= amount;
-          return Effect.void;
-        }),
-      credit: (id, amount) =>
-        Effect.sync(() => {
-          members.get(id)!.balance += amount;
-        }),
     },
+    wallet: inMemoryGameWallet,
     transport: {
       publish: (state) => Effect.sync(() => void published.push(state)),
       enter: () => Effect.void,

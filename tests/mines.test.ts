@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { MinesGame } from "../server/mines";
 import { minesForTarget, minesMultiplier, minesPayout } from "../src/lib/mines";
 
@@ -11,7 +12,7 @@ describe("Jeu de la mine", () => {
 
   test("les positions restent masquées pendant une manche active", () => {
     const game = new MinesGame();
-    const player = { balance: 1_000 };
+    const player = { id: randomUUID(), balance: 1_000 };
     game.start(player, 100, 200);
     const state = game.snapshot();
 
@@ -23,7 +24,7 @@ describe("Jeu de la mine", () => {
 
   test("un encaissement recrédite le joueur sans exposer les positions avant", () => {
     let game = new MinesGame();
-    const player = { balance: 1_000 };
+    const player = { id: randomUUID(), balance: 1_000 };
 
     // Keep the test deterministic at the behavior level while allowing the
     // cryptographic draw to choose the actual first safe tile.
@@ -45,7 +46,7 @@ describe("Jeu de la mine", () => {
   });
 
   test("une mine clôt la manche et perd la mise", () => {
-    const player = { balance: 1_000 };
+    const player = { id: randomUUID(), balance: 1_000 };
     let game = new MinesGame();
     let state = game.snapshot();
 
@@ -66,7 +67,7 @@ describe("Jeu de la mine", () => {
   });
 
   test("un pattern révèle toutes ses cases en une commande et encaisse", () => {
-    const player = { balance: 100_000 };
+    const player = { id: randomUUID(), balance: 100_000 };
     let game = new MinesGame();
     let state = game.snapshot();
     let publishes = 0;

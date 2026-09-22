@@ -2,18 +2,18 @@ import { PgDrizzle } from "@effect/sql-drizzle/Pg";
 import { SqlClient } from "@effect/sql/SqlClient";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { Data, Effect } from "effect";
+import type { WalletOperation } from "../game-wallet";
 import { walletAccount, walletEntry } from "./schema";
 
 const MINOR_PER_CREDIT = 100;
 const INITIAL_BALANCE_MINOR = 200_000;
 
-export type GameId =
-  "blackjack" | "poker" | "tower" | "mines" | "roulette" | "system";
-
 export type WalletSnapshot = {
   readonly balance: number;
   readonly version: number;
 };
+
+export type WalletResult = WalletSnapshot & { readonly userId: string };
 
 export class WalletDatabaseError extends Data.TaggedError(
   "WalletDatabaseError",
@@ -91,83 +91,120 @@ export const readWallet = (userId: string) =>
     } satisfies WalletSnapshot;
   }).pipe(mapDatabaseError);
 
-export type ApplyWalletDelta = {
-  readonly operationId: string;
-  readonly userId: string;
-  readonly delta: number;
-  readonly game: GameId;
-  readonly reason: string;
-  readonly referenceId?: string;
-  readonly metadata?: Record<string, unknown>;
-};
+const applyOperation = (input: WalletOperation) =>
+  Effect.gen(function* () {
+    const db = yield* PgDrizzle;
+    const deltaMinor = toMinor(input.delta);
 
-export const applyWalletDelta = (input: ApplyWalletDelta) =>
+    yield* db
+      .insert(walletAccount)
+      .values({
+        userId: input.userId,
+        balanceMinor: INITIAL_BALANCE_MINOR,
+      })
+      .onConflictDoNothing();
+
+    const [existing] = yield* db
+      .select({
+        userId: walletEntry.userId,
+        amountMinor: walletEntry.amountMinor,
+        game: walletEntry.game,
+        kind: walletEntry.kind,
+        reason: walletEntry.reason,
+        referenceId: walletEntry.referenceId,
+        metadata: walletEntry.metadata,
+      })
+      .from(walletEntry)
+      .where(eq(walletEntry.operationId, input.operationId))
+      .limit(1);
+    if (existing) {
+      if (
+        existing.userId !== input.userId ||
+        existing.amountMinor !== deltaMinor ||
+        existing.game !== input.game ||
+        existing.kind !== input.kind ||
+        existing.reason !== input.reason ||
+        existing.referenceId !== input.referenceId ||
+        JSON.stringify(existing.metadata) !==
+          JSON.stringify(input.metadata ?? null)
+      )
+        return yield* Effect.die(
+          "Wallet operation id reused with different data",
+        );
+      return;
+    }
+
+    const condition =
+      deltaMinor < 0
+        ? and(
+            eq(walletAccount.userId, input.userId),
+            gte(walletAccount.balanceMinor, -deltaMinor),
+          )
+        : eq(walletAccount.userId, input.userId);
+
+    const [updated] = yield* db
+      .update(walletAccount)
+      .set({
+        balanceMinor: sql`${walletAccount.balanceMinor} + ${deltaMinor}`,
+        version: sql`${walletAccount.version} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(condition)
+      .returning({ balanceMinor: walletAccount.balanceMinor });
+
+    if (!updated) return yield* new InsufficientBalance();
+
+    yield* db.insert(walletEntry).values({
+      operationId: input.operationId,
+      userId: input.userId,
+      game: input.game,
+      kind: input.kind,
+      reason: input.reason,
+      referenceId: input.referenceId,
+      amountMinor: deltaMinor,
+      balanceAfterMinor: updated.balanceMinor,
+      metadata: input.metadata ?? null,
+    });
+  });
+
+export const applyWalletOperations = (operations: readonly WalletOperation[]) =>
   Effect.gen(function* () {
     const db = yield* PgDrizzle;
     const client = yield* SqlClient;
-    const deltaMinor = toMinor(input.delta);
+    const grouped = new Map<string, WalletOperation[]>();
+    for (const operation of operations) {
+      const userOperations = grouped.get(operation.userId) ?? [];
+      userOperations.push(operation);
+      grouped.set(operation.userId, userOperations);
+    }
+    const ordered = [...grouped.entries()].sort(([left], [right]) =>
+      left.localeCompare(right),
+    );
 
     return yield* client.withTransaction(
       Effect.gen(function* () {
-        yield* db
-          .insert(walletAccount)
-          .values({
-            userId: input.userId,
-            balanceMinor: INITIAL_BALANCE_MINOR,
-          })
-          .onConflictDoNothing();
+        for (const [, userOperations] of ordered)
+          for (const operation of userOperations)
+            yield* applyOperation(operation);
 
-        const [existing] = yield* db
-          .select({
-            balanceAfterMinor: walletEntry.balanceAfterMinor,
-          })
-          .from(walletEntry)
-          .where(eq(walletEntry.operationId, input.operationId))
-          .limit(1);
-        if (existing)
-          return {
-            balance: fromMinor(existing.balanceAfterMinor),
-            version: 0,
-          } satisfies WalletSnapshot;
-
-        const condition =
-          deltaMinor < 0
-            ? and(
-                eq(walletAccount.userId, input.userId),
-                gte(walletAccount.balanceMinor, -deltaMinor),
-              )
-            : eq(walletAccount.userId, input.userId);
-
-        const [updated] = yield* db
-          .update(walletAccount)
-          .set({
-            balanceMinor: sql`${walletAccount.balanceMinor} + ${deltaMinor}`,
-            version: sql`${walletAccount.version} + 1`,
-            updatedAt: new Date(),
-          })
-          .where(condition)
-          .returning({
-            balanceMinor: walletAccount.balanceMinor,
-            version: walletAccount.version,
+        const results: WalletResult[] = [];
+        for (const [userId] of ordered) {
+          const [row] = yield* db
+            .select({
+              balanceMinor: walletAccount.balanceMinor,
+              version: walletAccount.version,
+            })
+            .from(walletAccount)
+            .where(eq(walletAccount.userId, userId))
+            .limit(1);
+          if (!row) return yield* Effect.die("Wallet row missing after update");
+          results.push({
+            userId,
+            balance: fromMinor(row.balanceMinor),
+            version: row.version,
           });
-
-        if (!updated) return yield* new InsufficientBalance();
-
-        yield* db.insert(walletEntry).values({
-          operationId: input.operationId,
-          userId: input.userId,
-          game: input.game,
-          reason: input.reason,
-          referenceId: input.referenceId,
-          amountMinor: deltaMinor,
-          balanceAfterMinor: updated.balanceMinor,
-          metadata: input.metadata ?? null,
-        });
-
-        return {
-          balance: fromMinor(updated.balanceMinor),
-          version: updated.version,
-        } satisfies WalletSnapshot;
+        }
+        return results;
       }),
     );
   }).pipe(mapDatabaseError);

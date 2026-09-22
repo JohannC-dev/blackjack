@@ -2,21 +2,21 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import next from "next";
 import { Server } from "socket.io";
-import { Effect, Option, Schema } from "effect";
+import { Effect, Exit, Option, Schema } from "effect";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import { Table, type Player } from "./engine";
 import { auth } from "./auth";
 import { runDatabase } from "./db/client";
 import {
-  applyWalletDelta,
+  applyWalletOperations,
   getOrCreateWallet,
   readWallet,
-  type GameId,
 } from "./db/wallet";
 import { PokerManager } from "./poker";
 import { TowerManager } from "./tower";
 import { MinesGame } from "./mines";
-import { InsufficientCredits, makeRouletteRuntime } from "./roulette";
+import { makeRouletteRuntime } from "./roulette";
+import { RecordingGameWallet } from "./game-wallet";
 import {
   GameError,
   ServerClock,
@@ -133,9 +133,8 @@ io.use(async (socket, next) => {
 const tables = new Map<string, Table>();
 const profiles = new Map<string, Player>();
 const playersById = new Map<string, Player>();
+const gameWallet = new RecordingGameWallet();
 const playerSockets = new Map<string, Set<string>>();
-/** Connected players by id, for the wallet updates. */
-const online = new Map<string, Player>();
 /** Last wallet pushed to each connected player. */
 const wallets = new Map<string, Wallet>();
 /** Sockets of each player currently showing the Tower. */
@@ -149,7 +148,7 @@ function publishMines(playerId: string) {
 function getMines(playerId: string) {
   let game = mines.get(playerId);
   if (!game) {
-    game = new MinesGame(() => publishMines(playerId));
+    game = new MinesGame(() => publishMines(playerId), gameWallet);
     mines.set(playerId, game);
   }
   return game;
@@ -164,20 +163,8 @@ const roulette = makeRouletteRuntime({
   players: {
     get: (playerId) =>
       Effect.sync(() => Option.fromNullable(playersById.get(playerId))),
-    debit: (playerId, amount) =>
-      Effect.suspend(() => {
-        const player = playersById.get(playerId);
-        if (!player || player.balance < amount)
-          return Effect.fail(new InsufficientCredits());
-        player.balance -= amount;
-        return Effect.void;
-      }),
-    credit: (playerId, amount) =>
-      Effect.sync(() => {
-        const player = playersById.get(playerId);
-        if (player) player.balance += amount;
-      }),
   },
+  wallet: gameWallet,
   transport: {
     publish: (state) =>
       Effect.sync(() => {
@@ -196,7 +183,7 @@ const roulette = makeRouletteRuntime({
 const poker = new PokerManager((playerId, state) => {
   for (const socketId of playerSockets.get(playerId) ?? [])
     io.to(socketId).emit("poker:state", state);
-});
+}, gameWallet);
 const tower = new TowerManager(
   (playerId, state) => {
     for (const socketId of towerSockets.get(playerId) ?? [])
@@ -207,6 +194,7 @@ const tower = new TowerManager(
   undefined,
   // Development only: TOWER_NO_TRAPS=1 bun run dev reaches the top every time.
   dev && process.env.TOWER_NO_TRAPS === "1",
+  gameWallet,
 );
 if (dev && process.env.TOWER_NO_TRAPS === "1")
   console.log("La Tower · mode test sans pièges activé");
@@ -216,18 +204,17 @@ function getTable(id: string) {
   if (!table) {
     if (tables.size >= 200)
       throw new Error("Toutes les tables sont occupées. Réessayez plus tard.");
-    table = new Table(id, () =>
-      io.to(id).emit("state", tables.get(id)!.snapshot()),
+    table = new Table(
+      id,
+      () => io.to(id).emit("state", tables.get(id)!.snapshot()),
+      undefined,
+      gameWallet,
     );
     tables.set(id, table);
   }
   return table;
 }
-/**
- * Game engines use a hot balance. PostgreSQL remains authoritative: commands
- * refresh before acting and only actual balance changes create a transaction.
- */
-const persistedBalances = new Map<string, number>();
+/** Financial commands are serialized around one explicit wallet batch. */
 let financialQueue: Promise<unknown> = Promise.resolve();
 
 function serializeFinancial<A>(task: () => Promise<A>): Promise<A> {
@@ -244,47 +231,64 @@ function refreshWalletEffect(player: Player) {
     try: async () => {
       const wallet = await runDatabase(readWallet(player.token));
       player.balance = wallet.balance;
-      persistedBalances.set(player.id, wallet.balance);
+      publishWallet(player.id);
     },
     catch: toGameError,
   });
 }
 
-function persistWalletsEffect(game: GameId, reason: string) {
-  return Effect.tryPromise({
-    try: async () => {
-      for (const player of playersById.values()) {
-        const persisted = persistedBalances.get(player.id);
-        if (persisted === undefined || persisted === player.balance) continue;
-        const requestedBalance = player.balance;
-        const wallet = await runDatabase(
-          applyWalletDelta({
-            operationId: randomUUID(),
-            userId: player.token,
-            delta: requestedBalance - persisted,
-            game,
-            reason,
-            referenceId: player.roomId,
-          }),
-        );
-        player.balance = wallet.balance;
-        persistedBalances.set(player.id, wallet.balance);
-      }
-      syncWallets();
-    },
-    catch: toGameError,
-  });
-}
-
-function syncWallets() {
-  for (const [playerId, player] of online) {
-    const wallet = wallets.get(playerId);
-    if (wallet?.balance === player.balance) continue;
-    const next = { balance: player.balance, seq: (wallet?.seq ?? 0) + 1 };
+function publishWallet(playerId: string, socketId?: string) {
+  const player = playersById.get(playerId);
+  if (!player) return;
+  const previous = wallets.get(playerId);
+  if (!previous || previous.balance !== player.balance) {
+    const next = {
+      balance: player.balance,
+      seq: (previous?.seq ?? 0) + 1,
+    } satisfies Wallet;
     wallets.set(playerId, next);
-    for (const socketId of playerSockets.get(playerId) ?? [])
-      io.to(socketId).emit("wallet", next);
+    for (const connectionId of playerSockets.get(playerId) ?? [])
+      io.to(connectionId).emit("wallet", next);
+    return;
   }
+  if (socketId) io.to(socketId).emit("wallet", previous);
+}
+
+function commitWalletOperationsEffect() {
+  const operations = gameWallet.operations();
+  if (!operations.length) {
+    gameWallet.complete();
+    return Effect.void;
+  }
+  return Effect.tryPromise({
+    try: () => runDatabase(applyWalletOperations(operations)),
+    catch: toGameError,
+  }).pipe(
+    Effect.tap((results) =>
+      Effect.sync(() => {
+        for (const result of results) {
+          const player = playersById.get(result.userId);
+          if (player) player.balance = result.balance;
+        }
+        gameWallet.complete();
+        for (const result of results) publishWallet(result.userId);
+      }),
+    ),
+    Effect.asVoid,
+  );
+}
+
+function walletTransactionEffect<A, E>(effect: Effect.Effect<A, E, never>) {
+  return Effect.acquireUseRelease(
+    Effect.try({ try: () => gameWallet.begin(), catch: toGameError }),
+    () => effect.pipe(Effect.tap(() => commitWalletOperationsEffect())),
+    (_, exit) =>
+      Exit.isFailure(exit)
+        ? Effect.sync(() =>
+            gameWallet.rollback((playerId) => playersById.get(playerId)),
+          )
+        : Effect.void,
+  );
 }
 
 function leaveTowerEffect(socketId: string, player: Player, abandon: boolean) {
@@ -332,7 +336,9 @@ function replyWalletEffect<A, E, R = Ack>(
   effect: Effect.Effect<A, E, never>,
   onSuccess: (value: A) => R = () => ({ ok: true }) as R,
 ) {
-  void serializeFinancial(() => executeReply(ack, effect, onSuccess));
+  void serializeFinancial(() =>
+    executeReply(ack, walletTransactionEffect(effect), onSuccess),
+  );
 }
 
 function runOrThrow<A, E>(effect: Effect.Effect<A, E, never>): A {
@@ -440,7 +446,6 @@ io.on("connection", (socket) => {
         }
         known.name = name;
         known.balance = wallet.balance;
-        persistedBalances.set(known.id, wallet.balance);
         player = known;
         player.connected = true;
         player.lastSeen = clock.now();
@@ -448,11 +453,10 @@ io.on("connection", (socket) => {
         const connections = playerSockets.get(player.id) ?? new Set();
         connections.add(socket.id);
         playerSockets.set(player.id, connections);
-        online.set(player.id, player);
         socket.join(safeData.tableId);
         runOrThrow(table.observeEffect(player));
         runOrThrow(poker.connectEffect(player));
-        syncWallets();
+        publishWallet(player.id, socket.id);
         publishMines(player.id);
         return {
           ok: true,
@@ -507,7 +511,6 @@ io.on("connection", (socket) => {
               context.blackjackPlayerId,
               parsed as Command,
             );
-            yield* persistWalletsEffect("blackjack", parsed.type);
           }),
       ),
     );
@@ -534,7 +537,6 @@ io.on("connection", (socket) => {
                 "state",
                 blackjackTable.snapshot(),
               );
-            yield* persistWalletsEffect("poker", parsed.type);
           }),
       ),
     );
@@ -555,7 +557,6 @@ io.on("connection", (socket) => {
             });
             yield* refreshWalletEffect(currentPlayer);
             yield* tower.commandEffect(currentPlayer, parsed as TowerCommand);
-            yield* persistWalletsEffect("tower", parsed.type);
           }),
       ),
     );
@@ -580,7 +581,6 @@ io.on("connection", (socket) => {
               currentPlayer,
               parsed as MinesCommand,
             );
-            yield* persistWalletsEffect("mines", parsed.type);
           }),
       ),
     );
@@ -602,7 +602,6 @@ io.on("connection", (socket) => {
               runtime.command(socket.id, currentPlayer.id, command),
             );
           });
-          yield* persistWalletsEffect("roulette", "command");
         }),
       );
     },
@@ -657,7 +656,6 @@ io.on("connection", (socket) => {
         });
         yield* refreshWalletEffect(currentPlayer);
         yield* leaveTowerEffect(socket.id, currentPlayer, true);
-        yield* persistWalletsEffect("tower", "leave");
       }),
     );
   });
@@ -737,7 +735,6 @@ io.on("connection", (socket) => {
           connections?.delete(socket.id);
           if (connections?.size) return false;
           playerSockets.delete(disconnectedPlayer.id);
-          online.delete(disconnectedPlayer.id);
           disconnectedPlayer.connected = false;
           disconnectedPlayer.lastSeen = clock.now();
           return true;
@@ -761,14 +758,15 @@ const maintenanceEffect = Effect.provide(
     const clock = yield* ServerClock;
     const now = clock.now();
     for (const [id, table] of tables) {
-      yield* Effect.either(table.tickEffect(now));
+      yield* Effect.either(walletTransactionEffect(table.tickEffect(now)));
       if (!table.players.size && now - table.lastUsed > 30 * 60_000)
         tables.delete(id);
     }
-    yield* Effect.either(poker.tickEffect(now));
-    yield* Effect.either(gameEffect(() => roulette.run((r) => r.tick)));
-    yield* Effect.either(tower.tickEffect(now));
-    yield* Effect.either(persistWalletsEffect("system", "maintenance"));
+    yield* Effect.either(walletTransactionEffect(poker.tickEffect(now)));
+    yield* Effect.either(
+      walletTransactionEffect(gameEffect(() => roulette.run((r) => r.tick))),
+    );
+    yield* Effect.either(walletTransactionEffect(tower.tickEffect(now)));
     for (const [token, profile] of profiles)
       if (!profile.connected && now - profile.lastSeen > 24 * 60 * 60_000) {
         yield* Effect.either(
@@ -780,7 +778,6 @@ const maintenanceEffect = Effect.provide(
             profiles.delete(token);
             wallets.delete(profile.id);
             playersById.delete(profile.id);
-            persistedBalances.delete(profile.id);
             mines.delete(profile.id);
           }),
         );

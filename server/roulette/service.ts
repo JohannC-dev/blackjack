@@ -1,4 +1,4 @@
-import { Cause, Clock, Effect, SynchronizedRef } from "effect";
+import { Cause, Clock, Effect, Option, SynchronizedRef } from "effect";
 import {
   NotAtTable,
   NotShowingRoulette,
@@ -6,7 +6,7 @@ import {
   type RouletteError,
 } from "./errors";
 import { decodeCommand } from "./schema";
-import { Players, Transport, Wheel } from "./services";
+import { Players, Transport, Wallet, Wheel } from "./services";
 import * as Table from "./table";
 
 const MAX_TABLES = 200;
@@ -23,7 +23,7 @@ type Registry = {
   readonly sockets: ReadonlyMap<string, ReadonlySet<string>>;
 };
 
-type Env = Players | Wheel | Transport;
+type Env = Players | Wallet | Wheel | Transport;
 /** Notifications sent once a new registry is committed. */
 type Outbox = Effect.Effect<void, never, Env>[];
 
@@ -218,9 +218,25 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
           const tables = new Map(current.tables);
           // Winnings are paid once the settled table is committed.
           const outbox: Outbox = Table.payouts(table, next).map((result) =>
-            Effect.flatMap(Players, (players) =>
-              players.credit(result.playerId, result.payout),
-            ),
+            Effect.gen(function* () {
+              const players = yield* Players;
+              const wallet = yield* Wallet;
+              const player = yield* players.get(result.playerId);
+              if (Option.isSome(player))
+                wallet.credit(player.value, {
+                  operationId: `roulette:${table.id}:${next.round}:${result.playerId}:settlement`,
+                  game: "roulette",
+                  kind: "payout",
+                  reason: "settlement",
+                  referenceId: `${table.id}:${next.round}`,
+                  amount: result.payout,
+                  metadata: {
+                    number: next.number,
+                    stake: result.total,
+                    net: result.net,
+                  },
+                });
+            }),
           );
           commit(tables, outbox, table, next, now);
           const after = tables.get(tableId)!;

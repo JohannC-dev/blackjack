@@ -132,6 +132,7 @@ export const walletEntry = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     game: text("game").notNull(),
+    kind: text("kind").default("legacy").notNull(),
     reason: text("reason").notNull(),
     referenceId: text("reference_id"),
     amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),

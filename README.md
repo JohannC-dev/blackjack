@@ -48,7 +48,7 @@ Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table
 - **Lucky Tower** : chaque joueur a sa propre **cagnotte Lucky**, alimentée par 3 % de chacune de ses mises et conservée en mémoire serveur (remise à zéro au redémarrage). Certaines ascensions cachent une **carte dorée** sur une ligne de 3 à 6, jamais à la place du piège, tirée uniquement par le serveur avec une chance réglée par difficulté (≈ 1 ascension sur 500 la retourne en jouant au hasard). La retourner encaisse l’étage atteint et verse la cagnotte ; la tour s’illumine ensuite jusqu’au sommet, en animation seulement. Une carte dorée manquée est révélée avec sa ligne.
 - Sons synthétisés en direct (Web Audio) : note montante à chaque étage, roulements de tambour près du sommet, effondrement, sonnerie de jackpot. Les voix « Lucky! » et « JACKPOT! » (`public/audio/tower/`) ont été générées avec la synthèse vocale de Windows ; les remplacer par de vrais enregistrements si besoin.
 - Les joueurs sont répartis en **salles de 10** (rooms Socket.IO) : on ne voit, et on ne reçoit les mises à jour, que des grimpeurs de sa salle. Quitter la Tower règle l’ascension immédiatement : gains acquis encaissés, mise rendue avant le premier étage. Après une coupure réseau, l’ascension reste reprenable 10 minutes puis est réglée de la même façon.
-- Le solde partagé entre les trois jeux n’est transmis que par l’événement serveur `wallet` (numéroté), jamais par les snapshots de jeu. Une mise Blackjack confirmée mais dépensée ailleurs avant la donne fait sortir le joueur de la manche au lieu de rendre son solde négatif.
+- Le solde partagé entre les jeux n’est transmis que par l’événement serveur `wallet` (numéroté), jamais par les snapshots de jeu. Une mise Blackjack confirmée mais dépensée ailleurs avant la donne fait sortir le joueur de la manche au lieu de rendre son solde négatif.
 
 ### Blackjack européen
 
@@ -81,7 +81,7 @@ Seule la meilleure combinaison est payée. « Pour 1 » désigne le gain net, av
 
 - Better Auth 1.7.5 gère les comptes e-mail/mot de passe et les sessions dans PostgreSQL. Le navigateur ne conserve plus de profil ni de solde dans `localStorage`.
 - PostgreSQL est la source de vérité du portefeuille. Chaque variation est atomique, refuse un débit qui rendrait le solde négatif et crée une ligne de journal avec un identifiant d’opération.
-- Le serveur recharge le portefeuille avant toute commande financière. Les moteurs gardent un solde chaud pendant la commande, puis écrivent seulement si le solde a réellement changé : réservation de mise, double ou split, règlement ou encaissement.
+- Le serveur recharge le portefeuille avant toute commande financière. Chaque moteur déclare ses débits et crédits via le même port `GameWallet`, avec un identifiant stable et leur cause métier. Les opérations d’une commande sont écrites ensemble dans une seule transaction ; une commande sans variation de solde ne touche pas PostgreSQL.
 - Le client reçoit le solde par `GET /api/profile` et par l’événement Socket.IO `wallet`. Ces valeurs servent à l’affichage et à désactiver des actions impossibles ; elles ne sont jamais acceptées comme autorité par le serveur.
 - Les cartes, tables, manches et historiques restent en mémoire dans cette version. Un seul processus serveur doit donc héberger les parties. Les comptes, sessions, soldes et écritures du portefeuille survivent aux redémarrages.
 - Une place déconnectée est libérée après 60 secondes lors de la phase de mise. Une table vide expire après 30 minutes ; un profil de jeu inactif est retiré de la mémoire après 24 heures, sans supprimer son compte ni son portefeuille.
@@ -131,7 +131,8 @@ Les tests couvrent les deux moteurs, toutes les catégories de mains Poker, la c
 - `server/index.ts` : serveur Bun/Next.js, sessions HTTP et protocole Socket.IO.
 - `server/auth.ts` : configuration Better Auth.
 - `server/db/schema.ts` : tables Better Auth, portefeuille et journal comptable.
-- `server/db/wallet.ts` : opérations atomiques Effect TS/Drizzle sur le portefeuille.
+- `server/game-wallet.ts` : contrat commun utilisé par les moteurs pour lire, débiter et créditer un portefeuille.
+- `server/db/wallet.ts` : application atomique avec Effect TS/Drizzle des lots d’opérations dans PostgreSQL.
 - `src/lib/rules.ts` : valeurs des cartes et évaluation des paris annexes.
 - `src/lib/profile-context.tsx` : session Better Auth et solde d’affichage.
 - `src/lib/use-game.ts` : connexion Socket.IO et commandes de jeu.

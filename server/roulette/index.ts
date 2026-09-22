@@ -7,18 +7,26 @@ import {
   ManagedRuntime,
   Option,
 } from "effect";
+import type { GameWallet } from "../game-wallet";
 import type { RouletteError } from "./errors";
 import { Roulette } from "./service";
-import { Players, Transport, Wheel } from "./services";
+import { Players, Transport, Wallet, Wheel } from "./services";
 
 export * from "./errors";
 export { decodeBets, decodeCommand } from "./schema";
 export { Roulette } from "./service";
-export { Players, Transport, Wheel, type RoulettePlayer } from "./services";
+export {
+  Players,
+  Transport,
+  Wallet,
+  Wheel,
+  type RoulettePlayer,
+} from "./services";
 export { ROULETTE_SPIN_MS } from "./table";
 
 export type RouletteRuntimeOptions = {
   players: Players["Type"];
+  wallet: GameWallet;
   transport: Transport["Type"];
   /** Defaults to the fair wheel. */
   wheel?: Wheel["Type"];
@@ -36,6 +44,7 @@ export type RouletteRuntimeOptions = {
 export function makeRouletteRuntime(options: RouletteRuntimeOptions) {
   const services = Layer.mergeAll(
     Layer.succeed(Players, options.players),
+    Layer.succeed(Wallet, options.wallet),
     Layer.succeed(Transport, options.transport),
     options.wheel ? Layer.succeed(Wheel, options.wheel) : Wheel.Live,
   );

@@ -1,0 +1,1 @@
+ALTER TABLE "wallet_entry" ADD COLUMN "kind" text DEFAULT 'legacy' NOT NULL;
