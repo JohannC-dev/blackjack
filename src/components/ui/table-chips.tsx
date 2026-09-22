@@ -9,7 +9,11 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { chipStackForComposition, chipColors } from "@/lib/chips";
+import {
+  chipStackForComposition,
+  chipColors,
+  type CasinoChipStackStage,
+} from "@/lib/chips";
 import type { ChipCount } from "@/lib/types";
 import { credits } from "@/lib/rules";
 import { motionDuration } from "./motion";
@@ -95,29 +99,33 @@ export const TableChipStack = memo(function TableChipStack({
   amount,
   maximum,
   chips,
+  columns,
   className = "",
 }: {
   amount: number;
   maximum: number;
   chips?: readonly ChipCount[];
+  columns?: CasinoChipStackStage["columns"];
   className?: string;
 }) {
   const stage = chipStackForComposition(chips, amount, maximum);
+  const renderedColumns = columns ?? stage.columns;
+  const pileKey = `${amount}-${renderedColumns.map((column) => `${column.denomination}:${column.layers}`).join("-")}`;
   return (
     <span
-      key={stage.index}
+      key={pileKey}
       className={`table-chip chip-stack-stage-${stage.index} ${className}`}
       data-chip-stage={stage.index}
     >
       <span className="table-chip-pile" aria-hidden="true">
-        {stage.columns.map((column, columnIndex) => (
+        {renderedColumns.map((column, columnIndex) => (
           <span
             className={`table-chip-column chip-${column.denomination}`}
             key={`${column.denomination}-${columnIndex}`}
             style={
               {
                 ...chipColors(column.denomination),
-                "--chip-column-left": `${((columnIndex + 1) / (stage.columns.length + 1)) * 100}%`,
+                "--chip-column-left": `${((columnIndex + 1) / (renderedColumns.length + 1)) * 100}%`,
                 "--chip-column-index": columnIndex,
               } as CSSProperties
             }

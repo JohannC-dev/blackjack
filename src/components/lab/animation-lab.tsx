@@ -24,8 +24,9 @@ import {
   X,
 } from "lucide-react";
 import type { Card } from "@/lib/types";
+import type { CasinoChipStackStage } from "@/lib/chips";
 import { credits } from "@/lib/rules";
-import { SettlementChipAnimation } from "../ui/table-chips";
+import { SettlementChipAnimation, TableChipStack } from "../ui/table-chips";
 import { PlayingCard } from "../ui/playing-card";
 import { PokerChipStack } from "../games/poker/poker-casino";
 import { PokerShuffleAnimation } from "../ui/poker-shuffle";
@@ -136,66 +137,66 @@ const cards = {
   sevenDiamonds: { id: "7d", rank: 7, suit: "diamonds" },
 } satisfies Record<string, Card>;
 
-type ChipColumn = { denomination: 5 | 25 | 50 | 100; layers: number };
+type ChipColumn = CasinoChipStackStage["columns"][number];
 
 const chipStates: ReadonlyArray<{
   amount: number;
   columns: ReadonlyArray<ChipColumn>;
 }> = [
-  { amount: 5, columns: [{ denomination: 5, layers: 2 }] },
-  { amount: 10, columns: [{ denomination: 5, layers: 3 }] },
-  { amount: 25, columns: [{ denomination: 25, layers: 2 }] },
+  { amount: 5_000, columns: [{ denomination: 5_000, layers: 2 }] },
+  { amount: 10_000, columns: [{ denomination: 5_000, layers: 3 }] },
+  { amount: 20_000, columns: [{ denomination: 20_000, layers: 2 }] },
   {
-    amount: 30,
+    amount: 25_000,
     columns: [
-      { denomination: 25, layers: 2 },
-      { denomination: 5, layers: 2 },
+      { denomination: 20_000, layers: 2 },
+      { denomination: 5_000, layers: 2 },
     ],
   },
-  { amount: 50, columns: [{ denomination: 50, layers: 2 }] },
+  { amount: 100_000, columns: [{ denomination: 100_000, layers: 2 }] },
   {
-    amount: 75,
+    amount: 120_000,
     columns: [
-      { denomination: 50, layers: 2 },
-      { denomination: 25, layers: 2 },
+      { denomination: 100_000, layers: 2 },
+      { denomination: 20_000, layers: 2 },
     ],
   },
-  { amount: 100, columns: [{ denomination: 100, layers: 2 }] },
+  { amount: 500_000, columns: [{ denomination: 500_000, layers: 2 }] },
   {
-    amount: 125,
+    amount: 520_000,
     columns: [
-      { denomination: 100, layers: 2 },
-      { denomination: 25, layers: 2 },
-    ],
-  },
-  {
-    amount: 150,
-    columns: [
-      { denomination: 100, layers: 2 },
-      { denomination: 50, layers: 2 },
+      { denomination: 500_000, layers: 2 },
+      { denomination: 20_000, layers: 2 },
     ],
   },
   {
-    amount: 175,
+    amount: 600_000,
     columns: [
-      { denomination: 100, layers: 2 },
-      { denomination: 50, layers: 2 },
-      { denomination: 25, layers: 2 },
+      { denomination: 500_000, layers: 2 },
+      { denomination: 100_000, layers: 2 },
     ],
   },
   {
-    amount: 250,
+    amount: 620_000,
     columns: [
-      { denomination: 100, layers: 3 },
-      { denomination: 50, layers: 2 },
+      { denomination: 500_000, layers: 2 },
+      { denomination: 100_000, layers: 2 },
+      { denomination: 20_000, layers: 2 },
     ],
   },
   {
-    amount: 500,
+    amount: 1_200_000,
     columns: [
-      { denomination: 100, layers: 5 },
-      { denomination: 50, layers: 4 },
-      { denomination: 25, layers: 3 },
+      { denomination: 500_000, layers: 3 },
+      { denomination: 100_000, layers: 2 },
+    ],
+  },
+  {
+    amount: 2_000_000,
+    columns: [
+      { denomination: 500_000, layers: 5 },
+      { denomination: 100_000, layers: 4 },
+      { denomination: 20_000, layers: 3 },
     ],
   },
 ];
@@ -291,42 +292,6 @@ function ResultDemo({ run }: { run: number }) {
   );
 }
 
-function LabChipStack({
-  amount,
-  columns,
-}: {
-  amount: number;
-  columns: ReadonlyArray<ChipColumn>;
-}) {
-  return (
-    <span className="table-chip">
-      <span className="table-chip-pile" aria-hidden="true">
-        {columns.map((column, columnIndex) => (
-          <span
-            className={`table-chip-column chip-${column.denomination}`}
-            key={`${column.denomination}-${columnIndex}`}
-            style={
-              {
-                "--chip-column-left": `${((columnIndex + 1) / (columns.length + 1)) * 100}%`,
-                "--chip-column-index": columnIndex,
-              } as CSSProperties
-            }
-          >
-            {Array.from({ length: column.layers }, (_, layer) => (
-              <i
-                className="table-chip-disc"
-                key={layer}
-                style={{ "--chip-layer": layer } as CSSProperties}
-              />
-            ))}
-          </span>
-        ))}
-      </span>
-      <span className="table-chip-amount">{credits(amount)}</span>
-    </span>
-  );
-}
-
 function ChipState({
   amount,
   columns,
@@ -347,9 +312,11 @@ function ChipState({
       aria-label={`Rejouer la pile de ${amount} crédits`}
     >
       <span key={run}>
-        <LabChipStack amount={amount} columns={columns} />
+        <TableChipStack amount={amount} maximum={2_000_000} columns={columns} />
       </span>
-      <small>{columns.map((column) => column.denomination).join(" + ")}</small>
+      <small>
+        {columns.map((column) => credits(column.denomination)).join(" + ")}
+      </small>
     </button>
   );
 }
@@ -372,7 +339,7 @@ function SettlementDemo({
   payout: number;
 }) {
   const side = kind === "side";
-  const stake = 25;
+  const stake = 20_000;
   return (
     <div className={`table-stage ${styles.settlementTable}`}>
       <div className={`dealer-cards ${styles.settlementBank}`}>
@@ -390,7 +357,7 @@ function SettlementDemo({
             <SettlementChipAnimation
               stake={stake}
               payout={payout}
-              maximum={side ? 100 : 500}
+              maximum={side ? 100_000 : 500_000}
               side={side}
             />
           </button>
@@ -411,8 +378,8 @@ function SettlementDemo({
   );
 }
 
-function PokerStackPreview({ amount = 300 }: { amount?: number }) {
-  return <PokerChipStack amount={amount} maximum={1000} pot />;
+function PokerStackPreview({ amount = 300_000 }: { amount?: number }) {
+  return <PokerChipStack amount={amount} maximum={1_000_000} pot />;
 }
 
 function ModalDemo() {
@@ -534,7 +501,7 @@ function BlackjackDemos() {
         note="Le gain arrive de la banque, fusionne avec la mise, puis repart vers le joueur."
         sound="win"
       >
-        {() => <SettlementDemo kind="side" payout={250} />}
+        {() => <SettlementDemo kind="side" payout={200_000} />}
       </Demo>
 
       <Demo
@@ -550,7 +517,7 @@ function BlackjackDemos() {
         note="Les jetons gagnés rejoignent la mise avant que le total soit rendu au joueur."
         sound="win"
       >
-        {() => <SettlementDemo kind="main" payout={50} />}
+        {() => <SettlementDemo kind="main" payout={40_000} />}
       </Demo>
 
       <Demo
@@ -807,7 +774,7 @@ function PokerDemos() {
       >
         {() => (
           <div className={styles.centered}>
-            <PokerStackPreview amount={650} />
+            <PokerStackPreview amount={650_000} />
           </div>
         )}
       </Demo>
@@ -820,9 +787,9 @@ function PokerDemos() {
         {() => (
           <div className={`poker-felt ${styles.collectStage}`}>
             {[
-              { x: 20, y: 76, amount: 100 },
-              { x: 50, y: 86, amount: 250 },
-              { x: 80, y: 76, amount: 450 },
+              { x: 20, y: 76, amount: 100_000 },
+              { x: 50, y: 86, amount: 250_000 },
+              { x: 80, y: 76, amount: 450_000 },
             ].map((chip, index) => (
               <div
                 className="poker-chip-flight"
@@ -835,12 +802,12 @@ function PokerDemos() {
                   } as CSSProperties
                 }
               >
-                <PokerChipStack amount={chip.amount} maximum={500} />
+                <PokerChipStack amount={chip.amount} maximum={500_000} />
               </div>
             ))}
             <div className={styles.potTarget}>
               <span>POT</span>
-              <PokerStackPreview amount={800} />
+              <PokerStackPreview amount={800_000} />
             </div>
           </div>
         )}

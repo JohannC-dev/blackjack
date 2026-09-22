@@ -85,27 +85,43 @@ export function chipStackForComposition(
   amount: number,
   maximum: number,
 ): CasinoChipStackStage {
+  const stage = casinoChipStackForAmount(amount, maximum);
   if (!chips?.length) {
-    const stage = casinoChipStackForAmount(amount, maximum);
+    const denominations = CASINO_CHIP_DENOMINATIONS.filter(
+      (denomination) => denomination <= amount,
+    ).reverse();
     return {
       ...stage,
-      columns: stage.columns.map((column) => ({
+      columns: stage.columns.map((column, index) => ({
         ...column,
-        denomination: chipColorDenomination(amount),
+        denomination:
+          denominations[index] ??
+          denominations[denominations.length - 1] ??
+          chipColorDenomination(amount),
       })),
     };
   }
-  const count = chips.reduce((total, chip) => total + chip.count, 0);
+  const columns = chips
+    .filter((chip) => chip.count > 0)
+    .slice(-3)
+    .map((chip) => ({
+      denomination: chip.denomination,
+      layers: Math.min(chip.count + 1, 5),
+    }));
+  if (!columns.length)
+    return chipStackForComposition(undefined, amount, maximum);
+
+  const count = chips.reduce(
+    (total, chip) => total + Math.max(0, chip.count),
+    0,
+  );
   let index: CasinoChipStackStage["index"] = 4;
   if (count <= 1) index = 1;
   else if (count <= 3) index = 2;
   else if (count <= 6) index = 3;
   return {
     index,
-    columns: chips.slice(-3).map((chip) => ({
-      denomination: chip.denomination,
-      layers: Math.min(chip.count, 6),
-    })),
+    columns,
   };
 }
 

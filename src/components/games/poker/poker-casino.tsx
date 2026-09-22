@@ -36,7 +36,7 @@ import {
   evaluateBestPokerHand,
   getPokerCombinationCards,
 } from "@/lib/rules";
-import { casinoChipStackForAmount, chipColors } from "@/lib/chips";
+import { chipStackForComposition, chipColors } from "@/lib/chips";
 import {
   CASINO_DEAL_INTERVAL,
   playCasinoSound,
@@ -1164,7 +1164,7 @@ export function PokerChipStack({
   maximum: number;
   pot?: boolean;
 }) {
-  const stage = casinoChipStackForAmount(amount, maximum);
+  const stage = chipStackForComposition(undefined, amount, maximum);
   const chipSize = pot ? 42 : 30;
   const columnStep = pot ? 19 : 14;
   const maximumLayers = Math.max(
@@ -1172,7 +1172,7 @@ export function PokerChipStack({
   );
   return (
     <div
-      key={stage.index}
+      key={amount}
       className={`poker-chip-stack chip-stack-stage-${stage.index} ${pot ? "pot-chips" : "bet-chips"}`}
       role="img"
       aria-label={`${credits(amount)} crédits en jetons`}

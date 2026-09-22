@@ -134,8 +134,8 @@ describe("Nouvelle économie", () => {
       chipStackForComposition(seat.chips.main, seat.bet.main, BLACKJACK_MAX_BET)
         .columns,
     ).toEqual([
-      { denomination: 15_000, layers: 1 },
-      { denomination: 30_000, layers: 1 },
+      { denomination: 15_000, layers: 2 },
+      { denomination: 30_000, layers: 2 },
     ]);
     expect(() =>
       table.command(member.id, {
@@ -154,6 +154,29 @@ describe("Nouvelle économie", () => {
     seat.chips = { main: [], three: [], pairs: [] };
     table.command(member.id, { type: "repeat" });
     expect(seat.chips).toEqual(chips);
+  });
+  test("uses the animation lab's disc counts with the current chip colours", () => {
+    const single = [{ denomination: 200_000_000, count: 1 }];
+    const full = [{ denomination: 200_000_000, count: 7 }];
+    expect(chipStackForComposition(single, 200_000_000, 1_000_000_000)).toEqual(
+      {
+        index: 1,
+        columns: [{ denomination: 200_000_000, layers: 2 }],
+      },
+    );
+    expect(
+      chipStackForComposition(full, 1_400_000_000, 20_000_000_000),
+    ).toEqual({
+      index: 4,
+      columns: [{ denomination: 200_000_000, layers: 5 }],
+    });
+    expect(
+      chipStackForComposition(
+        undefined,
+        1_000_000_000,
+        1_000_000_000,
+      ).columns.map((column) => column.denomination),
+    ).toEqual([1_000_000_000, 200_000_000, 50_000_000]);
   });
 
   test("recharge et crée les parties sur la nouvelle base", () => {
