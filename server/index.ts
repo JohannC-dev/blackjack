@@ -139,6 +139,28 @@ const playerSockets = new Map<string, Set<string>>();
 const wallets = new Map<string, Wallet>();
 /** Sockets of each player currently showing the Tower. */
 const towerSockets = new Map<string, Set<string>>();
+type TowerSocketIntent = { kind: "join" | "leave"; version: number };
+const towerSocketIntents = new Map<string, TowerSocketIntent>();
+
+function markTowerSocketIntent(
+  socketId: string,
+  kind: TowerSocketIntent["kind"],
+) {
+  const intent = {
+    kind,
+    version: (towerSocketIntents.get(socketId)?.version ?? 0) + 1,
+  } satisfies TowerSocketIntent;
+  towerSocketIntents.set(socketId, intent);
+  return intent;
+}
+
+function isCurrentTowerSocketIntent(
+  socketId: string,
+  intent: TowerSocketIntent,
+) {
+  const current = towerSocketIntents.get(socketId);
+  return current?.version === intent.version && current.kind === intent.kind;
+}
 const mines = new Map<string, MinesGame>();
 function publishMines(playerId: string) {
   const snapshot = mines.get(playerId)?.snapshot() ?? null;
@@ -291,20 +313,29 @@ function walletTransactionEffect<A, E>(effect: Effect.Effect<A, E, never>) {
   );
 }
 
+function detachTowerSocketEffect(socketId: string, player: Player) {
+  return gameEffect(() => {
+    const sockets = towerSockets.get(player.id);
+    const roomId = tower.roomIdOf(player.id);
+    if (!sockets?.delete(socketId)) {
+      if (!roomId || sockets?.size) return false;
+      io.in(socketId).socketsLeave(roomId);
+      return true;
+    }
+    if (roomId) io.in(socketId).socketsLeave(roomId);
+    if (sockets.size) return false;
+    towerSockets.delete(player.id);
+    return true;
+  });
+}
+
 function leaveTowerEffect(socketId: string, player: Player, abandon: boolean) {
   return Effect.gen(function* () {
-    const shouldLeave = yield* gameEffect(() => {
-      const sockets = towerSockets.get(player.id);
-      if (!sockets?.delete(socketId)) return false;
-      const roomId = tower.roomIdOf(player.id);
-      if (roomId) io.in(socketId).socketsLeave(roomId);
-      if (sockets.size) return false;
-      towerSockets.delete(player.id);
-      return true;
-    });
+    const shouldLeave = yield* detachTowerSocketEffect(socketId, player);
     if (shouldLeave) yield* tower.leaveEffect(player, undefined, { abandon });
   });
 }
+
 function replyError(ack: unknown, error: unknown) {
   if (typeof ack === "function")
     ack({
@@ -631,10 +662,12 @@ io.on("connection", (socket) => {
     );
   });
   socket.on("tower:join", (ack: (value: Ack) => void) => {
+    const intent = markTowerSocketIntent(socket.id, "join");
     replyEffect(
       ack,
       gameEffect((clock) => {
         throttle(clock.now());
+        if (!isCurrentTowerSocketIntent(socket.id, intent)) return;
         if (!player) throw new Error("Vous n’êtes pas connecté au club.");
         const sockets = towerSockets.get(player.id) ?? new Set();
         sockets.add(socket.id);
@@ -646,16 +679,35 @@ io.on("connection", (socket) => {
   // Leaving the Tower view settles the climb: nothing stays at risk while the
   // player is in another game.
   socket.on("tower:leave", (ack: (value: Ack) => void) => {
+    const intent = markTowerSocketIntent(socket.id, "leave");
     replyWalletEffect(
       ack,
       Effect.gen(function* () {
+        const isCurrentLeave = yield* gameEffect(() =>
+          isCurrentTowerSocketIntent(socket.id, intent),
+        );
+        if (!isCurrentLeave) return;
         const currentPlayer = yield* gameEffect((clock) => {
           throttle(clock.now());
           if (!player) throw new Error("Vous n’êtes pas connecté au club.");
           return player;
         });
+        const shouldLeave = yield* detachTowerSocketEffect(
+          socket.id,
+          currentPlayer,
+        );
         yield* refreshWalletEffect(currentPlayer);
-        yield* leaveTowerEffect(socket.id, currentPlayer, true);
+        if (shouldLeave) {
+          const stillAbsent = yield* gameEffect(
+            () =>
+              isCurrentTowerSocketIntent(socket.id, intent) &&
+              !towerSockets.get(currentPlayer.id)?.size,
+          );
+          if (stillAbsent)
+            yield* tower.leaveEffect(currentPlayer, undefined, {
+              abandon: true,
+            });
+        }
       }),
     );
   });
@@ -727,6 +779,7 @@ io.on("connection", (socket) => {
     runOrThrow(
       Effect.gen(function* () {
         yield* leaveTowerEffect(socket.id, disconnectedPlayer, false);
+        yield* gameEffect(() => towerSocketIntents.delete(socket.id));
         yield* gameEffect(() => {
           roulette.run((r) => r.disconnect(socket.id, disconnectedPlayer.id));
         });

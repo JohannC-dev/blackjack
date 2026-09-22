@@ -69,7 +69,12 @@ try {
   });
   assert(!refused.ok && refused.error.includes("Ouvrez la Tower"));
 
-  assert((await emit(alice, "tower:join")).ok);
+  // React StrictMode can emit this sequence during a remount without waiting
+  // for any of the socket acknowledgements.
+  alice.socket.emit("tower:join");
+  alice.socket.emit("tower:leave");
+  alice.socket.emit("tower:join");
+  await until(() => !!alice.tower, "Tower state absent after a rapid remount");
   assert((await emit(bob, "tower:join")).ok);
   const started = await emit(alice, "tower:command", {
     type: "start",
