@@ -1,3 +1,5 @@
+import type { BetChips, ChipCount } from "./types";
+
 export const INITIAL_CREDIT_BALANCE = 500_000;
 
 export const CASINO_CHIP_DENOMINATIONS = [
@@ -25,10 +27,87 @@ export type CasinoChipDenomination = (typeof CASINO_CHIP_DENOMINATIONS)[number];
 export type CasinoChipStackStage = {
   index: 1 | 2 | 3 | 4;
   columns: ReadonlyArray<{
-    denomination: CasinoChipDenomination;
+    denomination: number;
     layers: number;
   }>;
 };
+
+export function emptyBetChips(): BetChips {
+  return { main: [], three: [], pairs: [] };
+}
+
+export function copyBetChips(chips: BetChips): BetChips {
+  return {
+    main: chips.main.map((chip) => ({ ...chip })),
+    three: chips.three.map((chip) => ({ ...chip })),
+    pairs: chips.pairs.map((chip) => ({ ...chip })),
+  };
+}
+
+export function addBetChip(
+  chips: BetChips,
+  type: keyof BetChips,
+  denomination: number,
+): BetChips {
+  const next = copyBetChips(chips);
+  const existing = next[type].find(
+    (chip) => chip.denomination === denomination,
+  );
+  if (existing) existing.count++;
+  else next[type].push({ denomination, count: 1 });
+  return next;
+}
+
+export function mergeChipCounts(
+  left: readonly ChipCount[],
+  right: readonly ChipCount[],
+): ChipCount[] {
+  const merged = left.map((chip) => ({ ...chip }));
+  for (const chip of right) {
+    const existing = merged.find(
+      (entry) => entry.denomination === chip.denomination,
+    );
+    if (existing) existing.count += chip.count;
+    else merged.push({ ...chip });
+  }
+  return merged;
+}
+
+export function chipCountTotal(chips: readonly ChipCount[]) {
+  return chips.reduce(
+    (total, chip) => total + chip.denomination * chip.count,
+    0,
+  );
+}
+
+export function chipStackForComposition(
+  chips: readonly ChipCount[] | undefined,
+  amount: number,
+  maximum: number,
+): CasinoChipStackStage {
+  if (!chips?.length) {
+    const stage = casinoChipStackForAmount(amount, maximum);
+    return {
+      ...stage,
+      columns: stage.columns.map((column) => ({
+        ...column,
+        denomination: chipColorDenomination(amount),
+      })),
+    };
+  }
+  const count = chips.reduce((total, chip) => total + chip.count, 0);
+  let index: CasinoChipStackStage["index"] = 4;
+  if (count <= 1) index = 1;
+  else if (count <= 3) index = 2;
+  else if (count <= 6) index = 3;
+  return {
+    index,
+    columns: chips.slice(-3).map((chip) => ({
+      denomination: chip.denomination,
+      layers: Math.min(chip.count, 6),
+    })),
+  };
+}
 
 const CHIP_STACK_STAGES: ReadonlyArray<CasinoChipStackStage> = [
   { index: 1, columns: [{ denomination: 5_000, layers: 2 }] },
@@ -61,23 +140,37 @@ export function casinoChipStackForAmount(
   return CHIP_STACK_STAGES[3];
 }
 
-const ALL_CHIP_DENOMINATIONS: readonly number[] = [
-  ...CASINO_CHIP_DENOMINATIONS,
-  ...BLACKJACK_CHIP_DENOMINATIONS,
-].filter((amount, index, values) => values.indexOf(amount) === index);
+const CHIP_PALETTES = [
+  ["#f5d7d7", "#a53c47", "#d27d83", "#60212b"],
+  ["#d5e4fa", "#3266a2", "#83a8d4", "#1b3a67"],
+  ["#d9edda", "#3b8650", "#8fc89a", "#215333"],
+  ["#f8e5c4", "#b0782a", "#dbb873", "#684316"],
+  ["#e6dcf5", "#7650a4", "#ad92d0", "#422867"],
+  ["#f4dbe9", "#a74579", "#d98fb3", "#612648"],
+  ["#d1ecec", "#287f86", "#7fc2c5", "#174f55"],
+  ["#e7e6e1", "#666b77", "#adb0b8", "#373b47"],
+  ["#f7e9ca", "#a48636", "#d9bc72", "#594519"],
+] as const;
 
-/** Gives every denomination its own palette, including blackjack table chips. */
+/** Blackjack values between casino denominations share the lower chip's colour. */
+export function chipColorDenomination(amount: number) {
+  for (let index = CASINO_CHIP_DENOMINATIONS.length - 1; index >= 0; index--)
+    if (amount >= CASINO_CHIP_DENOMINATIONS[index])
+      return CASINO_CHIP_DENOMINATIONS[index];
+  return CASINO_CHIP_DENOMINATIONS[0];
+}
+
 export function chipColors(amount: number) {
-  const knownIndex = ALL_CHIP_DENOMINATIONS.indexOf(amount);
-  const index = knownIndex >= 0 ? knownIndex : Math.abs(Math.round(amount));
-  const hue = Math.round((268 + index * 137.508) % 360);
-  const lightness = 39 + (index % 3) * 5;
+  const index = CASINO_CHIP_DENOMINATIONS.indexOf(
+    chipColorDenomination(amount),
+  );
+  const [edge, base, border, shadow] = CHIP_PALETTES[index];
   return {
-    "--chip-edge": `hsl(${hue} 72% 82%)`,
-    "--chip-base": `hsl(${hue} 48% ${lightness}%)`,
-    "--chip-border": `hsl(${hue} 58% 68%)`,
-    "--chip-shadow": `hsl(${hue} 42% 22%)`,
-    "--chip-text": lightness > 45 ? "#17121f" : "#fffaf0",
+    "--chip-edge": edge,
+    "--chip-base": base,
+    "--chip-border": border,
+    "--chip-shadow": shadow,
+    "--chip-text": "#fffaf0",
   };
 }
 

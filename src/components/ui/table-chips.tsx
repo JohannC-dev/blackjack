@@ -9,7 +9,8 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { casinoChipStackForAmount, chipColors } from "@/lib/chips";
+import { chipStackForComposition, chipColors } from "@/lib/chips";
+import type { ChipCount } from "@/lib/types";
 import { credits } from "@/lib/rules";
 import { motionDuration } from "./motion";
 
@@ -17,17 +18,20 @@ export const AnimatedTableChip = memo(
   function AnimatedTableChip({
     amount,
     maximum,
+    chips,
     className,
     placeholder,
   }: {
     amount: number;
     maximum: number;
+    chips?: readonly ChipCount[];
     className: string;
     placeholder: ReactNode;
   }) {
     const [renderedAmount, setRenderedAmount] = useState<number | null>(
       amount > 0 ? amount : null,
     );
+    const [renderedChips, setRenderedChips] = useState(chips);
     const [exiting, setExiting] = useState(false);
     const exitTimer = useRef<number | null>(null);
 
@@ -39,6 +43,7 @@ export const AnimatedTableChip = memo(
 
       if (amount > 0) {
         setRenderedAmount(amount);
+        setRenderedChips(chips);
         setExiting(false);
         return;
       }
@@ -64,7 +69,7 @@ export const AnimatedTableChip = memo(
           exitTimer.current = null;
         }
       };
-    }, [amount, renderedAmount]);
+    }, [amount, chips, renderedAmount]);
 
     if (renderedAmount === null) {
       return <span className="spot-placeholder">{placeholder}</span>;
@@ -74,12 +79,14 @@ export const AnimatedTableChip = memo(
       <TableChipStack
         amount={renderedAmount}
         maximum={maximum}
+        chips={renderedChips}
         className={`${className} ${exiting ? "is-exiting" : ""}`}
       />
     );
   },
   (left, right) =>
     left.amount === right.amount &&
+    left.chips === right.chips &&
     left.maximum === right.maximum &&
     left.className === right.className,
 );
@@ -87,13 +94,15 @@ export const AnimatedTableChip = memo(
 export const TableChipStack = memo(function TableChipStack({
   amount,
   maximum,
+  chips,
   className = "",
 }: {
   amount: number;
   maximum: number;
+  chips?: readonly ChipCount[];
   className?: string;
 }) {
-  const stage = casinoChipStackForAmount(amount, maximum);
+  const stage = chipStackForComposition(chips, amount, maximum);
   return (
     <span
       key={stage.index}
@@ -132,11 +141,13 @@ export function SettlementChipAnimation({
   stake,
   payout,
   maximum,
+  stakeChips,
   side = false,
 }: {
   stake: number;
   payout: number;
   maximum: number;
+  stakeChips?: readonly ChipCount[];
   side?: boolean;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -195,6 +206,7 @@ export function SettlementChipAnimation({
           <TableChipStack
             amount={stake}
             maximum={maximum}
+            chips={stakeChips}
             className={`${chipClass} settlement-stake`}
           />
           <TableChipStack
@@ -207,6 +219,7 @@ export function SettlementChipAnimation({
         <TableChipStack
           amount={stake}
           maximum={maximum}
+          chips={stakeChips}
           className={`${chipClass} settlement-loss`}
         />
       )}

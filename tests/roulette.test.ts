@@ -306,6 +306,34 @@ describe("Roulette européenne", () => {
     expect(table.state().players[0].bets).toEqual([]);
   });
 
+  test("preserves the chips placed on a spot and repeats them", () => {
+    const table = club(() => 1);
+    table.sit("alice");
+    const bet = {
+      kind: "dozen" as const,
+      selection: "3",
+      amount: CHIP * 5,
+      chips: [
+        { denomination: CHIP, count: 1 },
+        { denomination: CHIP * 4, count: 1 },
+      ],
+    };
+    table.send("alice", { type: "bets", bets: [bet] });
+    expect(table.state().players[0].bets).toEqual([bet]);
+    expect(() =>
+      table.send("alice", {
+        type: "bets",
+        bets: [{ ...bet, chips: [{ denomination: CHIP, count: 1 }] }],
+      }),
+    ).toThrow(InvalidBets);
+    table.send("alice", { type: "ready", ready: true });
+    table.wait(3_100);
+    table.wait(ROULETTE_SPIN_MS);
+    table.wait(6_000);
+    table.send("alice", { type: "repeat" });
+    expect(table.state().players[0].bets).toEqual([bet]);
+  });
+
   test("le plafond s’applique par case, pas au total", () => {
     const table = club();
     table.sit("alice", MAX_PER_SPOT * 3);

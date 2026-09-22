@@ -2,11 +2,15 @@ import { randomInt, randomUUID } from "node:crypto";
 import { gameEffect } from "./effect";
 import { inMemoryGameWallet, type GameWallet } from "./game-wallet";
 import {
+  BLACKJACK_CHIP_DENOMINATIONS,
   BLACKJACK_MAX_BET,
   BLACKJACK_MAX_SIDE_BET,
   BLACKJACK_MIN_BET,
   CASINO_CHIP_DENOMINATIONS,
   INITIAL_CREDIT_BALANCE,
+  chipCountTotal,
+  copyBetChips,
+  emptyBetChips,
 } from "../src/lib/chips";
 import {
   betTotal,
@@ -18,6 +22,8 @@ import {
   score,
 } from "../src/lib/rules";
 import type {
+  Bet,
+  BetChips,
   Card,
   Command,
   Hand,
@@ -36,6 +42,32 @@ export type Player = PublicPlayer & {
 };
 const emptyBet = () => ({ main: 0, three: 0, pairs: 0 });
 const emptySides = () => ({ three: null, pairs: null });
+function chipsForBet(bet: Bet): BetChips {
+  return {
+    main: bet.main ? [{ denomination: bet.main, count: 1 }] : [],
+    three: bet.three ? [{ denomination: bet.three, count: 1 }] : [],
+    pairs: bet.pairs ? [{ denomination: bet.pairs, count: 1 }] : [],
+  };
+}
+function validBetChips(chips: BetChips, bet: Bet) {
+  if (!chips || typeof chips !== "object") return false;
+  return (["main", "three", "pairs"] as const).every((type) => {
+    const stack = chips[type];
+    return (
+      Array.isArray(stack) &&
+      stack.length <= BLACKJACK_CHIP_DENOMINATIONS.length &&
+      stack.every(
+        (chip) =>
+          chip &&
+          BLACKJACK_CHIP_DENOMINATIONS.includes(chip.denomination) &&
+          Number.isSafeInteger(chip.count) &&
+          chip.count > 0,
+      ) &&
+      new Set(stack.map((chip) => chip.denomination)).size === stack.length &&
+      chipCountTotal(stack) === bet[type]
+    );
+  });
+}
 const BETTING_COUNTDOWN_MS = 12_000;
 const ALL_READY_COUNTDOWN_MS = 3_000;
 const SETTLED_COUNTDOWN_MS = 7_000;
@@ -101,6 +133,8 @@ export class Table {
         index,
         playerId: null,
         bet: emptyBet(),
+        chips: emptyBetChips(),
+        previousChips: null,
         previousBet: null,
         hands: [],
         sides: emptySides(),
@@ -119,6 +153,10 @@ export class Table {
     const seats = this.state.seats.map((seat) => ({
       ...seat,
       bet: { ...seat.bet },
+      chips: copyBetChips(seat.chips),
+      previousChips: seat.previousChips
+        ? copyBetChips(seat.previousChips)
+        : null,
       previousBet: seat.previousBet ? { ...seat.previousBet } : null,
       sides: { ...seat.sides },
       hands: seat.hands.map((hand) => {
@@ -217,6 +255,8 @@ export class Table {
       if (seat) {
         seat.playerId = player.id;
         seat.bet = emptyBet();
+        seat.chips = emptyBetChips();
+        seat.previousChips = null;
         seat.previousBet = null;
         this.idleSeatRounds.set(seat.index, 0);
       }
@@ -226,6 +266,8 @@ export class Table {
   private clearSeat(seat: Seat) {
     seat.playerId = null;
     seat.bet = emptyBet();
+    seat.chips = emptyBetChips();
+    seat.previousChips = null;
     seat.previousBet = null;
     seat.hands = [];
     seat.sides = emptySides();
@@ -360,7 +402,12 @@ export class Table {
         if (!total) throw new Error("Aucune mise précédente à répéter.");
         if (total > this.wallet.balance(player))
           throw new Error("Vous n’avez pas assez de crédits.");
-        for (const seat of own) seat.bet = { ...seat.previousBet! };
+        for (const seat of own) {
+          seat.bet = { ...seat.previousBet! };
+          seat.chips = seat.previousChips
+            ? copyBetChips(seat.previousChips)
+            : chipsForBet(seat.bet);
+        }
         player.ready = false;
       } else if (
         command.type === "claim" ||
@@ -375,6 +422,8 @@ export class Table {
           if (seat.playerId) throw new Error("Cette place est déjà occupée.");
           seat.playerId = playerId;
           seat.bet = emptyBet();
+          seat.chips = emptyBetChips();
+          seat.previousChips = null;
           seat.previousBet = null;
           this.idleSeatRounds.set(seat.index, 0);
         } else {
@@ -417,7 +466,12 @@ export class Table {
               .reduce((sum, s) => sum + betTotal(s.bet), 0);
             if (reserved + betTotal(b) > this.wallet.balance(player))
               throw new Error("Vous n’avez pas assez de crédits.");
+            if (command.chips && !validBetChips(command.chips, b))
+              throw new Error("La pile de jetons ne correspond pas à la mise.");
             seat.bet = { main: b.main, three: b.three, pairs: b.pairs };
+            seat.chips = command.chips
+              ? copyBetChips(command.chips)
+              : chipsForBet(seat.bet);
           }
         }
         player.ready = false;
@@ -628,7 +682,10 @@ export class Table {
     // remain displayed on the table while the round is in progress.
     const dealtSeatIndexes = new Set(seats.map((seat) => seat.index));
     for (const seat of this.state.seats)
-      if (!dealtSeatIndexes.has(seat.index)) seat.bet = emptyBet();
+      if (!dealtSeatIndexes.has(seat.index)) {
+        seat.bet = emptyBet();
+        seat.chips = emptyBetChips();
+      }
     this.state.round++;
     this.state.phase = "dealing";
     this.state.deadline = null;
@@ -637,6 +694,7 @@ export class Table {
     for (const seat of seats) {
       const player = this.players.get(seat.playerId!)!;
       seat.previousBet = { ...seat.bet };
+      seat.previousChips = copyBetChips(seat.chips);
       seat.committed = betTotal(seat.bet);
       seat.hands = [
         {
@@ -914,6 +972,7 @@ export class Table {
       for (const player of this.players.values()) player.ready = false;
       for (const seat of this.state.seats) {
         seat.bet = emptyBet();
+        seat.chips = emptyBetChips();
         seat.hands = [];
         seat.sides = emptySides();
         seat.committed = 0;

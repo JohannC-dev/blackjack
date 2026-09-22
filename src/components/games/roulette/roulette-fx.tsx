@@ -6,13 +6,13 @@ import {
   type CSSProperties,
   type RefObject,
 } from "react";
-import { CASINO_CHIP_DENOMINATIONS } from "@/lib/chips";
+import { chipColors, mergeChipCounts } from "@/lib/chips";
 import {
   ROULETTE_MAX_PER_SPOT,
   rouletteBetId,
   rouletteBetWins,
 } from "@/lib/roulette";
-import type { RouletteTableState } from "@/lib/types";
+import type { ChipCount, RouletteTableState } from "@/lib/types";
 import { TableChipStack } from "../../ui/table-chips";
 
 type Point = { x: number; y: number };
@@ -94,22 +94,36 @@ export function RouletteFx({
   if (!table || !geometry || table.phase !== "settled") return null;
   const number = table.number;
   if (number === null) return null;
-  const losing = new Map<string, number>();
+  const losing = new Map<string, { amount: number; chips: ChipCount[] }>();
   for (const player of table.players)
     for (const bet of player.bets)
       if (!rouletteBetWins(bet, number)) {
         const id = rouletteBetId(bet);
-        losing.set(id, (losing.get(id) ?? 0) + bet.amount);
+        const previous = losing.get(id);
+        losing.set(id, {
+          amount: (previous?.amount ?? 0) + bet.amount,
+          chips: mergeChipCounts(
+            previous?.chips ?? [],
+            bet.chips ?? [{ denomination: bet.amount, count: 1 }],
+          ),
+        });
       }
   const piles = [...losing]
     .filter(([id]) => geometry.spots[id])
-    .map(([id, amount], index) => ({
+    .map(([id, { amount, chips }], index) => ({
       id,
       amount,
+      chips,
       spot: geometry.spots[id],
       delay: ROULETTE_FX.rake + index * ROULETTE_FX.rakeStagger,
       // Bigger piles shed more chips, within an overall budget.
-      count: Math.min(6, Math.max(2, Math.round(amount / 15))),
+      count: Math.min(
+        6,
+        Math.max(
+          2,
+          chips.reduce((sum, chip) => sum + chip.count, 0),
+        ),
+      ),
     }));
   if (!piles.length) return null;
 
@@ -117,12 +131,16 @@ export function RouletteFx({
   const budget = piles.reduce((sum, { count }) => sum + count, 0);
   const scale = Math.min(1, ROULETTE_FX.maxDrops / budget);
   let drop = 0;
-  const rain = piles.flatMap(({ spot, delay, count }) =>
-    Array.from({ length: Math.max(1, Math.round(count * scale)) }, () => ({
-      index: drop++,
-      spot,
-      start: delay + ROULETTE_FX.lift,
-    })),
+  const rain = piles.flatMap(({ spot, delay, count, chips }) =>
+    Array.from(
+      { length: Math.max(1, Math.round(count * scale)) },
+      (_, layer) => ({
+        index: drop++,
+        spot,
+        denomination: chips[layer % chips.length]?.denomination ?? 5_000,
+        start: delay + ROULETTE_FX.lift,
+      }),
+    ),
   );
 
   return (
@@ -131,7 +149,7 @@ export function RouletteFx({
       style={{ "--cell": `${geometry.cell}px` } as CSSProperties}
       key={`settle-${table.round}`}
     >
-      {piles.map(({ id, amount, spot, delay }) => (
+      {piles.map(({ id, amount, chips, spot, delay }) => (
         <span
           key={id}
           className="roulette-fx-pile is-lift"
@@ -146,36 +164,32 @@ export function RouletteFx({
         >
           <TableChipStack
             amount={amount}
+            chips={chips}
             maximum={ROULETTE_MAX_PER_SPOT / 2}
             className="roulette-chip"
           />
         </span>
       ))}
-      {rain.map(({ index, spot, start }) => {
-        const denomination =
-          CASINO_CHIP_DENOMINATIONS[
-            Math.floor(noise(index, 1) * CASINO_CHIP_DENOMINATIONS.length)
-          ];
-        return (
-          <span
-            key={index}
-            className={`roulette-rain-drop chip-${denomination}`}
-            style={
-              {
-                left: spot.x + (noise(index, 2) - 0.5) * dropSize,
-                top: spot.y - geometry.cell * 0.45,
-                "--size": `${dropSize}px`,
-                "--x": `${(noise(index, 3) - 0.5) * geometry.cell * 3}px`,
-                "--rise": `${-10 - noise(index, 4) * 18}px`,
-                "--fall": `${geometry.bottom - spot.y + 60}px`,
-                "--rot": `${(noise(index, 5) - 0.5) * 900}deg`,
-                "--delay": `${start + noise(index, 6) * 160}ms`,
-                "--dur": `${800 + noise(index, 7) * 450}ms`,
-              } as CSSProperties
-            }
-          />
-        );
-      })}
+      {rain.map(({ index, spot, start, denomination }) => (
+        <span
+          key={index}
+          className={`roulette-rain-drop chip-${denomination}`}
+          style={
+            {
+              ...chipColors(denomination),
+              left: spot.x + (noise(index, 2) - 0.5) * dropSize,
+              top: spot.y - geometry.cell * 0.45,
+              "--size": `${dropSize}px`,
+              "--x": `${(noise(index, 3) - 0.5) * geometry.cell * 3}px`,
+              "--rise": `${-10 - noise(index, 4) * 18}px`,
+              "--fall": `${geometry.bottom - spot.y + 60}px`,
+              "--rot": `${(noise(index, 5) - 0.5) * 900}deg`,
+              "--delay": `${start + noise(index, 6) * 160}ms`,
+              "--dur": `${800 + noise(index, 7) * 450}ms`,
+            } as CSSProperties
+          }
+        />
+      ))}
     </div>
   );
 }

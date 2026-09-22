@@ -449,7 +449,7 @@
   padding: 2px 4px;
   font-size: max(8px, calc(var(--cell) * 0.16));
 }
-/* Other players: another colour, translucent, slightly behind mine. */
+/* Other players: translucent, slightly behind mine. */
 .roulette-chip.roulette-chip-other {
   opacity: 0.3;
   transition: opacity 160ms ease;
@@ -459,12 +459,6 @@
 /* Under my own chips, or under the spot I am aiming at. */
 .roulette-chip.roulette-chip-other.is-faint {
   opacity: 0.12;
-}
-.roulette-chip-other .table-chip-column {
-  --chip-edge: #bff3e2;
-  --chip-base: #3f9c86;
-  --chip-border: #8fdcc7;
-  --chip-shadow: #24594d;
 }
 .roulette-chip-other .table-chip-amount {
   color: #c9f5e8;

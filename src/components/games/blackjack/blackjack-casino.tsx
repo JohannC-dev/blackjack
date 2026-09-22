@@ -59,11 +59,15 @@ import {
   CASINO_CHIP_DENOMINATIONS,
   INITIAL_CREDIT_BALANCE,
   chipLabel,
+  addBetChip,
+  copyBetChips,
+  emptyBetChips,
 } from "@/lib/chips";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
 import { DEFAULT_PUBLIC_TABLE_ID, PUBLIC_TABLES } from "@/lib/table-config";
 import type {
   Bet,
+  BetChips,
   GambleColor,
   GambleState,
   Hand,
@@ -109,6 +113,8 @@ const EMPTY_SEATS: Seat[] = Array.from({ length: 5 }, (_, index) => ({
   index,
   playerId: null,
   bet: { main: 0, three: 0, pairs: 0 },
+  chips: emptyBetChips(),
+  previousChips: null,
   previousBet: null,
   hands: [],
   sides: { three: null, pairs: null },
@@ -349,6 +355,7 @@ function BlackjackMainBetChips({ seat }: { seat: Seat }) {
             <AnimatedTableChip
               amount={group.amount}
               maximum={BLACKJACK_MAX_BET}
+              chips={seat.chips.main}
               className="blackjack-bet-chip"
               placeholder={null}
               key={`${group.id}-${stackIndex}`}
@@ -373,6 +380,11 @@ function BlackjackMainSettlement({ seat }: { seat: Seat }) {
         <span className="blackjack-settlement-group" key={hand.id}>
           <SettlementChipAnimation
             stake={hand.bet}
+            stakeChips={seat.chips.main.map((chip) => ({
+              ...chip,
+              count:
+                chip.count * Math.max(1, Math.round(hand.bet / seat.bet.main)),
+            }))}
             payout={hand.payout ?? 0}
             maximum={BLACKJACK_MAX_BET}
           />
@@ -570,6 +582,7 @@ const SeatView = memo(function SeatView({
                   ) : (
                     <SettlementChipAnimation
                       stake={stake}
+                      stakeChips={seat.chips[type]}
                       payout={payout}
                       maximum={BLACKJACK_MAX_SIDE_BET}
                       side
@@ -587,6 +600,7 @@ const SeatView = memo(function SeatView({
                   <AnimatedTableChip
                     amount={stake}
                     maximum={BLACKJACK_MAX_SIDE_BET}
+                    chips={seat.chips[type]}
                     className="side-chip"
                     placeholder={placeholder}
                   />
@@ -1079,9 +1093,9 @@ export function BlackjackCasino({
   const [authPending, setAuthPending] = useState(false);
   const [tableCode, setTableCode] = useState("");
   const [selectedSeat, setSelectedSeat] = useState(2);
-  const [betHistory, setBetHistory] = useState<{ seat: number; before: Bet }[]>(
-    [],
-  );
+  const [betHistory, setBetHistory] = useState<
+    { seat: number; before: Bet; beforeChips: BetChips }[]
+  >([]);
   const [chip, setChip] = useState<number>(BLACKJACK_CHIP_PRESETS[0][0]);
   const [toast, setToast] = useState("");
   const [notice, setNotice] = useState<{
@@ -1395,15 +1409,17 @@ export function BlackjackCasino({
       }
       setSelectedSeat(target.index);
       const before = { ...target.bet };
+      const beforeChips = copyBetChips(target.chips);
       void command({
         type: "bet",
         seat: target.index,
         bet: { ...before, [type]: before[type] + chip },
+        chips: addBetChip(beforeChips, type, chip),
       }).then((ok) => {
         if (ok)
           setBetHistory((history) => [
             ...history,
-            { seat: target.index, before },
+            { seat: target.index, before, beforeChips },
           ]);
       });
     },
@@ -1418,17 +1434,24 @@ export function BlackjackCasino({
   const undoBet = () => {
     const last = betHistory.at(-1);
     if (!last) return;
-    void command({ type: "bet", seat: last.seat, bet: last.before }).then(
-      (ok) => {
-        if (ok) setBetHistory((history) => history.slice(0, -1));
-      },
-    );
+    void command({
+      type: "bet",
+      seat: last.seat,
+      bet: last.before,
+      chips: last.beforeChips,
+    }).then((ok) => {
+      if (ok) setBetHistory((history) => history.slice(0, -1));
+    });
   };
   const repeatBet = () => {
     if (!previousBetTotal || totalBet) return;
     const before = ownSeats
       .filter((target) => target.previousBet)
-      .map((target) => ({ seat: target.index, before: { ...target.bet } }));
+      .map((target) => ({
+        seat: target.index,
+        before: { ...target.bet },
+        beforeChips: copyBetChips(target.chips),
+      }));
     void command({ type: "repeat" }).then((ok) => {
       if (ok) setBetHistory(before);
     });
@@ -1440,6 +1463,7 @@ export function BlackjackCasino({
           type: "bet",
           seat: target.index,
           bet: { main: 0, three: 0, pairs: 0 },
+          chips: emptyBetChips(),
         });
         if (!ok) return;
       }

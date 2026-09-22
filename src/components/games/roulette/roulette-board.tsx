@@ -1,6 +1,7 @@
 "use client";
 
 import { credits } from "@/lib/rules";
+import { mergeChipCounts } from "@/lib/chips";
 import { useState, type CSSProperties } from "react";
 import { ROULETTE_FX } from "./roulette-fx";
 import {
@@ -12,19 +13,18 @@ import {
   type RouletteBet,
   type RouletteBetKind,
 } from "@/lib/roulette";
-import type { RouletteTableState } from "@/lib/types";
-import {
-  SettlementChipAnimation,
-  TableChipStack,
-} from "../../ui/table-chips";
+import type { ChipCount, RouletteTableState } from "@/lib/types";
+import { SettlementChipAnimation, TableChipStack } from "../../ui/table-chips";
 import { numberTone } from "./roulette-wheel";
 
 export type Target = { kind: RouletteBetKind; selection: string };
 
 export type BoardProps = {
   mine: Map<string, number>;
-  /** Chips of the other players, drawn translucent in another colour. */
+  mineChips: Map<string, ChipCount[]>;
+  /** Chips of the other players, drawn translucent. */
   others: Map<string, number>;
+  othersChips: Map<string, ChipCount[]>;
   chip: number;
   canBet: boolean;
   result: number | null;
@@ -126,6 +126,9 @@ function anchorOf({ kind, selection }: Target) {
 function Chips({ id, board }: { id: string; board: BoardProps }) {
   const amount = board.mine.get(id) ?? 0;
   const others = board.others.get(id) ?? 0;
+  const myChips = board.mineChips.get(id) ?? [];
+  const otherChips = board.othersChips.get(id) ?? [];
+  const allChips = mergeChipCounts(myChips, otherChips);
   if (!amount && !others) return null;
   // Once the ball is launched every chip of a spot joins one pile. At the
   // result the losing piles are taken over by RouletteFx, while the winnings
@@ -140,6 +143,7 @@ function Chips({ id, board }: { id: string; board: BoardProps }) {
         <>
           <SettlementChipAnimation
             stake={stake}
+            stakeChips={allChips}
             payout={stake + gain}
             maximum={ROULETTE_MAX_PER_SPOT / 2}
           />
@@ -154,6 +158,7 @@ function Chips({ id, board }: { id: string; board: BoardProps }) {
     return (
       <TableChipStack
         amount={amount + others}
+        chips={allChips}
         maximum={ROULETTE_MAX_PER_SPOT / 2}
         className="roulette-chip"
       />
@@ -167,6 +172,7 @@ function Chips({ id, board }: { id: string; board: BoardProps }) {
       {others > 0 && (
         <TableChipStack
           amount={others}
+          chips={otherChips}
           maximum={ROULETTE_MAX_PER_SPOT / 2}
           className={`roulette-chip roulette-chip-other ${amount ? "is-behind" : ""} ${faint ? "is-faint" : ""}`}
         />
@@ -174,6 +180,7 @@ function Chips({ id, board }: { id: string; board: BoardProps }) {
       {amount > 0 && (
         <TableChipStack
           amount={amount}
+          chips={myChips}
           maximum={ROULETTE_MAX_PER_SPOT / 2}
           className="roulette-chip"
         />
@@ -385,6 +392,18 @@ export function RouletteBoard(props: BoardProps) {
       </div>
     </div>
   );
+}
+
+export function betChipMap(
+  bets: RouletteBet[],
+  into = new Map<string, ChipCount[]>(),
+) {
+  for (const bet of bets) {
+    const id = rouletteBetId(bet);
+    const chips = bet.chips ?? [{ denomination: bet.amount, count: 1 }];
+    into.set(id, mergeChipCounts(into.get(id) ?? [], chips));
+  }
+  return into;
 }
 
 export function betMap(bets: RouletteBet[], into = new Map<string, number>()) {

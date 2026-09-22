@@ -3,7 +3,7 @@
 import { Check, CircleDot, Repeat2, RotateCcw, Volume2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
-import { CASINO_CHIP_DENOMINATIONS } from "@/lib/chips";
+import { CASINO_CHIP_DENOMINATIONS, mergeChipCounts } from "@/lib/chips";
 import {
   ROULETTE_MAX_BETS,
   ROULETTE_MAX_PER_SPOT,
@@ -15,6 +15,7 @@ import {
 } from "@/lib/roulette";
 import { credits } from "@/lib/rules";
 import type { CasinoView } from "@/lib/navigation";
+import type { ChipCount } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import { Chip } from "../../ui/chip";
 import { RouletteFx, ROULETTE_FX } from "./roulette-fx";
@@ -25,7 +26,7 @@ import {
   GameControlsBar,
 } from "../../ui/game-controls";
 import { CasinoRail, ClubHeader, getClubBalance } from "../../ui";
-import { RouletteBoard, betMap } from "./roulette-board";
+import { RouletteBoard, betMap, betChipMap } from "./roulette-board";
 import { colorName, numberTone, RouletteWheel } from "./roulette-wheel";
 
 type Game = ReturnType<typeof useGame>;
@@ -124,10 +125,25 @@ export function RouletteCasino({
       existing
         ? myBets.map((bet) =>
             rouletteBetId(bet) === id
-              ? { ...bet, amount: bet.amount + chip }
+              ? {
+                  ...bet,
+                  amount: bet.amount + chip,
+                  chips: mergeChipCounts(
+                    bet.chips ?? [{ denomination: bet.amount, count: 1 }],
+                    [{ denomination: chip, count: 1 }],
+                  ),
+                }
               : bet,
           )
-        : [...myBets, { kind, selection, amount: chip }],
+        : [
+            ...myBets,
+            {
+              kind,
+              selection,
+              amount: chip,
+              chips: [{ denomination: chip, count: 1 }],
+            },
+          ],
     );
   };
   const remove = (kind: RouletteBetKind, selection: string) => {
@@ -152,8 +168,13 @@ export function RouletteCasino({
   };
 
   const mine = betMap(myBets);
+  const mineChips = betChipMap(myBets);
+  const othersChips = new Map<string, ChipCount[]>();
   const othersMap = new Map<string, number>();
-  for (const player of others) betMap(player.bets, othersMap);
+  for (const player of others) {
+    betMap(player.bets, othersMap);
+    betChipMap(player.bets, othersChips);
+  }
 
   const readyCount = table?.players.filter((player) => player.ready).length;
   const actionLabel = !betting
@@ -397,7 +418,9 @@ export function RouletteCasino({
                 </div>
                 <RouletteBoard
                   mine={mine}
+                  mineChips={mineChips}
                   others={othersMap}
+                  othersChips={othersChips}
                   chip={chip}
                   canBet={canBet}
                   result={result}

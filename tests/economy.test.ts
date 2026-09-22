@@ -5,10 +5,13 @@ import { MinesGame } from "../server/mines";
 import { CASH_LIMITS, SPIN_BUY_INS } from "../server/poker";
 import {
   BLACKJACK_CHIP_DENOMINATIONS,
+  BLACKJACK_MAX_BET,
   BLACKJACK_CHIP_PRESETS,
   CASINO_CHIP_DENOMINATIONS,
   INITIAL_CREDIT_BALANCE,
   chipLabel,
+  chipColors,
+  chipStackForComposition,
 } from "../src/lib/chips";
 import { isValidRouletteBet, ROULETTE_MAX_PER_SPOT } from "../src/lib/roulette";
 
@@ -65,6 +68,63 @@ describe("Nouvelle économie", () => {
         bet: { main: 5_000, three: 0, pairs: 0 },
       }),
     ).toThrow("combinaison");
+  });
+
+  test("keeps chip colours fixed between casino denominations", () => {
+    expect(chipColors(15_000)).toEqual(chipColors(5_000));
+    expect(chipColors(30_000)).toEqual(chipColors(20_000));
+    expect(chipColors(60_000)).toEqual(chipColors(20_000));
+    expect(chipColors(100_000)).not.toEqual(chipColors(20_000));
+    expect(chipColors(1_600_000)).toEqual(chipColors(500_000));
+    expect(chipColors(10_000_000)).toEqual(chipColors(16_000_000));
+  });
+
+  test("keeps selected blackjack chips on the table and for repeat", () => {
+    const member = player();
+    const table = new Table("CHIPS");
+    table.add(member);
+    const seat = table.state.seats.find(
+      (entry) => entry.playerId === member.id,
+    )!;
+    const chips = {
+      main: [
+        { denomination: 15_000, count: 1 },
+        { denomination: 30_000, count: 1 },
+      ],
+      three: [{ denomination: 15_000, count: 1 }],
+      pairs: [],
+    };
+    table.command(member.id, {
+      type: "bet",
+      seat: seat.index,
+      bet: { main: 45_000, three: 15_000, pairs: 0 },
+      chips,
+    });
+    expect(table.snapshot().seats[seat.index].chips).toEqual(chips);
+    expect(
+      chipStackForComposition(seat.chips.main, seat.bet.main, BLACKJACK_MAX_BET)
+        .columns,
+    ).toEqual([
+      { denomination: 15_000, layers: 1 },
+      { denomination: 30_000, layers: 1 },
+    ]);
+    expect(() =>
+      table.command(member.id, {
+        type: "bet",
+        seat: seat.index,
+        bet: { main: 45_000, three: 15_000, pairs: 0 },
+        chips: { ...chips, main: [{ denomination: 15_000, count: 1 }] },
+      }),
+    ).toThrow();
+
+    table.command(member.id, { type: "ready", ready: true });
+    table.startRound();
+    expect(seat.previousChips).toEqual(chips);
+    table.state.phase = "betting";
+    seat.bet = { main: 0, three: 0, pairs: 0 };
+    seat.chips = { main: [], three: [], pairs: [] };
+    table.command(member.id, { type: "repeat" });
+    expect(seat.chips).toEqual(chips);
   });
 
   test("recharge et crée les parties sur la nouvelle base", () => {

@@ -9,6 +9,8 @@ export type Card = {
   hidden?: boolean;
 };
 export type Bet = { main: number; three: number; pairs: number };
+export type ChipCount = { denomination: number; count: number };
+export type BetChips = Record<keyof Bet, ChipCount[]>;
 export type SideResult = { label: string; odds: number; payout: number };
 export type GambleColor = "red" | "black";
 export type GambleResult = "win" | "lose";
@@ -46,6 +48,8 @@ export type Seat = {
   index: number;
   playerId: string | null;
   bet: Bet;
+  chips: BetChips;
+  previousChips: BetChips | null;
   /** Last wager that actually entered a round, used by the rebet action. */
   previousBet: Bet | null;
   hands: Hand[];
@@ -111,7 +115,7 @@ export type Profile = { token: string; name: string; balance: number };
 export type Command =
   | { type: "claim"; seat: number }
   | { type: "release"; seat: number }
-  | { type: "bet"; seat: number; bet: Bet }
+  | { type: "bet"; seat: number; bet: Bet; chips?: BetChips }
   | { type: "repeat" }
   | { type: "ready"; ready: boolean }
   | { type: "hit" | "stand" | "split"; handId: string }
