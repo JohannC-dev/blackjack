@@ -306,6 +306,7 @@ export function TowerFx({
     const canvas = canvasRef.current!;
     const context = canvas.getContext("2d")!;
     const state = world.current;
+    canvas.style.visibility = "hidden";
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     state.reduced = media.matches;
     const onMotion = () => (state.reduced = media.matches);
@@ -354,6 +355,7 @@ export function TowerFx({
     let frame = 0;
     const step = (now: number) => {
       frame = requestAnimationFrame(step);
+      canvas.style.visibility = lost ? "hidden" : "";
       if (lost) {
         last = now;
         return;
