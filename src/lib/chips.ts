@@ -1,6 +1,8 @@
 import type { BetChips, ChipCount } from "./types";
 
 export const INITIAL_CREDIT_BALANCE = 500_000;
+export const REFILL_THRESHOLD = 5_000;
+export const REFILL_BALANCE = 10_000;
 
 export const CASINO_CHIP_DENOMINATIONS = [
   5_000, 20_000, 100_000, 500_000, 2_000_000, 10_000_000, 50_000_000,
@@ -8,11 +10,12 @@ export const CASINO_CHIP_DENOMINATIONS = [
 ] as const;
 
 export const CASINO_MAX_BET = 20_000_000_000;
-export const BLACKJACK_MIN_BET = 15_000;
+export const BLACKJACK_MIN_BET = 5_000;
 export const BLACKJACK_MAX_BET = 20_000_000_000;
 export const BLACKJACK_MAX_SIDE_BET = 160_000_000;
 
 export const BLACKJACK_CHIP_PRESETS = [
+  [5_000, 10_000],
   [15_000, 30_000, 60_000, 150_000],
   [200_000, 400_000, 800_000, 1_600_000],
   [2_000_000, 4_000_000, 8_000_000, 16_000_000],

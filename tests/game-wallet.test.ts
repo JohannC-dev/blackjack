@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { RecordingGameWallet } from "../server/game-wallet";
+import { refillWallet } from "../server/refill";
 
 const wager = {
   operationId: "game:round-1:player:wager",
@@ -12,6 +13,25 @@ const wager = {
 };
 
 describe("GameWallet", () => {
+  test("journalise uniquement le complément de la recave", () => {
+    const wallet = new RecordingGameWallet();
+    const player = { id: "player", balance: 4_000 };
+
+    wallet.begin();
+    refillWallet(player, wallet);
+
+    expect(player.balance).toBe(10_000);
+    expect(wallet.operations()).toMatchObject([
+      {
+        userId: "player",
+        delta: 6_000,
+        game: "casino",
+        kind: "grant",
+        reason: "refill",
+      },
+    ]);
+  });
+
   test("enregistre les opérations explicites d’un nouveau jeu", () => {
     const wallet = new RecordingGameWallet();
     const player = { id: "player", balance: 100 };

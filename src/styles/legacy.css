@@ -4007,6 +4007,12 @@ h1 > span:not(.live-tag) {
 .leave-poker-modal {
   width: 520px;
 }
+.refill-reminder {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 20;
+}
 .leave-poker-actions {
   display: flex;
   flex-wrap: wrap;
@@ -8697,7 +8703,9 @@ h1 > span:not(.live-tag) {
   height: 100%;
   display: block;
   object-fit: cover;
-  transition: transform 350ms var(--ease), filter 350ms var(--ease);
+  transition:
+    transform 350ms var(--ease),
+    filter 350ms var(--ease);
 }
 .tower-poster-art.is-hot img {
   transform: scale(1.05);

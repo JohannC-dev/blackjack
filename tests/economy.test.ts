@@ -5,13 +5,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Table, type Player } from "../server/engine";
 import { BetChipPicker } from "../src/components/ui/game-controls";
 import { MinesGame } from "../server/mines";
+import { refillWallet } from "../server/refill";
+import { inMemoryGameWallet } from "../server/game-wallet";
 import { CASH_LIMITS, SPIN_BUY_INS } from "../server/poker";
 import {
   BLACKJACK_CHIP_DENOMINATIONS,
   BLACKJACK_MAX_BET,
   BLACKJACK_CHIP_PRESETS,
   CASINO_CHIP_DENOMINATIONS,
-  INITIAL_CREDIT_BALANCE,
+  REFILL_BALANCE,
+  REFILL_THRESHOLD,
   chipLabel,
   chipColors,
   chipStackForComposition,
@@ -42,11 +45,12 @@ describe("Nouvelle économie", () => {
   });
 
   test("garde les propositions blackjack indépendantes des tables", () => {
-    expect(BLACKJACK_CHIP_PRESETS).toHaveLength(4);
-    expect(BLACKJACK_CHIP_PRESETS[0]).toEqual([
+    expect(BLACKJACK_CHIP_PRESETS).toHaveLength(5);
+    expect(BLACKJACK_CHIP_PRESETS[0]).toEqual([5_000, 10_000]);
+    expect(BLACKJACK_CHIP_PRESETS[1]).toEqual([
       15_000, 30_000, 60_000, 150_000,
     ]);
-    expect(BLACKJACK_CHIP_PRESETS[1]).toEqual([
+    expect(BLACKJACK_CHIP_PRESETS[2]).toEqual([
       200_000, 400_000, 800_000, 1_600_000,
     ]);
 
@@ -70,7 +74,7 @@ describe("Nouvelle économie", () => {
         seat: seat.index,
         bet: { main: 5_000, three: 0, pairs: 0 },
       }),
-    ).toThrow("combinaison");
+    ).not.toThrow();
   });
 
   test("keeps chip colours fixed between casino denominations", () => {
@@ -179,18 +183,36 @@ describe("Nouvelle économie", () => {
     ).toEqual([1_000_000_000, 200_000_000, 50_000_000]);
   });
 
-  test("recharge et crée les parties sur la nouvelle base", () => {
+  test("recave à 10 000 seulement sous 5 000, puis permet de remiser", () => {
     const member = player(0);
     const table = new Table("MINUIT");
     table.add(member);
-    table.command(member.id, { type: "refill" });
-    expect(member.balance).toBe(INITIAL_CREDIT_BALANCE);
+    refillWallet(member, inMemoryGameWallet);
+    expect(member.balance).toBe(REFILL_BALANCE);
+    expect(() => refillWallet(member, inMemoryGameWallet)).toThrow("sous 5000");
+
+    member.balance = REFILL_THRESHOLD - 1;
+    refillWallet(member, inMemoryGameWallet);
+    expect(member.balance).toBe(REFILL_BALANCE);
+    member.balance = REFILL_THRESHOLD;
+    expect(() => refillWallet(member, inMemoryGameWallet)).toThrow("sous 5000");
+
+    member.balance = REFILL_BALANCE;
+    const seat = table.state.seats.find(
+      (entry) => entry.playerId === member.id,
+    )!;
+    table.command(member.id, {
+      type: "bet",
+      seat: seat.index,
+      bet: { main: 5_000, three: 0, pairs: 0 },
+    });
+    expect(() =>
+      table.command(member.id, { type: "ready", ready: true }),
+    ).not.toThrow();
 
     const mines = new MinesGame();
     mines.start(member, CASINO_CHIP_DENOMINATIONS[0], 200);
-    expect(member.balance).toBe(
-      INITIAL_CREDIT_BALANCE - CASINO_CHIP_DENOMINATIONS[0],
-    );
+    expect(member.balance).toBe(REFILL_BALANCE - CASINO_CHIP_DENOMINATIONS[0]);
   });
 
   test("aligne roulette et poker sur les nouveaux montants", () => {

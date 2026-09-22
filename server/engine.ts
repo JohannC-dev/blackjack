@@ -6,8 +6,6 @@ import {
   BLACKJACK_MAX_BET,
   BLACKJACK_MAX_SIDE_BET,
   BLACKJACK_MIN_BET,
-  CASINO_CHIP_DENOMINATIONS,
-  INITIAL_CREDIT_BALANCE,
   chipCountTotal,
   copyBetChips,
   emptyBetChips,
@@ -85,13 +83,7 @@ function isBlackjackStake(value: number, maximum: number) {
     return false;
   if (value === 0) return true;
 
-  // The smallest independent values are 15K and 200K. Trying the three
-  // possible 200K residues proves whether a total can be built from the rack.
-  const units = value / BLACKJACK_STAKE_UNIT;
-  return [0, 1, 2].some(
-    (largeChips) =>
-      units >= 40 * largeChips && (units - 40 * largeChips) % 3 === 0,
-  );
+  return true;
 }
 export const BLACKJACK_SHUFFLE_MS = 2_200;
 export function makeShoe(): Card[] {
@@ -356,31 +348,11 @@ export class Table {
         }
       }
     } else if (
-      ["claim", "release", "bet", "repeat", "ready", "refill"].includes(
-        command.type,
-      )
+      ["claim", "release", "bet", "repeat", "ready"].includes(command.type)
     ) {
       if (this.state.phase !== "betting")
         throw new Error("Attendez la prochaine manche.");
-      if (command.type === "refill") {
-        const balance = this.wallet.balance(player);
-        const refillThreshold = this.legacyEconomy
-          ? 5
-          : CASINO_CHIP_DENOMINATIONS[0];
-        if (balance >= refillThreshold)
-          throw new Error(
-            `La recharge est disponible sous ${refillThreshold} crédits.`,
-          );
-        this.wallet.credit(player, {
-          operationId: `blackjack:${this.state.id}:${playerId}:refill:${randomUUID()}`,
-          game: "blackjack",
-          kind: "grant",
-          reason: "refill",
-          referenceId: playerId,
-          amount:
-            (this.legacyEconomy ? 2_000 : INITIAL_CREDIT_BALANCE) - balance,
-        });
-      } else if (command.type === "ready") {
+      if (command.type === "ready") {
         if (typeof command.ready !== "boolean")
           throw new Error("Action invalide.");
         const own = this.state.seats.filter((s) => s.playerId === playerId);

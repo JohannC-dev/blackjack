@@ -125,8 +125,7 @@ export type Command =
   | { type: "hit" | "stand" | "split"; handId: string }
   | { type: "double"; handId: string; reveal?: "now" | "dealer" }
   | { type: "gamble"; color: GambleColor }
-  | { type: "cashout" }
-  | { type: "refill" };
+  | { type: "cashout" };
 export type Ack =
   | { ok: true; playerId?: string; tableId?: string }
   | { ok: false; error: string };

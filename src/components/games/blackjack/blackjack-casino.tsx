@@ -56,7 +56,6 @@ import {
   BLACKJACK_CHIP_PRESETS,
   BLACKJACK_MAX_BET,
   BLACKJACK_MAX_SIDE_BET,
-  CASINO_CHIP_DENOMINATIONS,
   INITIAL_CREDIT_BALANCE,
   chipLabel,
   addBetChip,
@@ -1225,6 +1224,15 @@ export function BlackjackCasino({
   }, [chipBalance]);
 
   useEffect(() => {
+    if (chipBalance > 0 && chip > chipBalance) {
+      const affordable = BLACKJACK_CHIP_PRESETS.flat()
+        .filter((amount) => amount <= chipBalance)
+        .at(-1);
+      if (affordable !== undefined) setChip(affordable);
+    }
+  }, [chip, chipBalance]);
+
+  useEffect(() => {
     if (profile && connected && state?.id) void joinBlackjack();
   }, [connected, joinBlackjack, profile, state?.id]);
 
@@ -1873,36 +1881,25 @@ export function BlackjackCasino({
                               {credits(totalBet)} <small>cr.</small>
                             </b>
                           </span>
-                          {balance < CASINO_CHIP_DENOMINATIONS[0] ? (
-                            <button
-                              className="button primary"
-                              onClick={() => command({ type: "refill" })}
-                              disabled={disabled}
-                            >
-                              <Coins size={16} />
-                              Recharger
-                            </button>
-                          ) : (
-                            <button
-                              className={`button primary deal-button ${me?.ready ? "is-ready" : ""}`}
-                              disabled={disabled || totalBet === 0}
-                              onClick={() =>
-                                command({ type: "ready", ready: !me?.ready })
-                              }
-                            >
-                              {me?.ready ? (
-                                <>
-                                  <Check size={18} />
-                                  Prêt · annuler
-                                </>
-                              ) : (
-                                <>
-                                  Je suis prêt
-                                  <ArrowRight size={18} />
-                                </>
-                              )}
-                            </button>
-                          )}
+                          <button
+                            className={`button primary deal-button ${me?.ready ? "is-ready" : ""}`}
+                            disabled={disabled || totalBet === 0}
+                            onClick={() =>
+                              command({ type: "ready", ready: !me?.ready })
+                            }
+                          >
+                            {me?.ready ? (
+                              <>
+                                <Check size={18} />
+                                Prêt · annuler
+                              </>
+                            ) : (
+                              <>
+                                Je suis prêt
+                                <ArrowRight size={18} />
+                              </>
+                            )}
+                          </button>
                         </div>
                       </>
                     ) : null}

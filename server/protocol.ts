@@ -52,7 +52,6 @@ export const BlackjackCommandSchema = Schema.Union(
     color: Schema.Union(Schema.Literal("red"), Schema.Literal("black")),
   }),
   Schema.Struct({ type: Schema.Literal("cashout") }),
-  Schema.Struct({ type: Schema.Literal("refill") }),
 );
 
 const PokerMode = Schema.Union(Schema.Literal("cash"), Schema.Literal("spin"));

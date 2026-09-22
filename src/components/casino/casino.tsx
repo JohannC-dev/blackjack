@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BlackjackIcon } from "../ui/blackjack-icon";
 import { Modal } from "../ui/modal";
 import { ServerClockProvider } from "../ui/countdown";
-import { LoaderCircle, Spade } from "lucide-react";
+import { Coins, LoaderCircle, Spade } from "lucide-react";
+import { REFILL_BALANCE, REFILL_THRESHOLD } from "@/lib/chips";
+import { credits } from "@/lib/rules";
 import type { CasinoView } from "@/lib/navigation";
 import { useGame } from "@/lib/use-game";
 import { BlackjackCasino } from "../games/blackjack/blackjack-casino";
@@ -19,6 +21,18 @@ export function Casino() {
   const [confirmPokerLeave, setConfirmPokerLeave] = useState(false);
   const [leavingPoker, setLeavingPoker] = useState(false);
   const [pendingView, setPendingView] = useState<CasinoView | null>(null);
+  const [showRefill, setShowRefill] = useState(false);
+  const [refillDismissed, setRefillDismissed] = useState(false);
+  const canRefill =
+    !!game.profile && game.balance !== null && game.balance < REFILL_THRESHOLD;
+  useEffect(() => {
+    if (!canRefill) {
+      setShowRefill(false);
+      setRefillDismissed(false);
+    } else if (!refillDismissed) {
+      setShowRefill(true);
+    }
+  }, [canRefill, refillDismissed]);
   const pokerStateRef = useRef(game.pokerState);
   pokerStateRef.current = game.pokerState;
   const navigate = useCallback((next: CasinoView) => {
@@ -68,6 +82,69 @@ export function Casino() {
     <ServerClockProvider offset={game.serverTimeOffset}>
       <>
         {content}
+        {canRefill && refillDismissed && !showRefill && (
+          <button
+            type="button"
+            className="button primary refill-reminder"
+            onClick={() => {
+              setRefillDismissed(false);
+              setShowRefill(true);
+            }}
+          >
+            <Coins size={16} />
+            Recaver
+          </button>
+        )}
+        {canRefill && showRefill && (
+          <Modal
+            title="Recaver"
+            onClose={() => {
+              setShowRefill(false);
+              setRefillDismissed(true);
+            }}
+          >
+            <span className="modal-emblem">
+              <Coins size={26} />
+            </span>
+            <span className="section-kicker">SOLDE INSUFFISANT</span>
+            <h2>Reprenez la partie.</h2>
+            <p className="modal-intro">
+              Votre solde est sous {credits(REFILL_THRESHOLD)} crédits. Vous
+              pouvez le remettre à {credits(REFILL_BALANCE)} crédits.
+            </p>
+            <div className="leave-poker-actions">
+              <button
+                type="button"
+                className="button secondary"
+                disabled={game.pending}
+                onClick={() => {
+                  setShowRefill(false);
+                  setRefillDismissed(true);
+                }}
+              >
+                Plus tard
+              </button>
+              <button
+                type="button"
+                className="button primary"
+                disabled={!game.connected || game.pending}
+                onClick={async () => {
+                  if (await game.refill()) {
+                    setShowRefill(false);
+                    setRefillDismissed(true);
+                  }
+                }}
+              >
+                {game.pending ? (
+                  <LoaderCircle size={16} className="spinner" />
+                ) : (
+                  <Coins size={16} />
+                )}
+                Recaver à {credits(REFILL_BALANCE)} cr.
+              </button>
+            </div>
+          </Modal>
+        )}
         {confirmPokerLeave && (
           <Modal
             title="Quitter la partie de poker ?"

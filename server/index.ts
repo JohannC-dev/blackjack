@@ -18,6 +18,7 @@ import { TowerManager } from "./tower";
 import { MinesGame } from "./mines";
 import { makeRouletteRuntime } from "./roulette";
 import { RecordingGameWallet } from "./game-wallet";
+import { refillWallet } from "./refill";
 import {
   GameError,
   ServerClock,
@@ -535,6 +536,20 @@ io.on("connection", (socket) => {
           return player;
         });
         yield* tables.get(currentPlayer.roomId)!.addEffect(currentPlayer);
+      }),
+    );
+  });
+  socket.on("wallet:refill", (ack: (value: Ack) => void) => {
+    replyWalletEffect(
+      ack,
+      Effect.gen(function* () {
+        const currentPlayer = yield* gameEffect((clock) => {
+          throttle(clock.now());
+          if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+          return player;
+        });
+        yield* refreshWalletEffect(currentPlayer);
+        yield* gameEffect(() => refillWallet(currentPlayer, gameWallet));
       }),
     );
   });

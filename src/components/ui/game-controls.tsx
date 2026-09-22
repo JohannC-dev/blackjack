@@ -171,6 +171,15 @@ export function ChipSlider({
     setLocalPage(chipPageForBalance(chipPages, balance));
   }, [balance, chipPages]);
 
+  useEffect(() => {
+    if (
+      balance > 0 &&
+      currentPage.length > 0 &&
+      currentPage.every((amount) => amount > balance)
+    )
+      setLocalPage(chipPageForBalance(chipPages, balance));
+  }, [balance, chipPages, currentPage]);
+
   if (!chipPages.length) return null;
 
   return (
