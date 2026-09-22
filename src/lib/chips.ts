@@ -10,33 +10,33 @@ export type CasinoChipStackStage = {
   }>;
 };
 
-const CHIP_STACK_STAGES: ReadonlyArray<CasinoChipStackStage> = [
-  { index: 1, columns: [{ denomination: 5, layers: 2 }] },
-  { index: 2, columns: [{ denomination: 25, layers: 4 }] },
-  {
-    index: 3,
-    columns: [
-      { denomination: 50, layers: 4 },
-      { denomination: 25, layers: 3 },
-    ],
-  },
-  {
-    index: 4,
-    columns: [
-      { denomination: 100, layers: 5 },
-      { denomination: 50, layers: 4 },
-      { denomination: 25, layers: 3 },
-    ],
-  },
-];
+// The picker and every pile use the same colour ranges. A value between two
+// denominations keeps the colour of the lower denomination.
+export function casinoChipDenominationForAmount(
+  amount: number,
+): CasinoChipDenomination {
+  for (let index = CASINO_CHIP_DENOMINATIONS.length - 1; index >= 0; index--) {
+    const denomination = CASINO_CHIP_DENOMINATIONS[index];
+    if (amount >= denomination) return denomination;
+  }
+  return CASINO_CHIP_DENOMINATIONS[0];
+}
+
+const CHIP_STACK_LAYERS = [[2], [4], [4, 3], [5, 4, 3]] as const;
 
 export function casinoChipStackForAmount(
   amount: number,
   maximum: number,
 ): CasinoChipStackStage {
   const ratio = Math.max(0, amount) / Math.max(1, maximum);
-  if (ratio <= 0.1) return CHIP_STACK_STAGES[0];
-  if (ratio <= 0.3) return CHIP_STACK_STAGES[1];
-  if (ratio <= 0.65) return CHIP_STACK_STAGES[2];
-  return CHIP_STACK_STAGES[3];
+  const index: CasinoChipStackStage["index"] =
+    ratio <= 0.1 ? 1 : ratio <= 0.3 ? 2 : ratio <= 0.65 ? 3 : 4;
+  const denomination = casinoChipDenominationForAmount(amount);
+  return {
+    index,
+    columns: CHIP_STACK_LAYERS[index - 1].map((layers) => ({
+      denomination,
+      layers,
+    })),
+  };
 }

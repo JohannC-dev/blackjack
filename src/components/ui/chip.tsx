@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { casinoChipDenominationForAmount } from "@/lib/chips";
 
 export const Chip = memo(function Chip({
   amount,
@@ -16,7 +17,7 @@ export const Chip = memo(function Chip({
   return (
     <button
       type="button"
-      className={`chip chip-${amount} ${selected ? "selected" : ""}`}
+      className={`chip chip-${casinoChipDenominationForAmount(amount)} ${selected ? "selected" : ""}`}
       onClick={() => onClick?.(amount)}
       disabled={disabled}
       aria-label={label ?? `Sélectionner le jeton de ${amount} crédits`}
