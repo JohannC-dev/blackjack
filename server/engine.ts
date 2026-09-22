@@ -698,12 +698,25 @@ export class Table {
         ? "Le croupier dépasse 21."
         : `Le croupier reste à ${dealerTotal}.`;
   }
+
+  observeEffect(player: Player) {
+    return gameEffect(() => this.observe(player));
+  }
+
+  addEffect(player: Player) {
+    return gameEffect(() => this.add(player));
+  }
+
+  removeEffect(playerId: string) {
+    return gameEffect(() => this.remove(playerId));
+  }
+
   commandEffect(playerId: string, command: Command) {
     return gameEffect(() => this.command(playerId, command));
   }
 
-  tickEffect(now = Date.now()) {
-    return gameEffect(() => this.tick(now));
+  tickEffect(now?: number) {
+    return gameEffect((clock) => this.tick(now ?? clock.now()));
   }
   tick(now = Date.now()) {
     let changed = false;

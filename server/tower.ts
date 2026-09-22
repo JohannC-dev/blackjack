@@ -135,6 +135,10 @@ export class TowerManager {
     return roomId;
   }
 
+  enterEffect(player: Player) {
+    return gameEffect(() => this.enter(player));
+  }
+
   /**
    * The player leaves the Tower. Navigating away settles the climb at once;
    * a lost connection keeps it for TOWER_ABANDON_MS so a reload can resume it.
@@ -155,6 +159,12 @@ export class TowerManager {
     if (run && run.status !== "playing") this.runs.delete(player.id);
   }
 
+  leaveEffect(player: Player, now?: number, options?: { abandon?: boolean }) {
+    return gameEffect((clock) =>
+      this.leave(player, now ?? clock.now(), options),
+    );
+  }
+
   command(player: Player, command: TowerCommand, now = Date.now()) {
     const roomId = this.roomOf.get(player.id);
     if (!roomId) throw new Error("Ouvrez la Tower pour jouer.");
@@ -167,12 +177,14 @@ export class TowerManager {
     this.broadcast(roomId, this.publicState(roomId));
   }
 
-  commandEffect(player: Player, command: TowerCommand, now = Date.now()) {
-    return gameEffect(() => this.command(player, command, now));
+  commandEffect(player: Player, command: TowerCommand, now?: number) {
+    return gameEffect((clock) =>
+      this.command(player, command, now ?? clock.now()),
+    );
   }
 
-  tickEffect(now: number) {
-    return gameEffect(() => this.tick(now));
+  tickEffect(now?: number) {
+    return gameEffect((clock) => this.tick(now ?? clock.now()));
   }
   tick(now: number) {
     const changed = new Set<string>();
@@ -207,6 +219,10 @@ export class TowerManager {
   forget(playerId: string) {
     this.pots.delete(playerId);
     this.runs.delete(playerId);
+  }
+
+  forgetEffect(playerId: string) {
+    return gameEffect(() => this.forget(playerId));
   }
 
   /** Test and debug helper: the hidden golden card of a player's climb. */

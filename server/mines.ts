@@ -120,6 +120,33 @@ export class MinesGame {
   commandEffect(player: MinesPlayer, command: MinesCommand) {
     return gameEffect(() => this.command(player, command));
   }
+
+  startEffect(
+    player: MinesPlayer,
+    bet: number,
+    target: number,
+    publish = true,
+  ) {
+    return gameEffect(() => this.start(player, bet, target, publish));
+  }
+
+  revealEffect(player: MinesPlayer, index: number) {
+    return gameEffect(() => this.reveal(player, index));
+  }
+
+  playPatternEffect(
+    player: MinesPlayer,
+    bet: number,
+    target: number,
+    indexes: unknown,
+  ) {
+    return gameEffect(() => this.playPattern(player, bet, target, indexes));
+  }
+
+  cashoutEffect(player: MinesPlayer) {
+    return gameEffect(() => this.cashout(player));
+  }
+
   start(player: MinesPlayer, bet: number, target: number, publish = true) {
     if (this.phase === "playing")
       throw new Error("Terminez la partie en cours avant de rejouer.");

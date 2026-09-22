@@ -29,6 +29,8 @@ export const ServerClockLive = Layer.succeed(ServerClock, {
   now: () => Date.now(),
 });
 
+export type GameEffect<A> = Effect.Effect<A, GameError, never>;
+
 export function toGameError(error: unknown): GameError {
   if (error instanceof GameError) return error;
   if (error instanceof Error) return new GameError(error.message, error);
@@ -36,7 +38,13 @@ export function toGameError(error: unknown): GameError {
 }
 
 /** Turns synchronous game mutations into typed, dependency-ready effects. */
-export function gameEffect<A>(thunk: (clock: Clock) => A) {
+export function provideServerClock<A, E>(
+  effect: Effect.Effect<A, E, ServerClock>,
+): Effect.Effect<A, E, never> {
+  return Effect.provide(effect, ServerClockLive);
+}
+
+export function gameEffect<A>(thunk: (clock: Clock) => A): GameEffect<A> {
   const effect = Effect.gen(function* () {
     const clock = yield* ServerClock;
     return yield* Effect.try({
@@ -45,7 +53,7 @@ export function gameEffect<A>(thunk: (clock: Clock) => A) {
     });
   });
 
-  return Effect.provide(effect, ServerClockLive);
+  return provideServerClock(effect);
 }
 
 /** Decodes untrusted socket payloads before they reach a game engine. */

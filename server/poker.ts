@@ -932,6 +932,14 @@ export class PokerManager {
     this.tables.get(member ?? "")?.disconnect(player.id);
   }
 
+  connectEffect(player: Player) {
+    return gameEffect(() => this.connect(player));
+  }
+
+  disconnectEffect(player: Player) {
+    return gameEffect(() => this.disconnect(player));
+  }
+
   private publishTable(table: PokerTable) {
     for (const entry of table.participants)
       this.send(entry.player.id, this.state(entry.player));
@@ -1051,12 +1059,16 @@ export class PokerManager {
     this.send(player.id, this.lobby(player));
   }
 
+  leaveEffect(player: Player) {
+    return gameEffect(() => this.leave(player));
+  }
+
   commandEffect(player: Player, command: PokerCommand) {
     return gameEffect(() => this.command(player, command));
   }
 
-  tickEffect(now: number) {
-    return gameEffect(() => this.tick(now));
+  tickEffect(now?: number) {
+    return gameEffect((clock) => this.tick(now ?? clock.now()));
   }
   tick(now: number) {
     for (const [id, table] of this.tables) {
