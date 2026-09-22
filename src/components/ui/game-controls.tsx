@@ -7,13 +7,7 @@ import {
   RotateCcw,
   X,
 } from "lucide-react";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CASINO_CHIP_DENOMINATIONS } from "@/lib/chips";
 import { Chip } from "./chip";
 
@@ -139,7 +133,7 @@ export function BetChipPicker({
         balance={balance}
         selected={betSteps.at(-1)}
         disabled={disabled}
-        canSelect={(amount) => amount <= balance && bet + amount <= maxBet}
+        canSelect={(amount) => amount <= balance && amount <= maxBet}
         onSelect={onAdd}
       />
       <span className="rack-divider" />

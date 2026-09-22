@@ -21,6 +21,7 @@ import {
   type RefObject,
 } from "react";
 import { credits } from "@/lib/rules";
+import { nextBetWithChip } from "@/lib/chips";
 import {
   formatMultiplier,
   TOWER_DIFFICULTIES,
@@ -105,6 +106,9 @@ export function TowerCasino({
   const [difficulty, setDifficulty] = useState<TowerDifficulty>("normal");
   const [bet, setBet] = useState<number>(TOWER_MIN_BET);
   const [betSteps, setBetSteps] = useState<number[]>([]);
+  const [betUndo, setBetUndo] = useState<{ bet: number; steps: number[] }[]>(
+    [],
+  );
   const [previewing, setPreviewing] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [luckyIntro, setLuckyIntro] = useState(false);
@@ -321,22 +325,25 @@ export function TowerCasino({
     shownRun?.status === "lost" && (phase === "falling" || phase === "rubble");
 
   const addChip = (amount: number) => {
-    if (playing || bet + amount > maxBet) return;
-    setBet(bet + amount);
-    setBetSteps([...betSteps, amount]);
+    if (playing || amount > maxBet) return;
+    setBetUndo([...betUndo, { bet, steps: betSteps }]);
+    setBet(nextBetWithChip(bet, amount, maxBet));
+    setBetSteps(bet + amount > maxBet ? [amount] : [...betSteps, amount]);
     setPreviewing(true);
     play("chips");
   };
   const undoChip = () => {
-    const last = betSteps.at(-1);
-    if (last === undefined || playing) return;
-    setBet(Math.max(0, bet - last));
-    setBetSteps(betSteps.slice(0, -1));
+    const previous = betUndo.at(-1);
+    if (!previous || playing) return;
+    setBet(previous.bet);
+    setBetSteps(previous.steps);
+    setBetUndo(betUndo.slice(0, -1));
   };
   const clearBet = () => {
     if (playing) return;
     setBet(0);
     setBetSteps([]);
+    setBetUndo([]);
   };
   const start = () => {
     if (busy || playing || bet < TOWER_MIN_BET || bet > balance) return;

@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { Table, type Player } from "../server/engine";
+import { BetChipPicker } from "../src/components/ui/game-controls";
 import { MinesGame } from "../server/mines";
 import { CASH_LIMITS, SPIN_BUY_INS } from "../server/poker";
 import {
@@ -11,6 +14,7 @@ import {
   INITIAL_CREDIT_BALANCE,
   chipLabel,
   chipColors,
+  nextBetWithChip,
   chipStackForComposition,
 } from "../src/lib/chips";
 import { isValidRouletteBet, ROULETTE_MAX_PER_SPOT } from "../src/lib/roulette";
@@ -77,11 +81,36 @@ describe("Nouvelle économie", () => {
     expect(chipColors(100_000)).not.toEqual(chipColors(20_000));
     expect(chipColors(1_600_000)).toEqual(chipColors(500_000));
     expect(chipColors(10_000_000)).toEqual(chipColors(16_000_000));
-    expect(chipColors(200_000)).toEqual(chipColors(400_000));
-    expect(chipColors(200_000)).not.toEqual(chipColors(100_000));
-    expect(chipColors(200_000)["--chip-base"]).toBe("#d45f27");
+    expect(chipColors(200_000)).toEqual(chipColors(100_000));
+    expect(chipColors(400_000)).toEqual(chipColors(100_000));
     expect(chipColors(1_000_000_000)["--chip-base"]).toBe("#17191d");
     expect(chipColors(1_000_000_000)).not.toEqual(chipColors(500_000));
+    expect(chipColors(200_000_000)["--chip-base"]).toBe("#215fc4");
+  });
+
+  test("lets a chip equal to the balance replace a smaller initial bet", () => {
+    expect(nextBetWithChip(5_000, 1_000_000_000, 1_000_000_000)).toBe(
+      1_000_000_000,
+    );
+    expect(nextBetWithChip(5_000, 20_000, 1_000_000_000)).toBe(25_000);
+
+    const markup = renderToStaticMarkup(
+      createElement(BetChipPicker, {
+        bet: 5_000,
+        maxBet: 1_000_000_000,
+        balance: 1_000_000_000,
+        betSteps: [],
+        disabled: false,
+        onAdd: () => {},
+        onUndo: () => {},
+        onClear: () => {},
+      }),
+    );
+    const billionChip = markup.match(
+      /<button(?=[^>]*class="chip chip-1000000000)[^>]*>/,
+    )?.[0];
+    expect(billionChip).toBeDefined();
+    expect(billionChip).not.toContain("disabled");
   });
 
   test("keeps selected blackjack chips on the table and for repeat", () => {

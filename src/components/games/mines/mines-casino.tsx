@@ -21,6 +21,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
+import { nextBetWithChip } from "@/lib/chips";
 import {
   MINES_MAX_BET,
   MINES_MIN_BET,
@@ -635,6 +636,9 @@ export function MinesCasino({
   const state = game.minesState;
   const [bet, setBet] = useState<number>(MINES_MIN_BET);
   const [betSteps, setBetSteps] = useState<number[]>([]);
+  const [betUndo, setBetUndo] = useState<{ bet: number; steps: number[] }[]>(
+    [],
+  );
   const [target, setTarget] = useState<MinesTarget>(200);
   const [sound, setSound] = useState(false);
   const [pattern, setPattern] = useState<number[]>([]);
@@ -744,26 +748,26 @@ export function MinesCasino({
   }, [active, game, looping, state?.revealedCount]);
   const addChip = useCallback(
     (amount: number) => {
-      if (active || looping || bet + amount > maxBet) return;
-      setBet((current) => current + amount);
-      setBetSteps((current) => [...current, amount]);
+      if (active || looping || amount > maxBet) return;
+      setBetUndo((history) => [...history, { bet, steps: betSteps }]);
+      setBet(nextBetWithChip(bet, amount, maxBet));
+      setBetSteps(bet + amount > maxBet ? [amount] : [...betSteps, amount]);
       play("chips");
     },
-    [active, bet, looping, maxBet, play],
+    [active, bet, betSteps, looping, maxBet, play],
   );
   const undoChip = useCallback(() => {
-    if (active || looping) return;
-    setBetSteps((current) => {
-      const last = current.at(-1);
-      if (last === undefined) return current;
-      setBet((value) => Math.max(0, value - last));
-      return current.slice(0, -1);
-    });
-  }, [active, looping]);
+    const previous = betUndo.at(-1);
+    if (active || looping || !previous) return;
+    setBet(previous.bet);
+    setBetSteps(previous.steps);
+    setBetUndo((history) => history.slice(0, -1));
+  }, [active, betUndo, looping]);
   const clearBet = useCallback(() => {
     if (active || looping) return;
     setBet(0);
     setBetSteps([]);
+    setBetUndo([]);
   }, [active, looping]);
 
   const waitForLoopState = useCallback(
