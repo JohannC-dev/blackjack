@@ -140,30 +140,34 @@ export function casinoChipStackForAmount(
   return CHIP_STACK_STAGES[3];
 }
 
+const CHIP_COLOR_DENOMINATIONS = [
+  5_000, 20_000, 100_000, 200_000, 500_000, 2_000_000, 10_000_000, 50_000_000,
+  200_000_000, 1_000_000_000,
+] as const;
+
 const CHIP_PALETTES = [
   ["#f5d7d7", "#a53c47", "#d27d83", "#60212b"],
   ["#d5e4fa", "#3266a2", "#83a8d4", "#1b3a67"],
   ["#d9edda", "#3b8650", "#8fc89a", "#215333"],
+  ["#ffd6b0", "#d45f27", "#f49c5a", "#7a2e12"],
   ["#f8e5c4", "#b0782a", "#dbb873", "#684316"],
   ["#e6dcf5", "#7650a4", "#ad92d0", "#422867"],
   ["#f4dbe9", "#a74579", "#d98fb3", "#612648"],
   ["#d1ecec", "#287f86", "#7fc2c5", "#174f55"],
   ["#e7e6e1", "#666b77", "#adb0b8", "#373b47"],
-  ["#f7e9ca", "#a48636", "#d9bc72", "#594519"],
+  ["#d6c6a6", "#17191d", "#6b5b43", "#07080a"],
 ] as const;
 
-/** Blackjack values between casino denominations share the lower chip's colour. */
+/** Values share the lower colour tier; 200K-400K has its own orange tier. */
 export function chipColorDenomination(amount: number) {
-  for (let index = CASINO_CHIP_DENOMINATIONS.length - 1; index >= 0; index--)
-    if (amount >= CASINO_CHIP_DENOMINATIONS[index])
-      return CASINO_CHIP_DENOMINATIONS[index];
-  return CASINO_CHIP_DENOMINATIONS[0];
+  for (let index = CHIP_COLOR_DENOMINATIONS.length - 1; index >= 0; index--)
+    if (amount >= CHIP_COLOR_DENOMINATIONS[index])
+      return CHIP_COLOR_DENOMINATIONS[index];
+  return CHIP_COLOR_DENOMINATIONS[0];
 }
 
 export function chipColors(amount: number) {
-  const index = CASINO_CHIP_DENOMINATIONS.indexOf(
-    chipColorDenomination(amount),
-  );
+  const index = CHIP_COLOR_DENOMINATIONS.indexOf(chipColorDenomination(amount));
   const [edge, base, border, shadow] = CHIP_PALETTES[index];
   return {
     "--chip-edge": edge,

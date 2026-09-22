@@ -77,6 +77,11 @@ describe("Nouvelle économie", () => {
     expect(chipColors(100_000)).not.toEqual(chipColors(20_000));
     expect(chipColors(1_600_000)).toEqual(chipColors(500_000));
     expect(chipColors(10_000_000)).toEqual(chipColors(16_000_000));
+    expect(chipColors(200_000)).toEqual(chipColors(400_000));
+    expect(chipColors(200_000)).not.toEqual(chipColors(100_000));
+    expect(chipColors(200_000)["--chip-base"]).toBe("#d45f27");
+    expect(chipColors(1_000_000_000)["--chip-base"]).toBe("#17191d");
+    expect(chipColors(1_000_000_000)).not.toEqual(chipColors(500_000));
   });
 
   test("keeps selected blackjack chips on the table and for repeat", () => {
