@@ -3,6 +3,7 @@ export { BlackjackIcon } from "./blackjack-icon";
 export { Chip } from "./chip";
 export { CountdownText, useCountdownSeconds } from "./countdown";
 export {
+  ChipSlider,
   BetChipPicker,
   GameActionButton,
   GameControlGroup,

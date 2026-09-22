@@ -405,6 +405,7 @@ function MinesControls({
           <BetChipPicker
             bet={bet}
             maxBet={maxBet}
+            balance={balance}
             betSteps={betSteps}
             disabled={active || looping}
             onAdd={onAdd}

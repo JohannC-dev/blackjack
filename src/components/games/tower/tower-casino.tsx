@@ -569,6 +569,7 @@ export function TowerCasino({
               <BetChipPicker
                 bet={bet}
                 maxBet={maxBet}
+                balance={balance}
                 betSteps={betSteps}
                 disabled={playing}
                 onAdd={addChip}

@@ -19,8 +19,6 @@ import {
   Castle,
   Check,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   CircleHelp,
   Coins,
   Disc3,
@@ -79,6 +77,11 @@ import { CasinoRail, ClubHeader } from "../../ui";
 import type { CasinoView } from "@/lib/navigation";
 import { CountdownText } from "../../ui/countdown";
 import { Chip } from "../../ui/chip";
+import {
+  affordableChipInPage,
+  ChipSlider,
+  chipPageForBalance,
+} from "../../ui/game-controls";
 import { Modal } from "../../ui/modal";
 import { motionDuration } from "../../ui/motion";
 import { PlayingCard } from "../../ui/playing-card";
@@ -1079,7 +1082,6 @@ export function BlackjackCasino({
   const [betHistory, setBetHistory] = useState<{ seat: number; before: Bet }[]>(
     [],
   );
-  const [chipPreset, setChipPreset] = useState(0);
   const [chip, setChip] = useState<number>(BLACKJACK_CHIP_PRESETS[0][0]);
   const [toast, setToast] = useState("");
   const [notice, setNotice] = useState<{
@@ -1102,6 +1104,7 @@ export function BlackjackCasino({
   const hasSeenOwnBalance = useRef(false);
   const doubleCloseTimer = useRef<number | null>(null);
   const noticeCloseTimer = useRef<number | null>(null);
+  const chipInitialized = useRef(false);
   const me = state?.players.find((p) => p.id === playerId);
   // Seated players, keyed by a signature so the memoised toolbar stays stable.
   const emoteSignature = JSON.stringify(
@@ -1120,6 +1123,7 @@ export function BlackjackCasino({
   const seat = ownSeats.find((s) => s.index === selectedSeat) ?? ownSeats[0];
   const balance =
     game.balance ?? me?.balance ?? profile?.balance ?? INITIAL_CREDIT_BALANCE;
+  const chipBalance = game.balance ?? me?.balance ?? profile?.balance ?? 0;
   const betting = !state || state.phase === "betting";
   const canChangeTable = betting || ownSeats.length === 0;
   const totalBet = ownSeats.reduce((sum, s) => sum + betTotal(s.bet), 0);
@@ -1182,6 +1186,7 @@ export function BlackjackCasino({
     playerReady: !!me?.ready,
     disabled,
     chip,
+    chipBalance,
   });
   interactionRef.current = {
     profile,
@@ -1190,7 +1195,19 @@ export function BlackjackCasino({
     playerReady: !!me?.ready,
     disabled,
     chip,
+    chipBalance,
   };
+
+  useEffect(() => {
+    if (chipInitialized.current || chipBalance <= 0) return;
+    const page =
+      BLACKJACK_CHIP_PRESETS[
+        chipPageForBalance(BLACKJACK_CHIP_PRESETS, chipBalance)
+      ] ?? BLACKJACK_CHIP_PRESETS[0];
+    const suggestion = affordableChipInPage(page, chipBalance);
+    if (suggestion !== undefined) setChip(suggestion);
+    chipInitialized.current = true;
+  }, [chipBalance]);
 
   useEffect(() => {
     if (profile && connected && state?.id) void joinBlackjack();
@@ -1362,9 +1379,15 @@ export function BlackjackCasino({
   );
   const placeBet = useCallback(
     (target: Seat, type: keyof Bet) => {
-      const { playerId, betting, playerReady, disabled, chip } =
+      const { playerId, betting, playerReady, disabled, chip, chipBalance } =
         interactionRef.current;
-      if (target.playerId !== playerId || !betting || playerReady || disabled)
+      if (
+        target.playerId !== playerId ||
+        !betting ||
+        playerReady ||
+        disabled ||
+        chip > chipBalance
+      )
         return;
       if (type !== "main" && !target.bet.main) {
         setToast("Posez d’abord un jeton sur Blackjack pour cette main.");
@@ -1386,16 +1409,11 @@ export function BlackjackCasino({
     },
     [command],
   );
-  const selectChip = useCallback((amount: number) => setChip(amount), []);
-  const changeChipPreset = useCallback(
-    (direction: -1 | 1) => {
-      const next =
-        (chipPreset + direction + BLACKJACK_CHIP_PRESETS.length) %
-        BLACKJACK_CHIP_PRESETS.length;
-      setChipPreset(next);
-      setChip(BLACKJACK_CHIP_PRESETS[next][0]);
+  const selectChip = useCallback(
+    (amount: number) => {
+      if (amount <= chipBalance) setChip(amount);
     },
-    [chipPreset],
+    [chipBalance],
   );
   const undoBet = () => {
     const last = betHistory.at(-1);
@@ -1761,37 +1779,20 @@ export function BlackjackCasino({
                       <>
                         <div className="chip-rack">
                           <div className="chip-picker">
-                            <button
-                              type="button"
-                              className="icon-button chip-range-button"
+                            <ChipSlider
+                              pages={BLACKJACK_CHIP_PRESETS}
+                              balance={chipBalance}
+                              selected={chip}
                               disabled={!!me?.ready}
-                              onClick={() => changeChipPreset(-1)}
-                              title="Afficher les jetons précédents"
-                              aria-label="Afficher les jetons précédents"
-                            >
-                              <ChevronLeft size={17} />
-                            </button>
-                            {BLACKJACK_CHIP_PRESETS[chipPreset].map(
-                              (amount) => (
-                                <Chip
-                                  key={amount}
-                                  amount={amount}
-                                  selected={chip === amount}
-                                  disabled={!!me?.ready}
-                                  onClick={selectChip}
-                                />
-                              ),
-                            )}
-                            <button
-                              type="button"
-                              className="icon-button chip-range-button"
-                              disabled={!!me?.ready}
-                              onClick={() => changeChipPreset(1)}
-                              title="Afficher les jetons suivants"
-                              aria-label="Afficher les jetons suivants"
-                            >
-                              <ChevronRight size={17} />
-                            </button>
+                              onSelect={selectChip}
+                              onPageChange={(page) => {
+                                const nextChip = affordableChipInPage(
+                                  BLACKJACK_CHIP_PRESETS[page] ?? [],
+                                  chipBalance,
+                                );
+                                if (nextChip !== undefined) setChip(nextChip);
+                              }}
+                            />
                             <span className="rack-divider" />
                             <button
                               className="icon-button repeat-bet"

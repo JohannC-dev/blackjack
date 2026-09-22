@@ -2953,6 +2953,9 @@ h1 > span:not(.live-tag) {
     transform 0.2s var(--ease),
     box-shadow 0.2s;
 }
+.chip:disabled {
+  filter: grayscale(1);
+}
 .chip > span {
   height: 100%;
   width: 100%;
@@ -11473,10 +11476,10 @@ h1 > span:not(.live-tag) {
 }
 .mines-shell .mines-bet-control .chip-picker {
   display: grid;
-  grid-template-columns: repeat(4, minmax(28px, 1fr)) 1px 28px 28px;
+  grid-template-columns: 28px repeat(4, minmax(0, 1fr)) 28px 1px 28px 28px;
   align-items: center;
-  gap: 6px;
-  width: min(100%, 231px);
+  gap: 4px;
+  width: min(100%, 330px);
 }
 .mines-shell .mines-bet-control .chip-picker .chip {
   width: 100%;
