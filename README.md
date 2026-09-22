@@ -18,8 +18,8 @@ Next.js recharge automatiquement les composants et le CSS. Après une modificati
 
 ## Jouer à plusieurs
 
-1. Créer un compte avec un pseudo, une adresse e-mail et un mot de passe. Le portefeuille reçoit 2 000 crédits à sa création.
-2. Choisir un jeton dans le porte-jetons, puis cliquer sur une zone **Blackjack**, **21+3** ou **Super Pairs directement sur le tapis**. Le jeton sélectionné reste actif pour les mises suivantes. Une mise Blackjack est nécessaire pour ajouter les paris annexes.
+1. Créer un compte avec un pseudo, une adresse e-mail et un mot de passe. Le portefeuille reçoit 500 000 crédits à sa création.
+2. Choisir un jeton dans le porte-jetons, puis cliquer sur une zone **Blackjack**, **21+3** ou **Super Pairs directement sur le tapis**. Les flèches du porte-jetons affichent d’autres valeurs sans changer de table. Le jeton sélectionné reste actif pour les mises suivantes. Une mise Blackjack est nécessaire pour ajouter les paris annexes.
 3. Prendre plusieurs places libres pour jouer plusieurs mains. La table offre 5 places partagées. Le bouton d’annulation retire le dernier jeton posé ; la croix retire toutes vos mises.
 4. Cliquer sur **Je suis prêt** pour valider l’ensemble des mises. Si tous les joueurs ayant misé sont prêts, la manche démarre en 3 secondes. Sinon, les joueurs prêts démarrent après 12 secondes, les autres attendent la prochaine manche.
 5. Inviter des amis avec le bouton du haut. Le menu de table propose plusieurs tables publiques (`MINUIT`, `LUNA`, `NOVA` et `OPALE`) et permet aussi de créer une table avec un code ou d’en rejoindre une. Une table « privée » est accessible à toute personne qui connaît son code ; elle n’a pas de mot de passe.
@@ -30,8 +30,8 @@ Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table
 
 ### Poker Texas Hold’em
 
-- **Cash Game public** à 2–5 joueurs avec matchmaking et placement automatiques. Limites 10/20, 50/100 et 250/500 ; buy-in réglable de 40 à 100 grosses blinds. Aucun rake.
-- **Spin & Play public** à 3 joueurs, buy-ins de 200 à 25 000 crédits, tapis de tournoi de 500 et blinds croissantes toutes les deux minutes. La roue serveur attribue un multiplicateur de ×2 à ×1 000 ; le dernier joueur remporte tout.
+- **Cash Game public** à 2–5 joueurs avec matchmaking et placement automatiques. Limites 2 500/5 000, 10 000/20 000 et 50 000/100 000 ; buy-in réglable de 40 à 100 grosses blinds. Aucun rake.
+- **Spin & Play public** à 3 joueurs, buy-ins de 5 000 à 2 000 000 crédits, tapis de tournoi de 500 et blinds croissantes toutes les deux minutes. La roue serveur attribue un multiplicateur de ×2 à ×1 000 ; le dernier joueur remporte tout.
 - Règles No-Limit complètes : bouton et heads-up, relance minimale, all-in incomplet, pots secondaires, kickers, partages et jetons indivisibles.
 - Paquet neuf de 52 cartes mélangé cryptographiquement à chaque main. Burn cards, flop, turn et river standards. Toutes les mains encore actives sont révélées au showdown.
 - 25 secondes par décision en Cash Game et 15 secondes en Spin. Un joueur absent paie ses blinds puis check automatiquement si possible, sinon fold.
@@ -52,7 +52,7 @@ Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table
 ### La Tower
 
 - Choisir une difficulté : **Facile** (5 cartes par étage), **Normal** (4), **Difficile** (3) ou **Impossible** (2). Chaque étage cache toujours **un seul piège**, placé par le serveur au lancement.
-- Mise de **5 à 500** crédits avec les jetons du casino, débitée au lancement. Dix étages : une bonne carte fait monter, le piège fait s’effondrer la tour et perdre la mise.
+- Mise de **5 000 à 20 milliards** de crédits avec les jetons du casino, débitée au lancement. Dix étages : une bonne carte fait monter, le piège fait s’effondrer la tour et perdre la mise.
 - Après chaque étage réussi, encaisser `mise × multiplicateur` ou continuer. Le 10ᵉ étage est encaissé automatiquement. Les multiplicateurs reprennent ceux de la Tower of Chance de MONOPOLY Poker (Normal, Difficile et Impossible correspondent à ses niveaux Easy, Medium et Hard), soit ×7,86 (Facile), ×15,5 (Normal), ×50,9 (Difficile) et ×919 (Impossible) au sommet. La part rendue baisse doucement à mesure qu'on monte, d’environ 92 % au premier étage à 87-90 % au sommet (88 % à 84 % en Facile, qui n’existe pas dans le jeu), plus 3 % versés dans la cagnotte Lucky.
 - Seule la carte choisie est révélée, sauf en Impossible où l’autre carte est forcément le piège.
 - **Lucky Tower** : chaque joueur a sa propre **cagnotte Lucky**, alimentée par 3 % de chacune de ses mises et conservée en mémoire serveur (remise à zéro au redémarrage). Certaines ascensions cachent une **carte dorée** sur une ligne de 3 à 6, jamais à la place du piège, tirée uniquement par le serveur avec une chance réglée par difficulté (≈ 1 ascension sur 500 la retourne en jouant au hasard). La retourner encaisse l’étage atteint et verse la cagnotte ; la tour s’illumine ensuite jusqu’au sommet, en animation seulement. Une carte dorée manquée est révélée avec sa ligne.
@@ -67,7 +67,7 @@ Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table
 - Blackjack naturel payé **3:2**, victoire **1:1**, égalité remboursée. Un blackjack du croupier fait perdre les mises de double et de séparation ; seul un blackjack naturel est remboursé à égalité.
 - Double autorisé sur deux cartes, également après séparation. Au moment de doubler, le joueur choisit de voir immédiatement sa dernière carte ou de la garder face cachée jusqu’à la fin du jeu du croupier. Dans ce second mode, sa valeur reste uniquement sur le serveur jusqu’à la révélation. Séparation de cartes de même valeur, donc 10/valet/dame/roi peuvent être séparés ensemble, jusqu’à 4 mains par place. Les as séparés reçoivent une seule carte ; pas de nouvelle séparation des as. Le 21 après séparation paie 1:1.
 - Pas d’assurance ni d’abandon. 25 secondes par décision, puis la main reste automatiquement, y compris après une déconnexion.
-- Mises par pas de 5 : **5–500** au blackjack et **0–100** sur chaque pari annexe. Recharge à 2 000 crédits disponible lorsque le solde est inférieur à 5.
+- Le porte-jetons propose quatre séries de valeurs, de 15 000 à 160 millions, sur toutes les tables. La mise principale est plafonnée à 20 milliards et chaque pari annexe à 160 millions. Une recharge à 500 000 crédits est disponible lorsque le solde passe sous 5 000.
 - Après une manche positive, tentez vos gains sur une carte **rouge ou noire**. L’option reste disponible jusqu’à votre décision sans bloquer les manches suivantes. Une bonne couleur double le montant à risque et permet de recommencer sans limite ; une mauvaise couleur perd la séquence. Vous pouvez encaisser à tout moment.
 
 ### 21+3
@@ -83,7 +83,7 @@ Deux cartes initiales du joueur + carte visible du croupier. Straight Flush, Thr
 | Prime Pair   | Même rang, même couleur rouge/noir, enseignes différentes                           | 10:1     |
 | Any Pair     | Même rang, couleurs différentes                                                     | 8:1      |
 
-Seule la meilleure combinaison est payée. « Pour 1 » désigne le gain net, avec remboursement de la mise en plus : 5 à 9:1 crédite 50.
+Seule la meilleure combinaison est payée. « Pour 1 » désigne le gain net, avec remboursement de la mise en plus : 5 000 à 9:1 crédite 50 000.
 
 **Les deux paris annexes sont réglés à la fin de la distribution, avant toute action de blackjack.** Le solde est immédiatement crédité, puis une animation de 2,2 secondes précède le premier tour. Ces gains peuvent financer un double ou une séparation. Ils ne sont pas recrédités à la fin de la manche et restent acquis même si le blackjack est perdu.
 

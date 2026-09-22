@@ -3,6 +3,7 @@
 import { LoaderCircle, RotateCcw, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { CASINO_CHIP_DENOMINATIONS } from "@/lib/chips";
+import { credits } from "@/lib/rules";
 import { Chip } from "./chip";
 
 export function GameControlsBar({
@@ -92,7 +93,7 @@ export function BetChipPicker({
           selected={betSteps.at(-1) === amount && !disabled}
           disabled={disabled || bet + amount > maxBet}
           onClick={onAdd}
-          label={`Ajouter ${amount} crédits à la mise`}
+          label={`Ajouter ${credits(amount)} crédits à la mise`}
         />
       ))}
       <span className="rack-divider" />

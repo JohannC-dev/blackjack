@@ -37,7 +37,7 @@ function tableWith(draws: Card[], players = [player()]) {
     ...Array.from({ length: 200 }, () => card(10)),
     ...draws.toReversed(),
   ];
-  const table = new Table("TEST", undefined, shoe);
+  const table = new Table("TEST", undefined, shoe, undefined, true);
   players.forEach((p) => {
     table.add(p);
     const seat = table.state.seats.find((s) => s.playerId === p.id)!;
@@ -85,7 +85,7 @@ describe("Contextual casino chip stacks", () => {
       casinoChipStackForAmount(500, 500).columns.map(
         (column) => column.denomination,
       ),
-    ).toEqual([100, 50, 25]);
+    ).toEqual([500_000, 100_000, 20_000]);
   });
 });
 
@@ -513,7 +513,7 @@ describe("European blackjack and credit accounting", () => {
 
 describe("Multiplayer authority and lifecycle", () => {
   test("a Blackjack spectator does not reserve a seat", () => {
-    const table = new Table("TEST");
+    const table = new Table("TEST", undefined, undefined, undefined, true);
     const spectator = player("Poker only");
 
     table.observe(spectator);

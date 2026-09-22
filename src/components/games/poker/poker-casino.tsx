@@ -36,7 +36,7 @@ import {
   evaluateBestPokerHand,
   getPokerCombinationCards,
 } from "@/lib/rules";
-import { casinoChipStackForAmount } from "@/lib/chips";
+import { casinoChipStackForAmount, chipColors } from "@/lib/chips";
 import {
   CASINO_DEAL_INTERVAL,
   playCasinoSound,
@@ -1191,6 +1191,7 @@ export function PokerChipStack({
             key={`${column.denomination}-${columnIndex}`}
             style={
               {
+                ...chipColors(column.denomination),
                 "--chip-column-x": `${(columnIndex - (stage.columns.length - 1) / 2) * columnStep}px`,
                 "--chip-column-index": columnIndex,
               } as CSSProperties

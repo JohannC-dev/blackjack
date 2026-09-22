@@ -3,6 +3,9 @@ import { randomUUID } from "node:crypto";
 import { MinesGame } from "../server/mines";
 import { minesForTarget, minesMultiplier, minesPayout } from "../src/lib/mines";
 
+const minesGame = (publish: () => void = () => {}) =>
+  new MinesGame(publish, undefined, { min: 5, max: 500, step: 5 });
+
 describe("Jeu de la mine", () => {
   test("le multiplicateur augmente avec chaque diamant et garde la marge maison", () => {
     expect(minesMultiplier(9, 1)).toBe(1.5);
@@ -11,7 +14,7 @@ describe("Jeu de la mine", () => {
   });
 
   test("les positions restent masquées pendant une manche active", () => {
-    const game = new MinesGame();
+    const game = minesGame();
     const player = { id: randomUUID(), balance: 1_000 };
     game.start(player, 100, 200);
     const state = game.snapshot();
@@ -23,13 +26,13 @@ describe("Jeu de la mine", () => {
   });
 
   test("un encaissement recrédite le joueur sans exposer les positions avant", () => {
-    let game = new MinesGame();
+    let game = minesGame();
     const player = { id: randomUUID(), balance: 1_000 };
 
     // Keep the test deterministic at the behavior level while allowing the
     // cryptographic draw to choose the actual first safe tile.
     for (let attempt = 0; attempt < 20; attempt++) {
-      game = new MinesGame();
+      game = minesGame();
       game.start(player, 100, 110);
       game.reveal(player, 0);
       if (game.snapshot().phase === "playing") break;
@@ -47,11 +50,11 @@ describe("Jeu de la mine", () => {
 
   test("une mine clôt la manche et perd la mise", () => {
     const player = { id: randomUUID(), balance: 1_000 };
-    let game = new MinesGame();
+    let game = minesGame();
     let state = game.snapshot();
 
     for (let attempt = 0; attempt < 20; attempt++) {
-      game = new MinesGame();
+      game = minesGame();
       game.start(player, 100, 1000);
       for (let index = 0; index < 25; index++) {
         game.reveal(player, index);
@@ -68,13 +71,13 @@ describe("Jeu de la mine", () => {
 
   test("un pattern révèle toutes ses cases en une commande et encaisse", () => {
     const player = { id: randomUUID(), balance: 100_000 };
-    let game = new MinesGame();
+    let game = minesGame();
     let state = game.snapshot();
     let publishes = 0;
 
     for (let attempt = 0; attempt < 20; attempt++) {
       publishes = 0;
-      game = new MinesGame(() => publishes++);
+      game = minesGame(() => publishes++);
       game.playPattern(player, 100, 110, [0]);
       state = game.snapshot();
       if (state.phase === "cashed") {

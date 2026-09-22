@@ -632,7 +632,7 @@ export function MinesCasino({
   onNavigate: (view: CasinoView) => void;
 }) {
   const state = game.minesState;
-  const [bet, setBet] = useState(25);
+  const [bet, setBet] = useState<number>(MINES_MIN_BET);
   const [betSteps, setBetSteps] = useState<number[]>([]);
   const [target, setTarget] = useState<MinesTarget>(200);
   const [sound, setSound] = useState(false);

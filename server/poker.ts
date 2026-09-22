@@ -24,11 +24,13 @@ import {
 export { evaluatePokerHand } from "../src/lib/rules";
 
 export const CASH_LIMITS = new Map([
-  [20, { smallBlind: 10, bigBlind: 20 }],
-  [100, { smallBlind: 50, bigBlind: 100 }],
-  [500, { smallBlind: 250, bigBlind: 500 }],
+  [5_000, { smallBlind: 2_500, bigBlind: 5_000 }],
+  [20_000, { smallBlind: 10_000, bigBlind: 20_000 }],
+  [100_000, { smallBlind: 50_000, bigBlind: 100_000 }],
 ]);
-export const SPIN_BUY_INS = [200, 500, 1_000, 5_000, 25_000] as const;
+export const SPIN_BUY_INS = [
+  5_000, 20_000, 100_000, 500_000, 2_000_000,
+] as const;
 const SPIN_LEVELS = [
   [10, 20],
   [15, 30],

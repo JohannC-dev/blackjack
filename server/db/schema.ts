@@ -109,7 +109,7 @@ export const walletAccount = pgTable(
       .primaryKey()
       .references(() => user.id, { onDelete: "cascade" }),
     balanceMinor: bigint("balance_minor", { mode: "number" })
-      .default(200_000)
+      .default(50_000_000)
       .notNull(),
     version: bigint("version", { mode: "number" }).default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })

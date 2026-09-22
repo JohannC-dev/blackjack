@@ -1,4 +1,6 @@
-import { memo } from "react";
+import { memo, type CSSProperties } from "react";
+import { chipColors, chipLabel } from "@/lib/chips";
+import { credits } from "@/lib/rules";
 
 export const Chip = memo(function Chip({
   amount,
@@ -17,12 +19,15 @@ export const Chip = memo(function Chip({
     <button
       type="button"
       className={`chip chip-${amount} ${selected ? "selected" : ""}`}
+      style={chipColors(amount) as CSSProperties}
       onClick={() => onClick?.(amount)}
       disabled={disabled}
-      aria-label={label ?? `Sélectionner le jeton de ${amount} crédits`}
+      aria-label={
+        label ?? `Sélectionner le jeton de ${credits(amount)} crédits`
+      }
       aria-pressed={selected}
     >
-      <span>{amount}</span>
+      <span>{chipLabel(amount)}</span>
     </button>
   );
 });

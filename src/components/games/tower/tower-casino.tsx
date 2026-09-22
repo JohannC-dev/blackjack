@@ -103,7 +103,7 @@ export function TowerCasino({
   const { enterTower, leaveTower } = game;
 
   const [difficulty, setDifficulty] = useState<TowerDifficulty>("normal");
-  const [bet, setBet] = useState(25);
+  const [bet, setBet] = useState<number>(TOWER_MIN_BET);
   const [betSteps, setBetSteps] = useState<number[]>([]);
   const [previewing, setPreviewing] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -654,7 +654,7 @@ function ActionButton({
   }
   const reason =
     bet < TOWER_MIN_BET
-      ? `Mise minimale : ${TOWER_MIN_BET} cr.`
+      ? `Mise minimale : ${credits(TOWER_MIN_BET)} cr.`
       : balance < bet
         ? "Solde insuffisant"
         : `${TOWER_DIFFICULTIES[difficulty].label} · jusqu’à ${credits(towerPayout(bet, difficulty, TOWER_FLOORS))} cr.`;
@@ -1005,8 +1005,8 @@ function TowerRules({ onClose }: { onClose: () => void }) {
           (Impossible). Il y a toujours un seul piège par étage.
         </li>
         <li>
-          Misez de {TOWER_MIN_BET} à {TOWER_MAX_BET} crédits avec les jetons,
-          puis cliquez sur Jouer. La mise est verrouillée.
+          Misez de {credits(TOWER_MIN_BET)} à {credits(TOWER_MAX_BET)} crédits
+          avec les jetons, puis cliquez sur Jouer. La mise est verrouillée.
         </li>
         <li>
           À chaque étage, retournez une carte. Flèche : vous montez. Crâne : la

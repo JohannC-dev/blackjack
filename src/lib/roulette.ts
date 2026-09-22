@@ -1,3 +1,5 @@
+import { CASINO_MAX_BET, CASINO_CHIP_DENOMINATIONS } from "./chips";
+
 /**
  * European roulette, ported from Malori's party roulette: same bet kinds,
  * same table layout and payouts, settled in credits instead of drinks.
@@ -18,9 +20,9 @@ export type RouletteBet = {
   amount: number;
 };
 
-export const ROULETTE_MIN_CHIP = 5;
+export const ROULETTE_MIN_CHIP = CASINO_CHIP_DENOMINATIONS[0];
 /** Ceiling of one player's stake on a single spot, not on the whole layout. */
-export const ROULETTE_MAX_PER_SPOT = 500;
+export const ROULETTE_MAX_PER_SPOT = CASINO_MAX_BET;
 export const ROULETTE_MAX_BETS = 60;
 export const ROULETTE_HISTORY_SIZE = 14;
 

@@ -21,36 +21,36 @@ import { RoomArt } from "./room-art";
 
 const ROOMS = [
   {
-    stake: 20,
+    stake: 5_000,
     name: "Velours",
-    blinds: "10 / 20",
-    min: 800,
-    max: 2_000,
+    blinds: "2 500 / 5 000",
+    min: 200_000,
+    max: 500_000,
     theme: "velvet",
   },
   {
-    stake: 100,
+    stake: 20_000,
     name: "Salon",
-    blinds: "50 / 100",
-    min: 4_000,
-    max: 10_000,
+    blinds: "10 000 / 20 000",
+    min: 800_000,
+    max: 2_000_000,
     theme: "salon",
   },
   {
-    stake: 500,
+    stake: 100_000,
     name: "Minuit",
-    blinds: "250 / 500",
-    min: 20_000,
-    max: 50_000,
+    blinds: "50 000 / 100 000",
+    min: 4_000_000,
+    max: 10_000_000,
     theme: "midnight",
   },
 ] as const;
 const SPINS = [
-  { stake: 200, theme: "salon" },
-  { stake: 500, theme: "velvet" },
-  { stake: 1_000, theme: "rose" },
-  { stake: 5_000, theme: "ocean" },
-  { stake: 25_000, theme: "midnight" },
+  { stake: 5_000, theme: "salon" },
+  { stake: 20_000, theme: "velvet" },
+  { stake: 100_000, theme: "rose" },
+  { stake: 500_000, theme: "ocean" },
+  { stake: 2_000_000, theme: "midnight" },
 ];
 
 export function PokerLobby({
@@ -152,7 +152,7 @@ export function PokerLobby({
               <p>Votre rythme. Vos limites.</p>
               <div className={styles.gameDetail}>
                 <span>3 plafonds au choix</span>
-                <span>Dès 800 cr.</span>
+                <span>Dès 200 000 cr.</span>
               </div>
               <div className={styles.roomFooter}>
                 <span>Choisir le plafond</span>

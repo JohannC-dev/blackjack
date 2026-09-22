@@ -9,7 +9,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { casinoChipStackForAmount } from "@/lib/chips";
+import { casinoChipStackForAmount, chipColors } from "@/lib/chips";
 import { credits } from "@/lib/rules";
 import { motionDuration } from "./motion";
 
@@ -107,6 +107,7 @@ export const TableChipStack = memo(function TableChipStack({
             key={`${column.denomination}-${columnIndex}`}
             style={
               {
+                ...chipColors(column.denomination),
                 "--chip-column-left": `${((columnIndex + 1) / (stage.columns.length + 1)) * 100}%`,
                 "--chip-column-index": columnIndex,
               } as CSSProperties

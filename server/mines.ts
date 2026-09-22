@@ -11,6 +11,7 @@ import {
   minesMultiplier,
   minesPayout,
   MINES_GRID_SIZE,
+  MINES_BET_STEP,
   MINES_MAX_BET,
   MINES_MIN_BET,
   type MinesTarget,
@@ -27,12 +28,14 @@ function emptyCells() {
   }));
 }
 
-function validBet(value: number) {
+type MinesBetLimits = { min: number; max: number; step: number };
+
+function validBet(value: number, limits: MinesBetLimits) {
   return (
     Number.isSafeInteger(value) &&
-    value >= MINES_MIN_BET &&
-    value <= MINES_MAX_BET &&
-    value % 5 === 0
+    value >= limits.min &&
+    value <= limits.max &&
+    value % limits.step === 0
   );
 }
 
@@ -66,6 +69,11 @@ export class MinesGame {
   constructor(
     private readonly publish: () => void = () => {},
     private readonly wallet: GameWallet = inMemoryGameWallet,
+    private readonly betLimits: MinesBetLimits = {
+      min: MINES_MIN_BET,
+      max: MINES_MAX_BET,
+      step: MINES_BET_STEP,
+    },
   ) {}
 
   snapshot(): MinesState {
@@ -159,9 +167,9 @@ export class MinesGame {
   start(player: MinesPlayer, bet: number, target: number, publish = true) {
     if (this.phase === "playing")
       throw new Error("Terminez la partie en cours avant de rejouer.");
-    if (!validBet(bet))
+    if (!validBet(bet, this.betLimits))
       throw new Error(
-        `La mise doit être comprise entre ${MINES_MIN_BET} et ${MINES_MAX_BET} crédits.`,
+        `La mise doit être comprise entre ${this.betLimits.min} et ${this.betLimits.max} crédits.`,
       );
     if (!isMinesTarget(target))
       throw new Error("Choisissez un objectif de gain valide.");

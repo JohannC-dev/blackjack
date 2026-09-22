@@ -2,6 +2,13 @@ import { randomInt, randomUUID } from "node:crypto";
 import { gameEffect } from "./effect";
 import { inMemoryGameWallet, type GameWallet } from "./game-wallet";
 import {
+  BLACKJACK_MAX_BET,
+  BLACKJACK_MAX_SIDE_BET,
+  BLACKJACK_MIN_BET,
+  CASINO_CHIP_DENOMINATIONS,
+  INITIAL_CREDIT_BALANCE,
+} from "../src/lib/chips";
+import {
   betTotal,
   canSplitCards,
   evaluate21Plus3,
@@ -33,6 +40,26 @@ const BETTING_COUNTDOWN_MS = 12_000;
 const ALL_READY_COUNTDOWN_MS = 3_000;
 const SETTLED_COUNTDOWN_MS = 7_000;
 const IDLE_SEAT_ROUNDS = 2;
+const BLACKJACK_STAKE_UNIT = 5_000;
+
+function isBlackjackStake(value: number, maximum: number) {
+  if (
+    !Number.isSafeInteger(value) ||
+    value < 0 ||
+    value > maximum ||
+    value % BLACKJACK_STAKE_UNIT
+  )
+    return false;
+  if (value === 0) return true;
+
+  // The smallest independent values are 15K and 200K. Trying the three
+  // possible 200K residues proves whether a total can be built from the rack.
+  const units = value / BLACKJACK_STAKE_UNIT;
+  return [0, 1, 2].some(
+    (largeChips) =>
+      units >= 40 * largeChips && (units - 40 * largeChips) % 3 === 0,
+  );
+}
 export const BLACKJACK_SHUFFLE_MS = 2_200;
 export function makeShoe(): Card[] {
   const cards: Card[] = [];
@@ -63,6 +90,7 @@ export class Table {
     private publish: () => void = () => {},
     shoe?: Card[],
     private readonly wallet: GameWallet = inMemoryGameWallet,
+    private readonly legacyEconomy = false,
   ) {
     this.shoe = shoe ?? makeShoe();
     this.state = {
@@ -291,15 +319,21 @@ export class Table {
         throw new Error("Attendez la prochaine manche.");
       if (command.type === "refill") {
         const balance = this.wallet.balance(player);
-        if (balance >= 5)
-          throw new Error("La recharge est disponible sous 5 crédits.");
+        const refillThreshold = this.legacyEconomy
+          ? 5
+          : CASINO_CHIP_DENOMINATIONS[0];
+        if (balance >= refillThreshold)
+          throw new Error(
+            `La recharge est disponible sous ${refillThreshold} crédits.`,
+          );
         this.wallet.credit(player, {
           operationId: `blackjack:${this.state.id}:${playerId}:refill:${randomUUID()}`,
           game: "blackjack",
           kind: "grant",
           reason: "refill",
           referenceId: playerId,
-          amount: 2000 - balance,
+          amount:
+            (this.legacyEconomy ? 2_000 : INITIAL_CREDIT_BALANCE) - balance,
         });
       } else if (command.type === "ready") {
         if (typeof command.ready !== "boolean")
@@ -308,7 +342,9 @@ export class Table {
         const total = own.reduce((sum, s) => sum + betTotal(s.bet), 0);
         if (
           command.ready &&
-          (!own.some((s) => s.bet.main >= 5) ||
+          (!own.some(
+            (s) => s.bet.main >= (this.legacyEconomy ? 5 : BLACKJACK_MIN_BET),
+          ) ||
             total > this.wallet.balance(player))
         )
           throw new Error("Vérifiez vos mises et votre solde.");
@@ -352,18 +388,29 @@ export class Table {
             this.clearSeat(seat);
           } else {
             const b = command.bet;
+            const validMain = this.legacyEconomy
+              ? Number.isInteger(b?.main) &&
+                b.main >= 0 &&
+                b.main <= 500 &&
+                b.main % 5 === 0
+              : !!b && isBlackjackStake(b.main, BLACKJACK_MAX_BET);
+            const validSide = (value: number | undefined) =>
+              this.legacyEconomy
+                ? Number.isInteger(value) &&
+                  value! >= 0 &&
+                  value! <= 100 &&
+                  value! % 5 === 0
+                : value !== undefined &&
+                  isBlackjackStake(value, BLACKJACK_MAX_SIDE_BET);
             if (
               !b ||
-              ![b.main, b.three, b.pairs].every(
-                (v) => Number.isInteger(v) && v >= 0 && v % 5 === 0,
-              ) ||
-              b.main > 500 ||
-              b.three > 100 ||
-              b.pairs > 100 ||
+              !validMain ||
+              !validSide(b.three) ||
+              !validSide(b.pairs) ||
               (b.main === 0 && (b.three > 0 || b.pairs > 0))
             )
               throw new Error(
-                "Mises par pas de 5 : blackjack 5–500, bonus 0–100.",
+                "Cette combinaison de jetons dépasse les limites de la table.",
               );
             const reserved = this.state.seats
               .filter((s) => s.playerId === playerId && s !== seat)

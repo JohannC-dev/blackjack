@@ -1,0 +1,1 @@
+ALTER TABLE "wallet_account" ALTER COLUMN "balance_minor" SET DEFAULT 50000000;

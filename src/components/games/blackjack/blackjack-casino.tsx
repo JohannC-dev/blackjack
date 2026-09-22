@@ -19,6 +19,8 @@ import {
   Castle,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleHelp,
   Coins,
   Disc3,
@@ -52,7 +54,14 @@ import {
   score,
   SUITS,
 } from "@/lib/rules";
-import { CASINO_CHIP_DENOMINATIONS } from "@/lib/chips";
+import {
+  BLACKJACK_CHIP_PRESETS,
+  BLACKJACK_MAX_BET,
+  BLACKJACK_MAX_SIDE_BET,
+  CASINO_CHIP_DENOMINATIONS,
+  INITIAL_CREDIT_BALANCE,
+  chipLabel,
+} from "@/lib/chips";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
 import { DEFAULT_PUBLIC_TABLE_ID, PUBLIC_TABLES } from "@/lib/table-config";
 import type {
@@ -336,7 +345,7 @@ function BlackjackMainBetChips({ seat }: { seat: Seat }) {
           {Array.from({ length: group.stacks }, (_, stackIndex) => (
             <AnimatedTableChip
               amount={group.amount}
-              maximum={500}
+              maximum={BLACKJACK_MAX_BET}
               className="blackjack-bet-chip"
               placeholder={null}
               key={`${group.id}-${stackIndex}`}
@@ -362,7 +371,7 @@ function BlackjackMainSettlement({ seat }: { seat: Seat }) {
           <SettlementChipAnimation
             stake={hand.bet}
             payout={hand.payout ?? 0}
-            maximum={500}
+            maximum={BLACKJACK_MAX_BET}
           />
         </span>
       ))}
@@ -559,7 +568,7 @@ const SeatView = memo(function SeatView({
                     <SettlementChipAnimation
                       stake={stake}
                       payout={payout}
-                      maximum={100}
+                      maximum={BLACKJACK_MAX_SIDE_BET}
                       side
                     />
                   )
@@ -574,7 +583,7 @@ const SeatView = memo(function SeatView({
                 ) : (
                   <AnimatedTableChip
                     amount={stake}
-                    maximum={100}
+                    maximum={BLACKJACK_MAX_SIDE_BET}
                     className="side-chip"
                     placeholder={placeholder}
                   />
@@ -990,7 +999,7 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
         <span className={`connection-dot ${connected ? "online" : ""}`} />
         <b>TABLE {tableId}</b>
         <span className="table-separator">/</span>
-        <span>5 – 500 crédits</span>
+        <span>Mises sur mesure</span>
       </div>
       <div className="table-toolbar-actions">
         <EmoteButton
@@ -1070,7 +1079,8 @@ export function BlackjackCasino({
   const [betHistory, setBetHistory] = useState<{ seat: number; before: Bet }[]>(
     [],
   );
-  const [chip, setChip] = useState(25);
+  const [chipPreset, setChipPreset] = useState(0);
+  const [chip, setChip] = useState<number>(BLACKJACK_CHIP_PRESETS[0][0]);
   const [toast, setToast] = useState("");
   const [notice, setNotice] = useState<{
     message: string;
@@ -1108,7 +1118,8 @@ export function BlackjackCasino({
   );
   const ownSeats = state?.seats.filter((s) => s.playerId === playerId) ?? [];
   const seat = ownSeats.find((s) => s.index === selectedSeat) ?? ownSeats[0];
-  const balance = game.balance ?? me?.balance ?? profile?.balance ?? 2000;
+  const balance =
+    game.balance ?? me?.balance ?? profile?.balance ?? INITIAL_CREDIT_BALANCE;
   const betting = !state || state.phase === "betting";
   const canChangeTable = betting || ownSeats.length === 0;
   const totalBet = ownSeats.reduce((sum, s) => sum + betTotal(s.bet), 0);
@@ -1376,6 +1387,16 @@ export function BlackjackCasino({
     [command],
   );
   const selectChip = useCallback((amount: number) => setChip(amount), []);
+  const changeChipPreset = useCallback(
+    (direction: -1 | 1) => {
+      const next =
+        (chipPreset + direction + BLACKJACK_CHIP_PRESETS.length) %
+        BLACKJACK_CHIP_PRESETS.length;
+      setChipPreset(next);
+      setChip(BLACKJACK_CHIP_PRESETS[next][0]);
+    },
+    [chipPreset],
+  );
   const undoBet = () => {
     const last = betHistory.at(-1);
     if (!last) return;
@@ -1740,15 +1761,37 @@ export function BlackjackCasino({
                       <>
                         <div className="chip-rack">
                           <div className="chip-picker">
-                            {CASINO_CHIP_DENOMINATIONS.map((amount) => (
-                              <Chip
-                                key={amount}
-                                amount={amount}
-                                selected={chip === amount}
-                                disabled={!!me?.ready}
-                                onClick={selectChip}
-                              />
-                            ))}
+                            <button
+                              type="button"
+                              className="icon-button chip-range-button"
+                              disabled={!!me?.ready}
+                              onClick={() => changeChipPreset(-1)}
+                              title="Afficher les jetons précédents"
+                              aria-label="Afficher les jetons précédents"
+                            >
+                              <ChevronLeft size={17} />
+                            </button>
+                            {BLACKJACK_CHIP_PRESETS[chipPreset].map(
+                              (amount) => (
+                                <Chip
+                                  key={amount}
+                                  amount={amount}
+                                  selected={chip === amount}
+                                  disabled={!!me?.ready}
+                                  onClick={selectChip}
+                                />
+                              ),
+                            )}
+                            <button
+                              type="button"
+                              className="icon-button chip-range-button"
+                              disabled={!!me?.ready}
+                              onClick={() => changeChipPreset(1)}
+                              title="Afficher les jetons suivants"
+                              aria-label="Afficher les jetons suivants"
+                            >
+                              <ChevronRight size={17} />
+                            </button>
                             <span className="rack-divider" />
                             <button
                               className="icon-button repeat-bet"
@@ -1791,8 +1834,8 @@ export function BlackjackCasino({
                             </HoldToConfirmButton>
                           </div>
                           <span className="chip-rack-hint">
-                            Jeton de <b>{chip}</b> sélectionné · cliquez sur le
-                            tapis pour miser
+                            Jeton de <b>{chipLabel(chip)}</b> sélectionné ·
+                            cliquez sur le tapis pour miser
                           </span>
                         </div>
                         <div className="bet-confirm">
@@ -1802,7 +1845,7 @@ export function BlackjackCasino({
                               {credits(totalBet)} <small>cr.</small>
                             </b>
                           </span>
-                          {balance < 5 ? (
+                          {balance < CASINO_CHIP_DENOMINATIONS[0] ? (
                             <button
                               className="button primary"
                               onClick={() => command({ type: "refill" })}
@@ -2214,7 +2257,8 @@ export function BlackjackCasino({
           <span className="section-kicker">LES RÈGLES DE LA TABLE</span>
           <h2>Tout se joue à 21.</h2>
           <p className="modal-intro">
-            Blackjack européen · 8 jeux de 52 cartes · Mises de 5 à 500 crédits.
+            Blackjack européen · 8 jeux de 52 cartes · choisissez vos jetons
+            selon la mise visée.
           </p>
           <div className="rule-grid">
             <div>
@@ -2263,15 +2307,15 @@ export function BlackjackCasino({
             <Paytable kind="pairs" expanded />
           </div>
           <p className="rules-note">
-            Les cotes indiquent le gain net : à 9:1, une mise de 5 rapporte 45 +
-            les 5 misés. Les paris annexes sont payés dès la distribution, avant
-            le premier choix d’action. Ils sont indépendants du blackjack et
-            limités à 100 crédits chacun. Un gain net peut ensuite être tenté
-            autant de fois que vous le souhaitez sur rouge ou noir : chaque
-            bonne carte double le montant, une mauvaise carte arrête la série.
-            Vous pouvez encaisser quand vous voulez. Pas d’assurance ni
-            d’abandon. Votre profil est sauvegardé sur cet appareil ; les tables
-            sont conservées en mémoire tant que le serveur fonctionne.
+            Les cotes indiquent le gain net. À 9:1, le gain vaut neuf fois la
+            mise, qui est aussi rendue. Les paris annexes sont payés dès la
+            distribution, avant le premier choix d’action. Ils sont indépendants
+            du blackjack. Un gain net peut ensuite être tenté autant de fois que
+            vous le souhaitez sur rouge ou noir : chaque bonne carte double le
+            montant, une mauvaise carte arrête la série. Vous pouvez encaisser
+            quand vous voulez. Pas d’assurance ni d’abandon. Votre profil est
+            sauvegardé sur cet appareil ; les tables sont conservées en mémoire
+            tant que le serveur fonctionne.
           </p>
           <button className="button primary" onClick={() => setModal(null)}>
             À la table

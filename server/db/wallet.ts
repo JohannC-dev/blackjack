@@ -3,10 +3,11 @@ import { SqlClient } from "@effect/sql/SqlClient";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { Data, Effect } from "effect";
 import type { WalletOperation } from "../game-wallet";
+import { INITIAL_CREDIT_BALANCE } from "../../src/lib/chips";
 import { walletAccount, walletEntry } from "./schema";
 
 const MINOR_PER_CREDIT = 100;
-const INITIAL_BALANCE_MINOR = 200_000;
+const INITIAL_BALANCE_MINOR = INITIAL_CREDIT_BALANCE * MINOR_PER_CREDIT;
 
 export type WalletSnapshot = {
   readonly balance: number;

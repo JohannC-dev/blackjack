@@ -41,7 +41,7 @@ export function RouletteCasino({
   const table = game.rouletteState;
   const balance = getClubBalance(game);
   const { enterRoulette, leaveRoulette } = game;
-  const [chip, setChip] = useState<number>(CASINO_CHIP_DENOMINATIONS[1]);
+  const [chip, setChip] = useState<number>(CASINO_CHIP_DENOMINATIONS[0]);
   const [undo, setUndo] = useState<RouletteBet[][]>([]);
   const [sound, setSound] = useState(false);
   const audioRef = useRef<AudioContext | null>(null);
@@ -109,7 +109,7 @@ export function RouletteCasino({
     const staked = myBets.find((bet) => rouletteBetId(bet) === id)?.amount ?? 0;
     if (staked + chip > ROULETTE_MAX_PER_SPOT) {
       game.setError(
-        `La mise est limitée à ${ROULETTE_MAX_PER_SPOT} crédits par case.`,
+        `La mise est limitée à ${credits(ROULETTE_MAX_PER_SPOT)} crédits par case.`,
       );
       return;
     }
@@ -223,7 +223,8 @@ export function RouletteCasino({
                 <b>TABLE {table?.id ?? "…"}</b>
                 <span className="table-separator">/</span>
                 <span>
-                  {ROULETTE_MIN_CHIP} – {ROULETTE_MAX_PER_SPOT} crédits par case
+                  {credits(ROULETTE_MIN_CHIP)} –{" "}
+                  {credits(ROULETTE_MAX_PER_SPOT)} crédits par case
                 </span>
               </div>
               <div className="table-toolbar-actions">

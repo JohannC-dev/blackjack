@@ -15,6 +15,13 @@
       "when": 1790090087964,
       "tag": "0001_new_black_crow",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790098795874,
+      "tag": "0002_solid_meggan",
+      "breakpoints": true
     }
   ]
 }

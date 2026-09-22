@@ -84,6 +84,11 @@ export class TowerManager {
     /** Development aid: ordinary climbs without any trap. */
     private noTraps = false,
     private readonly wallet: GameWallet = inMemoryGameWallet,
+    private readonly betLimits: { min: number; max: number; step: number } = {
+      min: TOWER_MIN_BET,
+      max: TOWER_MAX_BET,
+      step: TOWER_BET_STEP,
+    },
   ) {}
 
   publicState(roomId: string | undefined): TowerPublicState {
@@ -244,12 +249,12 @@ export class TowerManager {
     if (
       typeof bet !== "number" ||
       !Number.isInteger(bet) ||
-      bet < TOWER_MIN_BET ||
-      bet > TOWER_MAX_BET ||
-      bet % TOWER_BET_STEP
+      bet < this.betLimits.min ||
+      bet > this.betLimits.max ||
+      bet % this.betLimits.step
     )
       throw new Error(
-        `La mise doit être comprise entre ${TOWER_MIN_BET} et ${TOWER_MAX_BET} crédits, par pas de ${TOWER_BET_STEP}.`,
+        `La mise doit être comprise entre ${this.betLimits.min} et ${this.betLimits.max} crédits, par pas de ${this.betLimits.step}.`,
       );
     if (this.runs.get(player.id)?.status === "playing")
       throw new Error("Terminez d’abord votre ascension en cours.");
