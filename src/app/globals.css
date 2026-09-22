@@ -11832,10 +11832,10 @@ h1 > span:not(.live-tag) {
 .roulette-stage {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
   align-items: center;
-  gap: clamp(18px, 3vw, 44px);
-  padding: 30px clamp(28px, 3.4vw, 54px) 38px;
+  gap: clamp(14px, 1.6vw, 26px);
+  padding: 28px clamp(22px, 2.4vw, 38px) 34px;
   isolation: isolate;
 }
 .roulette-felt {
@@ -11871,7 +11871,7 @@ h1 > span:not(.live-tag) {
   gap: 18px;
 }
 .roulette-wheel-frame {
-  --wheel-size: clamp(210px, 21vw, 290px);
+  --wheel-size: clamp(200px, 17vw, 250px);
   position: relative;
   flex: none;
   width: var(--wheel-size);
@@ -12088,7 +12088,7 @@ h1 > span:not(.live-tag) {
 }
 .roulette-layout {
   /* Fits the zone, then scrolls sideways below a comfortable tap size. */
-  --cell: clamp(32px, calc((100cqw - 14px) / 14), 52px);
+  --cell: clamp(32px, calc((100cqw - 14px) / 14), 88px);
   display: grid;
   width: max-content;
   margin: 0 auto;
@@ -12220,7 +12220,7 @@ h1 > span:not(.live-tag) {
 .roulette-chip .table-chip-amount {
   min-width: 18px;
   padding: 2px 4px;
-  font-size: 7px;
+  font-size: max(8px, calc(var(--cell) * 0.16));
 }
 /* Other players: another colour, translucent, slightly behind mine. */
 .roulette-chip.roulette-chip-other {
@@ -12492,12 +12492,6 @@ h1 > span:not(.live-tag) {
     animation-duration: 1ms;
   }
 }
-.roulette-board-hint {
-  margin: 0;
-  color: #8a7d99;
-  font-size: 9px;
-  text-align: center;
-}
 .roulette-bet-summary {
   color: var(--muted);
   font-size: 11px;
@@ -12615,7 +12609,7 @@ h1 > span:not(.live-tag) {
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1280px) {
   .roulette-stage {
     grid-template-columns: 1fr;
     padding: 26px 24px 34px;

@@ -19,7 +19,8 @@ export type RouletteBet = {
 };
 
 export const ROULETTE_MIN_CHIP = 5;
-export const ROULETTE_MAX_TOTAL = 500;
+/** Ceiling of one player's stake on a single spot, not on the whole layout. */
+export const ROULETTE_MAX_PER_SPOT = 500;
 export const ROULETTE_MAX_BETS = 60;
 export const ROULETTE_HISTORY_SIZE = 14;
 

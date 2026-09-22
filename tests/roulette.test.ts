@@ -305,6 +305,25 @@ describe("Roulette européenne", () => {
     expect(table.state().players[0].bets).toEqual([]);
   });
 
+  test("la limite de 500 crédits s’applique par case, pas au total", () => {
+    const table = club();
+    table.sit("alice", 2_000);
+    const layout = [
+      { kind: "straight" as const, selection: "17", amount: 500 },
+      { kind: "color" as const, selection: "red", amount: 500 },
+      { kind: "dozen" as const, selection: "2", amount: 500 },
+    ];
+    table.send("alice", { type: "bets", bets: layout });
+    expect(table.state().players[0].bets).toEqual(layout);
+    expect(() =>
+      table.send("alice", {
+        type: "bets",
+        bets: [...layout, { kind: "straight", selection: "17", amount: 5 }],
+      }),
+    ).toThrow("500 crédits par case");
+    expect(table.state().players[0].bets).toEqual(layout);
+  });
+
   test("seuls les champs attendus d’une mise sont gardés", () => {
     const table = club();
     table.sit("alice");

@@ -14,7 +14,7 @@ import { CASINO_CHIP_DENOMINATIONS } from "@/lib/chips";
 import {
   EUROPEAN_WHEEL_ORDER,
   ROULETTE_MAX_BETS,
-  ROULETTE_MAX_TOTAL,
+  ROULETTE_MAX_PER_SPOT,
   ROULETTE_MIN_CHIP,
   ROULETTE_PAYOUTS,
   rouletteBetId,
@@ -273,7 +273,7 @@ function Chips({ id, board }: { id: string; board: BoardProps }) {
           <SettlementChipAnimation
             stake={stake}
             payout={stake + gain}
-            maximum={ROULETTE_MAX_TOTAL / 2}
+            maximum={ROULETTE_MAX_PER_SPOT / 2}
           />
           <span
             className={`roulette-win-tag ${kind === "straight" ? "" : "is-below"}`}
@@ -286,7 +286,7 @@ function Chips({ id, board }: { id: string; board: BoardProps }) {
     return (
       <TableChipStack
         amount={amount + others}
-        maximum={ROULETTE_MAX_TOTAL / 2}
+        maximum={ROULETTE_MAX_PER_SPOT / 2}
         className="roulette-chip"
       />
     );
@@ -299,14 +299,14 @@ function Chips({ id, board }: { id: string; board: BoardProps }) {
       {others > 0 && (
         <TableChipStack
           amount={others}
-          maximum={ROULETTE_MAX_TOTAL / 2}
+          maximum={ROULETTE_MAX_PER_SPOT / 2}
           className={`roulette-chip roulette-chip-other ${amount ? "is-behind" : ""} ${faint ? "is-faint" : ""}`}
         />
       )}
       {amount > 0 && (
         <TableChipStack
           amount={amount}
-          maximum={ROULETTE_MAX_TOTAL / 2}
+          maximum={ROULETTE_MAX_PER_SPOT / 2}
           className="roulette-chip"
         />
       )}
@@ -603,9 +603,11 @@ export function RouletteCasino({
   };
   const place = (kind: RouletteBetKind, selection: string) => {
     if (!canBet) return;
-    if (total + chip > ROULETTE_MAX_TOTAL) {
+    const id = rouletteBetId({ kind, selection });
+    const staked = myBets.find((bet) => rouletteBetId(bet) === id)?.amount ?? 0;
+    if (staked + chip > ROULETTE_MAX_PER_SPOT) {
       game.setError(
-        `La mise totale est limitée à ${ROULETTE_MAX_TOTAL} crédits.`,
+        `La mise est limitée à ${ROULETTE_MAX_PER_SPOT} crédits par case.`,
       );
       return;
     }
@@ -613,8 +615,7 @@ export function RouletteCasino({
       game.setError("Votre solde est insuffisant pour ce jeton.");
       return;
     }
-    const id = rouletteBetId({ kind, selection });
-    const existing = myBets.some((bet) => rouletteBetId(bet) === id);
+    const existing = staked > 0;
     if (!existing && myBets.length >= ROULETTE_MAX_BETS) return;
     play("chips");
     void send(
@@ -716,7 +717,7 @@ export function RouletteCasino({
                 <b>TABLE {table?.id ?? "…"}</b>
                 <span className="table-separator">/</span>
                 <span>
-                  {ROULETTE_MIN_CHIP} – {ROULETTE_MAX_TOTAL} crédits
+                  {ROULETTE_MIN_CHIP} – {ROULETTE_MAX_PER_SPOT} crédits par case
                 </span>
               </div>
               <div className="table-toolbar-actions">
@@ -897,11 +898,6 @@ export function RouletteCasino({
                   onPlace={place}
                   onRemove={remove}
                 />
-                <p className="roulette-board-hint">
-                  Cliquez pour poser le jeton · clic droit pour retirer une mise
-                  · les jointures jouent chevaux et carrés · les mises des
-                  autres joueurs apparaissent en transparence
-                </p>
               </div>
               <RouletteFx table={table} stageRef={stageRef} />
             </div>
