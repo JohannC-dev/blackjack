@@ -6,6 +6,8 @@ import { Table, type Player } from "./engine";
 import { PokerManager } from "./poker";
 import { TowerManager } from "./tower";
 import { MinesGame } from "./mines";
+import { Effect, Option } from "effect";
+import { InsufficientCredits, makeRouletteRuntime } from "./roulette";
 import type {
   Ack,
   Command,
@@ -73,6 +75,41 @@ function getMines(playerId: string) {
   }
   return game;
 }
+const rouletteRoom = (tableId: string) => `roulette:${tableId}`;
+/** The Roulette runs on Effect; the club only lends it its players and sockets. */
+const roulette = makeRouletteRuntime({
+  players: {
+    get: (playerId) =>
+      Effect.sync(() => Option.fromNullable(playersById.get(playerId))),
+    debit: (playerId, amount) =>
+      Effect.suspend(() => {
+        const player = playersById.get(playerId);
+        if (!player || player.balance < amount)
+          return Effect.fail(new InsufficientCredits());
+        player.balance -= amount;
+        return Effect.void;
+      }),
+    credit: (playerId, amount) =>
+      Effect.sync(() => {
+        const player = playersById.get(playerId);
+        if (player) player.balance += amount;
+      }),
+  },
+  transport: {
+    publish: (state) =>
+      Effect.sync(() => {
+        io.to(rouletteRoom(state.id)).emit("roulette:state", state);
+      }),
+    enter: (socketIds, tableId) =>
+      Effect.sync(() =>
+        io.in([...socketIds]).socketsJoin(rouletteRoom(tableId)),
+      ),
+    exit: (socketIds, tableId) =>
+      Effect.sync(() =>
+        io.in([...socketIds]).socketsLeave(rouletteRoom(tableId)),
+      ),
+  },
+});
 const poker = new PokerManager((playerId, state) => {
   for (const socketId of playerSockets.get(playerId) ?? [])
     io.to(socketId).emit("poker:state", state);
@@ -320,6 +357,43 @@ io.on("connection", (socket) => {
       }
     },
   );
+  socket.on(
+    "roulette:command",
+    (command: unknown, ack: (value: Ack) => void) => {
+      try {
+        throttle();
+        if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+        const playerId = player.id;
+        roulette.run((r) => r.command(socket.id, playerId, command));
+        syncWallets();
+        if (typeof ack === "function") ack({ ok: true });
+      } catch (error) {
+        replyError(ack, error);
+      }
+    },
+  );
+  socket.on("roulette:join", (ack: (value: Ack) => void) => {
+    try {
+      throttle();
+      if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+      const { id, roomId } = player;
+      roulette.run((r) => r.join(socket.id, id, roomId));
+      if (typeof ack === "function") ack({ ok: true });
+    } catch (error) {
+      replyError(ack, error);
+    }
+  });
+  socket.on("roulette:leave", (ack: (value: Ack) => void) => {
+    try {
+      throttle();
+      if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+      const playerId = player.id;
+      roulette.run((r) => r.leave(socket.id, playerId));
+      if (typeof ack === "function") ack({ ok: true });
+    } catch (error) {
+      replyError(ack, error);
+    }
+  });
   socket.on("tower:join", (ack: (value: Ack) => void) => {
     try {
       throttle();
@@ -405,6 +479,9 @@ io.on("connection", (socket) => {
     if (!player) return;
     // A dropped connection keeps the climb for a while so a reload resumes it.
     leaveTower(socket.id, player, false);
+    // The seat stays a minute so a reload finds its chips again.
+    const playerId = player.id;
+    roulette.run((r) => r.disconnect(socket.id, playerId));
     const connections = playerSockets.get(player.id);
     connections?.delete(socket.id);
     if (!connections?.size) {
@@ -427,6 +504,7 @@ setInterval(() => {
       tables.delete(id);
   }
   poker.tick(now);
+  roulette.run((r) => r.tick);
   tower.tick(now);
   syncWallets();
   for (const [token, player] of profiles)
@@ -436,6 +514,7 @@ setInterval(() => {
       wallets.delete(player.id);
       playersById.delete(player.id);
       mines.delete(player.id);
+      roulette.run((r) => r.forget(player.id));
     }
 }, 100).unref();
 http.listen(port, hostname, () =>

@@ -5,6 +5,7 @@ import {
   Castle,
   Check,
   Coins,
+  Disc3,
   EyeOff,
   House,
   LoaderCircle,
@@ -54,6 +55,7 @@ import { RoomArt } from "./room-art";
 import { EmoteButton, EmoteLayer, type EmotePlayer } from "./emotes";
 import { GamePoster } from "./game-poster";
 import { MineBomb, MineDiamond } from "./mine-art";
+import { RoulettePosterArt } from "./roulette-casino";
 import { TowerPosterArt } from "./tower-art";
 
 type Game = ReturnType<typeof useGame>;
@@ -127,6 +129,14 @@ export const CasinoRail = memo(function CasinoRail({
           onClick={() => onNavigate("tower")}
         >
           <Castle size={21} />
+        </button>
+        <button
+          className={`rail-button ${active === "roulette" ? "active" : ""}`}
+          title="Roulette"
+          aria-label="Roulette"
+          onClick={() => onNavigate("roulette")}
+        >
+          <Disc3 size={21} />
         </button>
       </div>
       <div className="rail-bottom">
@@ -204,7 +214,7 @@ export function CasinoHome({
                 <em>votre table.</em>
               </h1>
               <p>
-                Quatre jeux, un seul portefeuille. Entrez sans attendre — les
+                Cinq jeux, un seul portefeuille. Entrez sans attendre — les
                 cartes et la grille sont déjà prêtes.
               </p>
               <div className="club-trust">
@@ -311,6 +321,23 @@ export function CasinoHome({
               description="Choisissez votre objectif, trouvez les diamants, encaissez."
               action="Commencer l’extraction"
               onClick={() => onNavigate("mines")}
+            />
+            <GamePoster
+              className="roulette-poster"
+              index="05"
+              artClassName="roulette-art"
+              art={<RoulettePosterArt />}
+              eyebrow="NOUVEAU · TABLE EUROPÉENNE"
+              title={
+                <>
+                  Roulette
+                  <br />
+                  Européenne
+                </>
+              }
+              description="Pleins, chevaux, carrés et chances simples sur un seul zéro."
+              action="Faites vos jeux"
+              onClick={() => onNavigate("roulette")}
             />
           </section>
         </main>
