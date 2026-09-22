@@ -25,10 +25,6 @@ export class NotSeated extends Data.TaggedError("NotSeated") {
 export class TableFull extends Data.TaggedError("TableFull") {
   override readonly message = "La table de roulette est complète.";
 }
-export class TablesExhausted extends Data.TaggedError("TablesExhausted") {
-  override readonly message =
-    "Toutes les tables sont occupées. Réessayez plus tard.";
-}
 export class BettingClosed extends Data.TaggedError("BettingClosed") {
   override readonly message = "Rien ne va plus : attendez la prochaine manche.";
 }
@@ -57,9 +53,4 @@ export type TableError =
   | CannotBeReady
   | InsufficientCredits;
 export type RouletteError =
-  | CommandError
-  | TableError
-  | NotShowingRoulette
-  | NotAtTable
-  | TableFull
-  | TablesExhausted;
+  CommandError | TableError | NotShowingRoulette | NotAtTable | TableFull;

@@ -1,15 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { Cause, Clock, Effect, Option, SynchronizedRef } from "effect";
-import {
-  NotAtTable,
-  NotShowingRoulette,
-  TablesExhausted,
-  type RouletteError,
-} from "./errors";
+import { NotAtTable, NotShowingRoulette, type RouletteError } from "./errors";
 import { decodeCommand } from "./schema";
 import { Players, Transport, Wallet, Wheel } from "./services";
 import * as Table from "./table";
 
-const MAX_TABLES = 200;
 /** An empty table is forgotten after this long without activity. */
 const IDLE_TABLE_MS = 30 * 60_000;
 
@@ -33,7 +28,7 @@ const publish = (table: Table.Table) =>
   );
 
 /**
- * The Roulette of the club. Every operation reads the registry, computes the
+ * The Roulette pool. Every operation reads the registry, computes the
  * next one and commits it in a single step; the notifications only leave
  * once it is committed. A refused command therefore never leaves a table half
  * updated, and a table that crashes on a tick is isolated from the others.
@@ -78,12 +73,12 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
       outbox.push(publish(used));
     };
 
-    /**
-     * Sits the player at `tableId`, leaving the previous table if the table
-     * code changed. The Roulette table follows the Blackjack table code, so
-     * friends invited with ?table=CODE also share the same wheel.
-     */
-    const join = (socketId: string, playerId: string, tableId: string) =>
+    /** Automatically seats the player at an available roulette table. */
+    const join = (
+      socketId: string,
+      playerId: string,
+      requestedTableId?: string,
+    ) =>
       transact((current) =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
@@ -93,6 +88,13 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
           const outbox: Outbox = [];
           const connections = new Set(sockets.get(playerId));
           const previous = seats.get(playerId);
+          const tableId =
+            requestedTableId ??
+            (previous && tables.has(previous)
+              ? previous
+              : ([...tables.values()].find(
+                  (candidate) => candidate.seats.length < Table.MAX_PLAYERS,
+                )?.id ?? `roulette-${randomUUID()}`));
           if (previous !== undefined && previous !== tableId) {
             const table = tables.get(previous);
             if (table)
@@ -108,8 +110,6 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
             );
           }
           const existing = tables.get(tableId);
-          if (!existing && tables.size >= MAX_TABLES)
-            return yield* new TablesExhausted();
           const table = existing ?? Table.emptyTable(tableId, now);
           const joined = yield* Table.join(table, playerId);
           connections.add(socketId);

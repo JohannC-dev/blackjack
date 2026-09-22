@@ -1,9 +1,11 @@
 # Vocabulaire du domaine
 
 - **Club** : l’espace commun de Minuit qui regroupe les jeux et le portefeuille de crédits.
-- **Jeux de cartes** : Blackjack et Poker. Ils partagent les cartes, les mises, les joueurs et les éléments de table.
+- **Jeux de cartes** : Blackjack et Poker, deux jeux distincts du Club avec leurs propres parties.
 - **Jeux de risque** : Mines et Tower. Ils partagent une mise, une progression visible et une sortie volontaire de la partie.
-- **Table** : partie persistante de Blackjack ou de Roulette avec plusieurs places et un état partagé.
+- **Table** : partie multijoueur propre à un jeu. Son état, ses places et ses participants ne s’étendent pas aux tables des autres jeux.
+- **Table publique** : table ouverte, attribuée automatiquement parmi celles qui ont des places disponibles.
+- **Table privée** : table créée à la demande et accessible aux personnes qui ont son lien ou son code.
 - **Salle** : espace de jeu identifié, notamment pour une partie de Poker ou une ascension de Tower.
 - **Joueur** : personne connectée avec un profil, un portefeuille et des actions disponibles.
 - **Place** : position occupée ou libre autour d’une table ou dans une salle.

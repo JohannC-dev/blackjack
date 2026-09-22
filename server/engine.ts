@@ -32,6 +32,7 @@ import type {
   PublicPlayer,
   Seat,
   Suit,
+  TableVisibility,
   TableState,
 } from "../src/lib/types";
 
@@ -123,10 +124,12 @@ export class Table {
     shoe?: Card[],
     private readonly wallet: GameWallet = inMemoryGameWallet,
     private readonly legacyEconomy = false,
+    visibility: TableVisibility = "private",
   ) {
     this.shoe = shoe ?? makeShoe();
     this.state = {
       id,
+      visibility,
       phase: "betting",
       round: 0,
       seats: Array.from({ length: 5 }, (_, index) => ({

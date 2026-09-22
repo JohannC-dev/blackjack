@@ -13,7 +13,8 @@ const MinesTarget = Schema.Literal(...MINES_TARGETS);
 const HandId = Schema.String.pipe(Schema.minLength(1));
 
 export const JoinSchema = Schema.Struct({
-  tableId: TableId,
+  tableId: Schema.optional(Schema.Union(TableId, Schema.Null)),
+  createPrivate: Schema.optional(Schema.Literal(true)),
 });
 
 const BetSchema = Schema.Struct({

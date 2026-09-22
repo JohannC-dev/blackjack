@@ -64,7 +64,6 @@ import {
   emptyBetChips,
 } from "@/lib/chips";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
-import { DEFAULT_PUBLIC_TABLE_ID, PUBLIC_TABLES } from "@/lib/table-config";
 import type {
   Bet,
   BetChips,
@@ -75,7 +74,6 @@ import type {
   Seat,
   TableState,
 } from "@/lib/types";
-import { newToken } from "@/lib/identity";
 import { useGame } from "@/lib/use-game";
 import { CasinoRail, ClubHeader } from "../../ui";
 import type { CasinoView } from "@/lib/navigation";
@@ -1140,6 +1138,9 @@ export function BlackjackCasino({
   const chipBalance = game.balance ?? me?.balance ?? profile?.balance ?? 0;
   const betting = !state || state.phase === "betting";
   const canChangeTable = betting || ownSeats.length === 0;
+  const currentPublicTable = state?.visibility === "public";
+  const publicPlayerCount =
+    state?.seats.filter((target) => target.playerId).length ?? 0;
   const totalBet = ownSeats.reduce((sum, s) => sum + betTotal(s.bet), 0);
   const previousBetTotal = ownSeats.reduce(
     (sum, s) => sum + (s.previousBet ? betTotal(s.previousBet) : 0),
@@ -1482,7 +1483,7 @@ export function BlackjackCasino({
   };
   const shareUrl = useCallback(() => {
     const url = new URL(window.location.href);
-    url.searchParams.set("table", state?.id ?? "MINUIT");
+    if (state?.id) url.searchParams.set("table", state.id);
     return url.toString();
   }, [state?.id]);
   const invite = useCallback(async () => {
@@ -1590,7 +1591,9 @@ export function BlackjackCasino({
               <section className="table-panel" aria-label="Table de blackjack">
                 <BlackjackTableToolbar
                   connected={connected}
-                  tableId={state?.id ?? "MINUIT"}
+                  tableId={
+                    state?.visibility === "private" ? state.id : "PUBLIQUE"
+                  }
                   sound={sound}
                   isFullscreen={isFullscreen}
                   seatCount={
@@ -2357,45 +2360,40 @@ export function BlackjackCasino({
           <span className="section-kicker">ENSEMBLE, C’EST MIEUX</span>
           <h2>Votre cercle. Votre table.</h2>
           <p className="modal-intro">
-            Retrouvez une table publique, ou créez votre espace et partagez le
-            lien à vos amis.
+            Rejoignez automatiquement une table publique disponible, ou créez
+            votre espace privé et partagez son lien à vos amis.
           </p>
           <div className="public-table-section">
-            <span className="table-list-heading">TABLES PUBLIQUES</span>
+            <span className="table-list-heading">TABLE PUBLIQUE</span>
             <div className="public-table-list">
-              {PUBLIC_TABLES.map((publicTable) => {
-                const current = state?.id === publicTable.id;
-                const playerCount = current
-                  ? state.seats.filter((seat) => seat.playerId).length
-                  : null;
-                return (
-                  <button
-                    key={publicTable.id}
-                    type="button"
-                    className={`public-table-option ${current ? "current" : ""}`}
-                    disabled={!connected || !canChangeTable || current}
-                    onClick={() => {
-                      game.changeTable(publicTable.id);
-                      setModal(null);
-                    }}
-                    aria-current={current ? "page" : undefined}
-                    aria-label={`Rejoindre la table publique ${publicTable.label}`}
-                  >
-                    <span className="public-table-status" aria-hidden="true">
-                      <i />
-                    </span>
-                    <span className="public-table-copy">
-                      <b>{publicTable.label}</b>
-                      <small>
-                        {current
-                          ? `${playerCount} / 5 joueurs`
-                          : publicTable.description}
-                      </small>
-                    </span>
-                    {current ? <Check size={15} /> : <ArrowRight size={15} />}
-                  </button>
-                );
-              })}
+              <button
+                type="button"
+                className={`public-table-option ${currentPublicTable ? "current" : ""}`}
+                disabled={!connected || !canChangeTable || currentPublicTable}
+                onClick={() => {
+                  game.changeTable(null);
+                  setModal(null);
+                }}
+                aria-current={currentPublicTable ? "page" : undefined}
+                aria-label="Rejoindre automatiquement une table publique"
+              >
+                <span className="public-table-status" aria-hidden="true">
+                  <i />
+                </span>
+                <span className="public-table-copy">
+                  <b>Table automatique</b>
+                  <small>
+                    {currentPublicTable
+                      ? `${publicPlayerCount} / 5 places · vous êtes ici`
+                      : "Une table ouverte vous sera attribuée"}
+                  </small>
+                </span>
+                {currentPublicTable ? (
+                  <Check size={15} />
+                ) : (
+                  <ArrowRight size={15} />
+                )}
+              </button>
             </div>
           </div>
           <div className="or-divider">
@@ -2407,11 +2405,7 @@ export function BlackjackCasino({
             className="button primary full-width"
             disabled={!connected || !canChangeTable}
             onClick={() => {
-              const code = newToken()
-                .replace(/-/g, "")
-                .slice(0, 6)
-                .toUpperCase();
-              game.changeTable(code);
+              game.createPrivateTable();
               setModal(null);
             }}
           >
@@ -2434,7 +2428,7 @@ export function BlackjackCasino({
             <div className="join-input">
               <input
                 id="table-code"
-                placeholder="Ex. A7C2F1"
+                placeholder="Ex. A7C2F1B8D903"
                 value={tableCode}
                 onChange={(event) =>
                   setTableCode(event.target.value.toUpperCase())
@@ -2458,17 +2452,6 @@ export function BlackjackCasino({
               Vous pourrez changer de table à la fin de cette manche.
             </p>
           )}
-          <button
-            className="text-button public-table-link"
-            disabled={!connected || !canChangeTable}
-            onClick={() => {
-              game.changeTable(DEFAULT_PUBLIC_TABLE_ID);
-              setModal(null);
-            }}
-          >
-            Revenir à la table publique {DEFAULT_PUBLIC_TABLE_ID}
-            <ArrowUpRight size={14} />
-          </button>
         </Modal>
       )}
 

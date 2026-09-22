@@ -241,7 +241,7 @@ export function RouletteCasino({
                 <span
                   className={`connection-dot ${game.connected ? "online" : ""}`}
                 />
-                <b>TABLE {table?.id ?? "…"}</b>
+                <b>TABLE PUBLIQUE</b>
                 <span className="table-separator">/</span>
                 <span>
                   {credits(ROULETTE_MIN_CHIP)} –{" "}
