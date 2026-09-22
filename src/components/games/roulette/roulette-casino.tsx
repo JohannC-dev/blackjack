@@ -16,15 +16,15 @@ import {
 import { credits } from "@/lib/rules";
 import type { CasinoView } from "@/lib/navigation";
 import { useGame } from "@/lib/use-game";
-import { Chip } from "./chip";
+import { Chip } from "../../shared/casino/chip";
 import { RouletteFx, ROULETTE_FX } from "./roulette-fx";
-import { CountdownText } from "./countdown";
+import { CountdownText } from "../../shared/casino/countdown";
 import {
   GameActionButton,
   GameControlGroup,
   GameControlsBar,
-} from "./game-controls";
-import { CasinoRail, ClubHeader, getClubBalance } from "./shared";
+} from "../../shared/casino/game-controls";
+import { CasinoRail, ClubHeader, getClubBalance } from "../../shared";
 import { RouletteBoard, betMap } from "./roulette-board";
 import { colorName, numberTone, RouletteWheel } from "./roulette-wheel";
 

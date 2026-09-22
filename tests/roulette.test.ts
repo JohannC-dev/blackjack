@@ -13,7 +13,7 @@ import {
   UnknownCommand,
   ROULETTE_SPIN_MS,
 } from "../server/roulette";
-import { targetAt, zeroTargetAt } from "../src/components/roulette-casino";
+import { targetAt, zeroTargetAt } from "../src/components/games/roulette/roulette-casino";
 import {
   isValidRouletteBet,
   rouletteBetWins,

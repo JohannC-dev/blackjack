@@ -25,10 +25,10 @@ import {
 } from "lucide-react";
 import type { Card } from "@/lib/types";
 import { credits } from "@/lib/rules";
-import { SettlementChipAnimation } from "./casino";
-import { PlayingCard } from "./playing-card";
-import { PokerChipStack } from "./poker-casino";
-import { PokerShuffleAnimation } from "./poker-shuffle";
+import { SettlementChipAnimation } from "../shared/casino/table-chips";
+import { PlayingCard } from "../shared/casino/playing-card";
+import { PokerChipStack } from "../games/poker/poker-casino";
+import { PokerShuffleAnimation } from "../shared/casino/poker-shuffle";
 import styles from "./animation-lab.module.css";
 
 type Section = "blackjack" | "poker" | "interface";

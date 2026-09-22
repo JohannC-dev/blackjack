@@ -4,7 +4,6 @@ import {
   memo,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -53,10 +52,7 @@ import {
   score,
   SUITS,
 } from "@/lib/rules";
-import {
-  CASINO_CHIP_DENOMINATIONS,
-  casinoChipStackForAmount,
-} from "@/lib/chips";
+import { CASINO_CHIP_DENOMINATIONS } from "@/lib/chips";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
 import { DEFAULT_PUBLIC_TABLE_ID, PUBLIC_TABLES } from "@/lib/table-config";
 import type {
@@ -70,22 +66,23 @@ import type {
 } from "@/lib/types";
 import { newToken } from "@/lib/identity";
 import { useGame } from "@/lib/use-game";
-import { CasinoRail, ClubHeader } from "./shared";
-import { BlackjackIcon } from "./shared/casino/blackjack-icon";
+import { CasinoRail, ClubHeader } from "../../shared";
 import type { CasinoView } from "@/lib/navigation";
-import { CountdownText, ServerClockProvider } from "./shared/casino/countdown";
-import { Chip } from "./shared/casino/chip";
-import { PlayingCard } from "./shared/casino/playing-card";
-import { CasinoHome, PokerCasino } from "./poker-casino";
-import { MinesCasino } from "./mines-casino";
-import { PokerShuffleAnimation } from "./shared/casino/poker-shuffle";
-import { TowerCasino } from "./tower-casino";
-import { RouletteCasino } from "./roulette-casino";
+import { CountdownText } from "../../shared/casino/countdown";
+import { Chip } from "../../shared/casino/chip";
+import { Modal } from "../../shared/casino/modal";
+import { motionDuration } from "../../shared/casino/motion";
+import { PlayingCard } from "../../shared/casino/playing-card";
+import {
+  AnimatedTableChip,
+  SettlementChipAnimation,
+} from "../../shared/casino/table-chips";
+import { PokerShuffleAnimation } from "../../shared/casino/poker-shuffle";
 import {
   EmoteButton,
   EmoteLayer,
   type EmotePlayer,
-} from "./shared/casino/emotes";
+} from "../../shared/casino/emotes";
 import type { EmoteRequest } from "@/lib/emotes";
 
 const THREE_PAYOUTS = [
@@ -125,13 +122,6 @@ const historyResultLabels = {
   none: "Pas de mise",
 };
 
-function motionDuration(normal: number, reduced: number) {
-  return typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ? reduced
-    : normal;
-}
-
 function formatNet(value: number) {
   if (value > 0) return `+${credits(value)}`;
   if (value < 0) return `−${credits(Math.abs(value))}`;
@@ -140,79 +130,6 @@ function formatNet(value: number) {
 
 function netTone(value: number) {
   return value > 0 ? "positive" : value < 0 ? "negative" : "neutral";
-}
-
-function Modal({
-  title,
-  children,
-  onClose,
-  className = "",
-}: {
-  title: string;
-  children: ReactNode;
-  onClose?: () => void;
-  className?: string;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const closeTimer = useRef<number | null>(null);
-  const [closing, setClosing] = useState(false);
-
-  useEffect(() => {
-    ref.current?.showModal();
-    return () => {
-      if (closeTimer.current !== null) {
-        window.clearTimeout(closeTimer.current);
-      }
-      ref.current?.close();
-    };
-  }, []);
-
-  const requestClose = () => {
-    if (!onClose || closing || closeTimer.current !== null) return;
-    setClosing(true);
-    closeTimer.current = window.setTimeout(
-      () => {
-        closeTimer.current = null;
-        onClose();
-      },
-      motionDuration(250, 160),
-    );
-  };
-
-  return (
-    <dialog
-      ref={ref}
-      className={`modal ${className} ${closing ? "is-closing" : ""}`}
-      aria-label={title}
-      onCancel={(event) => {
-        event.preventDefault();
-        requestClose();
-      }}
-      onClick={(event) => {
-        if (event.target === ref.current && onClose) {
-          const r = ref.current.getBoundingClientRect();
-          if (
-            event.clientX < r.left ||
-            event.clientX > r.right ||
-            event.clientY < r.top ||
-            event.clientY > r.bottom
-          )
-            requestClose();
-        }
-      }}
-    >
-      {onClose && (
-        <button
-          className="icon-button modal-close"
-          onClick={requestClose}
-          aria-label="Fermer"
-        >
-          <X size={19} />
-        </button>
-      )}
-      {children}
-    </dialog>
-  );
 }
 
 function HoldToConfirmButton({
@@ -290,206 +207,6 @@ function HoldToConfirmButton({
       <span className="hold-to-confirm-progress" aria-hidden="true" />
       {children}
     </button>
-  );
-}
-
-export const AnimatedTableChip = memo(
-  function AnimatedTableChip({
-    amount,
-    maximum,
-    className,
-    placeholder,
-  }: {
-    amount: number;
-    maximum: number;
-    className: string;
-    placeholder: ReactNode;
-  }) {
-    const [renderedAmount, setRenderedAmount] = useState<number | null>(
-      amount > 0 ? amount : null,
-    );
-    const [exiting, setExiting] = useState(false);
-    const exitTimer = useRef<number | null>(null);
-
-    useEffect(() => {
-      if (exitTimer.current !== null) {
-        window.clearTimeout(exitTimer.current);
-        exitTimer.current = null;
-      }
-
-      if (amount > 0) {
-        setRenderedAmount(amount);
-        setExiting(false);
-        return;
-      }
-
-      if (renderedAmount === null) {
-        setExiting(false);
-        return;
-      }
-
-      setExiting(true);
-      exitTimer.current = window.setTimeout(
-        () => {
-          exitTimer.current = null;
-          setRenderedAmount(null);
-          setExiting(false);
-        },
-        motionDuration(180, 120),
-      );
-
-      return () => {
-        if (exitTimer.current !== null) {
-          window.clearTimeout(exitTimer.current);
-          exitTimer.current = null;
-        }
-      };
-    }, [amount, renderedAmount]);
-
-    if (renderedAmount === null) {
-      return <span className="spot-placeholder">{placeholder}</span>;
-    }
-
-    return (
-      <TableChipStack
-        amount={renderedAmount}
-        maximum={maximum}
-        className={`${className} ${exiting ? "is-exiting" : ""}`}
-      />
-    );
-  },
-  (left, right) =>
-    left.amount === right.amount &&
-    left.maximum === right.maximum &&
-    left.className === right.className,
-);
-
-export const TableChipStack = memo(function TableChipStack({
-  amount,
-  maximum,
-  className = "",
-}: {
-  amount: number;
-  maximum: number;
-  className?: string;
-}) {
-  const stage = casinoChipStackForAmount(amount, maximum);
-  return (
-    <span
-      key={stage.index}
-      className={`table-chip chip-stack-stage-${stage.index} ${className}`}
-      data-chip-stage={stage.index}
-    >
-      <span className="table-chip-pile" aria-hidden="true">
-        {stage.columns.map((column, columnIndex) => (
-          <span
-            className={`table-chip-column chip-${column.denomination}`}
-            key={`${column.denomination}-${columnIndex}`}
-            style={
-              {
-                "--chip-column-left": `${((columnIndex + 1) / (stage.columns.length + 1)) * 100}%`,
-                "--chip-column-index": columnIndex,
-              } as CSSProperties
-            }
-          >
-            {Array.from({ length: column.layers }, (_, layer) => (
-              <i
-                className="table-chip-disc"
-                key={layer}
-                style={{ "--chip-layer": layer } as CSSProperties}
-              />
-            ))}
-          </span>
-        ))}
-      </span>
-      <span className="table-chip-amount">{credits(amount)}</span>
-    </span>
-  );
-});
-
-export function SettlementChipAnimation({
-  stake,
-  payout,
-  maximum,
-  side = false,
-}: {
-  stake: number;
-  payout: number;
-  maximum: number;
-  side?: boolean;
-}) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const profit = Math.max(0, payout - stake);
-  const chipClass = `settlement-chip ${side ? "side-chip" : ""}`;
-
-  useLayoutEffect(() => {
-    const root = ref.current;
-    // The Roulette reuses this settlement: its bank is the top of the felt
-    // and the winning pile stays on its spot, so it has no player target.
-    const table = root?.closest(".table-stage, .roulette-stage");
-    const seat = root?.closest(".seat");
-    const bank = table?.querySelector(".dealer-cards, .roulette-pot-anchor");
-    const player = seat?.querySelector(".seat-name");
-    if (!root || !bank) return;
-
-    const origin = root.getBoundingClientRect();
-    const bankRect = bank.getBoundingClientRect();
-    const centerX = origin.left + origin.width / 2;
-    const centerY = origin.top + origin.height / 2;
-    root.style.setProperty(
-      "--settlement-bank-x",
-      `${bankRect.left + bankRect.width / 2 - centerX}px`,
-    );
-    root.style.setProperty(
-      "--settlement-bank-y",
-      `${bankRect.top + bankRect.height / 2 - centerY}px`,
-    );
-    if (!player) return;
-    const playerRect = player.getBoundingClientRect();
-    root.style.setProperty(
-      "--settlement-player-x",
-      side ? `${playerRect.left + playerRect.width / 2 - centerX}px` : "0px",
-    );
-    root.style.setProperty(
-      "--settlement-player-y",
-      `${playerRect.top + playerRect.height / 2 - centerY}px`,
-    );
-  }, [payout, side, stake]);
-
-  return (
-    <span
-      ref={ref}
-      className={`settlement-chips ${side ? "side-settlement" : ""}`}
-      aria-hidden="true"
-    >
-      {profit > 0 && (
-        <TableChipStack
-          amount={profit}
-          maximum={maximum}
-          className={`${chipClass} settlement-incoming`}
-        />
-      )}
-      {payout > 0 ? (
-        <>
-          <TableChipStack
-            amount={stake}
-            maximum={maximum}
-            className={`${chipClass} settlement-stake`}
-          />
-          <TableChipStack
-            amount={payout}
-            maximum={maximum}
-            className={`${chipClass} settlement-return`}
-          />
-        </>
-      ) : (
-        <TableChipStack
-          amount={stake}
-          maximum={maximum}
-          className={`${chipClass} settlement-loss`}
-        />
-      )}
-    </span>
   );
 }
 
@@ -1323,128 +1040,7 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
   );
 });
 
-export function Casino() {
-  const game = useGame();
-  const [view, setView] = useState<CasinoView>("home");
-  const [confirmPokerLeave, setConfirmPokerLeave] = useState(false);
-  const [leavingPoker, setLeavingPoker] = useState(false);
-  const [pendingView, setPendingView] = useState<CasinoView | null>(null);
-  const pokerStateRef = useRef(game.pokerState);
-  pokerStateRef.current = game.pokerState;
-  const navigate = useCallback((next: CasinoView) => {
-    const pokerState = pokerStateRef.current;
-    if (next !== "poker" && pokerState && pokerState.status !== "lobby") {
-      setPendingView(next);
-      setConfirmPokerLeave(true);
-      return;
-    }
-    setView(next);
-  }, []);
-  if (!game.profile)
-    return (
-      <ServerClockProvider offset={game.serverTimeOffset}>
-        <BlackjackCasino game={game} onNavigate={navigate} />
-      </ServerClockProvider>
-    );
-  const content =
-    view === "home" ? (
-      <CasinoHome game={game} onNavigate={navigate} />
-    ) : view === "poker" ? (
-      <PokerCasino game={game} onNavigate={navigate} />
-    ) : view === "tower" ? (
-      <TowerCasino game={game} onNavigate={navigate} />
-    ) : view === "mines" ? (
-      <MinesCasino game={game} onNavigate={navigate} />
-    ) : view === "roulette" ? (
-      <RouletteCasino game={game} onNavigate={navigate} />
-    ) : (
-      <BlackjackCasino game={game} onNavigate={navigate} />
-    );
-  const pokerExitMessage = game.pokerState?.queue
-    ? "Votre recherche sera annulée et votre buy-in sera récupéré."
-    : game.pokerState?.table?.mode === "cash"
-      ? "Votre place sera libérée et votre stack restant sera recrédité."
-      : "Vous abandonnerez le tournoi et votre buy-in ne sera pas récupéré.";
-  const pokerExitDestination =
-    pendingView === "mines"
-      ? "le jeu de la Mine"
-      : pendingView === "roulette"
-        ? "la Roulette"
-        : pendingView === "home"
-          ? "l’accueil du club"
-          : "le Blackjack";
-
-  return (
-    <ServerClockProvider offset={game.serverTimeOffset}>
-      <>
-        {content}
-        {confirmPokerLeave && (
-          <Modal
-            title="Quitter la partie de poker ?"
-            className="leave-poker-modal"
-            onClose={
-              leavingPoker
-                ? undefined
-                : () => {
-                    setConfirmPokerLeave(false);
-                    setPendingView(null);
-                  }
-            }
-          >
-            <span className="modal-emblem">
-              <Spade size={26} fill="currentColor" />
-            </span>
-            <span className="section-kicker">PARTIE EN COURS</span>
-            <h2>Quitter la partie de poker ?</h2>
-            <p className="modal-intro">
-              {pokerExitMessage} Voulez-vous vraiment rejoindre{" "}
-              {pokerExitDestination} ?
-            </p>
-            <div className="leave-poker-actions">
-              <button
-                type="button"
-                className="button secondary"
-                autoFocus
-                disabled={leavingPoker}
-                onClick={() => {
-                  setConfirmPokerLeave(false);
-                  setPendingView(null);
-                }}
-              >
-                Rester au poker
-              </button>
-              <button
-                type="button"
-                className="button primary"
-                disabled={leavingPoker}
-                onClick={async () => {
-                  setLeavingPoker(true);
-                  const left = await game.pokerCommand({ type: "leave" });
-                  setLeavingPoker(false);
-                  if (!left) return;
-                  setConfirmPokerLeave(false);
-                  setView(pendingView ?? "blackjack");
-                  setPendingView(null);
-                }}
-              >
-                {leavingPoker ? (
-                  <LoaderCircle size={16} className="spinner" />
-                ) : (
-                  <BlackjackIcon />
-                )}
-                {pendingView === "blackjack"
-                  ? "Quitter et jouer au Blackjack"
-                  : "Quitter et rejoindre " + pokerExitDestination}
-              </button>
-            </div>
-          </Modal>
-        )}
-      </>
-    </ServerClockProvider>
-  );
-}
-
-function BlackjackCasino({
+export function BlackjackCasino({
   game,
   onNavigate,
 }: {

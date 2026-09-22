@@ -13,7 +13,10 @@ import {
   type RouletteBetKind,
 } from "@/lib/roulette";
 import type { RouletteTableState } from "@/lib/types";
-import { SettlementChipAnimation, TableChipStack } from "./casino";
+import {
+  SettlementChipAnimation,
+  TableChipStack,
+} from "../../shared/casino/table-chips";
 import { numberTone } from "./roulette-wheel";
 
 export type Target = { kind: RouletteBetKind; selection: string };

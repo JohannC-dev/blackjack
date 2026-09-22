@@ -44,26 +44,26 @@ import {
 } from "@/lib/casino-audio";
 import type { PokerAction, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
-import { CasinoRail, ClubHeader, getClubBalance } from "./shared";
+import { CasinoRail, ClubHeader, getClubBalance } from "../../shared";
 import type { CasinoView } from "@/lib/navigation";
-import { BlackjackIcon } from "./shared/casino/blackjack-icon";
+import { BlackjackIcon } from "../../shared/casino/blackjack-icon";
 import {
   useCountdownSeconds,
   useServerClockNow,
-} from "./shared/casino/countdown";
-import { PlayingCard } from "./shared/casino/playing-card";
+} from "../../shared/casino/countdown";
+import { PlayingCard } from "../../shared/casino/playing-card";
 import { PokerLobby } from "./poker-lobby";
-import { PokerShuffleAnimation } from "./shared/casino/poker-shuffle";
+import { PokerShuffleAnimation } from "../../shared/casino/poker-shuffle";
 import { RoomArt } from "./room-art";
 import {
   EmoteButton,
   EmoteLayer,
   type EmotePlayer,
-} from "./shared/casino/emotes";
-import { GamePoster } from "./shared/casino/game-poster";
-import { MineBomb, MineDiamond } from "./shared/games/mine-art";
-import { TowerPosterArt } from "./shared/games/tower-art";
-import { RoulettePosterArt } from "./roulette-wheel";
+} from "../../shared/casino/emotes";
+import { GamePoster } from "../../shared/casino/game-poster";
+import { MineBomb, MineDiamond } from "../mines/mine-art";
+import { TowerPosterArt } from "../tower/tower-art";
+import { RoulettePosterArt } from "../roulette/roulette-wheel";
 
 type Game = ReturnType<typeof useGame>;
 type Navigate = (view: CasinoView) => void;
