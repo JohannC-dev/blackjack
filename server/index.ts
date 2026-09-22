@@ -6,14 +6,14 @@ import { Table, type Player } from "./engine";
 import { PokerManager } from "./poker";
 import { TowerManager } from "./tower";
 import { MinesGame } from "./mines";
-import { RouletteTable } from "./roulette";
+import { Effect, Option } from "effect";
+import { InsufficientCredits, makeRouletteRuntime } from "./roulette";
 import type {
   Ack,
   Command,
   MinesCommand,
   PokerCommand,
   Profile,
-  RouletteCommand,
   TowerCommand,
   Wallet,
 } from "../src/lib/types";
@@ -75,35 +75,41 @@ function getMines(playerId: string) {
   }
   return game;
 }
-const rouletteTables = new Map<string, RouletteTable>();
-/** Roulette table of each player, and the sockets showing it. */
-const rouletteSeats = new Map<string, string>();
-const rouletteSockets = new Map<string, Set<string>>();
 const rouletteRoom = (tableId: string) => `roulette:${tableId}`;
-function getRouletteTable(id: string) {
-  let table = rouletteTables.get(id);
-  if (!table) {
-    if (rouletteTables.size >= 200)
-      throw new Error("Toutes les tables sont occupées. Réessayez plus tard.");
-    table = new RouletteTable(id, () =>
-      io
-        .to(rouletteRoom(id))
-        .emit("roulette:state", rouletteTables.get(id)!.snapshot()),
-    );
-    rouletteTables.set(id, table);
-  }
-  return table;
-}
-function leaveRoulette(socketId: string, player: Player) {
-  const sockets = rouletteSockets.get(player.id);
-  if (!sockets?.delete(socketId)) return;
-  const tableId = rouletteSeats.get(player.id);
-  if (tableId) io.in(socketId).socketsLeave(rouletteRoom(tableId));
-  if (sockets.size) return;
-  rouletteSockets.delete(player.id);
-  rouletteSeats.delete(player.id);
-  if (tableId) rouletteTables.get(tableId)?.leave(player.id);
-}
+/** The Roulette runs on Effect; the club only lends it its players and sockets. */
+const roulette = makeRouletteRuntime({
+  players: {
+    get: (playerId) =>
+      Effect.sync(() => Option.fromNullable(playersById.get(playerId))),
+    debit: (playerId, amount) =>
+      Effect.suspend(() => {
+        const player = playersById.get(playerId);
+        if (!player || player.balance < amount)
+          return Effect.fail(new InsufficientCredits());
+        player.balance -= amount;
+        return Effect.void;
+      }),
+    credit: (playerId, amount) =>
+      Effect.sync(() => {
+        const player = playersById.get(playerId);
+        if (player) player.balance += amount;
+      }),
+  },
+  transport: {
+    publish: (state) =>
+      Effect.sync(() => {
+        io.to(rouletteRoom(state.id)).emit("roulette:state", state);
+      }),
+    enter: (socketIds, tableId) =>
+      Effect.sync(() =>
+        io.in([...socketIds]).socketsJoin(rouletteRoom(tableId)),
+      ),
+    exit: (socketIds, tableId) =>
+      Effect.sync(() =>
+        io.in([...socketIds]).socketsLeave(rouletteRoom(tableId)),
+      ),
+  },
+});
 const poker = new PokerManager((playerId, state) => {
   for (const socketId of playerSockets.get(playerId) ?? [])
     io.to(socketId).emit("poker:state", state);
@@ -353,19 +359,12 @@ io.on("connection", (socket) => {
   );
   socket.on(
     "roulette:command",
-    (command: RouletteCommand, ack: (value: Ack) => void) => {
+    (command: unknown, ack: (value: Ack) => void) => {
       try {
         throttle();
         if (!player) throw new Error("Vous n’êtes pas connecté au club.");
-        // Only a connection showing the table may bet: a tab left on another
-        // game cannot act on the wheel. Several Roulette tabs of the same
-        // player all joined the table, so each of them may play.
-        if (!rouletteSockets.get(player.id)?.has(socket.id))
-          throw new Error("Ouvrez la roulette pour jouer.");
-        const tableId = rouletteSeats.get(player.id);
-        const table = tableId && rouletteTables.get(tableId);
-        if (!table) throw new Error("Rejoignez la table de roulette.");
-        table.command(player.id, command);
+        const playerId = player.id;
+        roulette.run((r) => r.command(socket.id, playerId, command));
         syncWallets();
         if (typeof ack === "function") ack({ ok: true });
       } catch (error) {
@@ -373,27 +372,12 @@ io.on("connection", (socket) => {
       }
     },
   );
-  // The Roulette table follows the Blackjack table code, so friends invited
-  // with ?table=CODE also share the same wheel.
   socket.on("roulette:join", (ack: (value: Ack) => void) => {
     try {
       throttle();
       if (!player) throw new Error("Vous n’êtes pas connecté au club.");
-      const previous = rouletteSeats.get(player.id);
-      if (previous && previous !== player.roomId) {
-        rouletteTables.get(previous)?.leave(player.id);
-        for (const socketId of rouletteSockets.get(player.id) ?? [])
-          io.in(socketId).socketsLeave(rouletteRoom(previous));
-      }
-      const table = getRouletteTable(player.roomId);
-      table.join(player);
-      rouletteSeats.set(player.id, table.id);
-      const sockets = rouletteSockets.get(player.id) ?? new Set();
-      sockets.add(socket.id);
-      rouletteSockets.set(player.id, sockets);
-      for (const socketId of sockets)
-        io.in(socketId).socketsJoin(rouletteRoom(table.id));
-      socket.emit("roulette:state", table.snapshot());
+      const { id, roomId } = player;
+      roulette.run((r) => r.join(socket.id, id, roomId));
       if (typeof ack === "function") ack({ ok: true });
     } catch (error) {
       replyError(ack, error);
@@ -403,7 +387,8 @@ io.on("connection", (socket) => {
     try {
       throttle();
       if (!player) throw new Error("Vous n’êtes pas connecté au club.");
-      leaveRoulette(socket.id, player);
+      const playerId = player.id;
+      roulette.run((r) => r.leave(socket.id, playerId));
       if (typeof ack === "function") ack({ ok: true });
     } catch (error) {
       replyError(ack, error);
@@ -495,7 +480,8 @@ io.on("connection", (socket) => {
     // A dropped connection keeps the climb for a while so a reload resumes it.
     leaveTower(socket.id, player, false);
     // The seat stays a minute so a reload finds its chips again.
-    rouletteSockets.get(player.id)?.delete(socket.id);
+    const playerId = player.id;
+    roulette.run((r) => r.disconnect(socket.id, playerId));
     const connections = playerSockets.get(player.id);
     connections?.delete(socket.id);
     if (!connections?.size) {
@@ -518,11 +504,7 @@ setInterval(() => {
       tables.delete(id);
   }
   poker.tick(now);
-  for (const [id, table] of rouletteTables) {
-    table.tick(now);
-    if (!table.size && now - table.lastUsed > 30 * 60_000)
-      rouletteTables.delete(id);
-  }
+  roulette.run((r) => r.tick);
   tower.tick(now);
   syncWallets();
   for (const [token, player] of profiles)
@@ -532,7 +514,7 @@ setInterval(() => {
       wallets.delete(player.id);
       playersById.delete(player.id);
       mines.delete(player.id);
-      rouletteSeats.delete(player.id);
+      roulette.run((r) => r.forget(player.id));
     }
 }, 100).unref();
 http.listen(port, hostname, () =>

@@ -167,7 +167,7 @@ export function rouletteBetWins(
 }
 
 /** Total credited back for a spin: stake plus winnings on each winning bet. */
-export function rouletteReturn(bets: RouletteBet[], result: number) {
+export function rouletteReturn(bets: readonly RouletteBet[], result: number) {
   return bets.reduce(
     (sum, bet) =>
       rouletteBetWins(bet, result)
@@ -177,7 +177,7 @@ export function rouletteReturn(bets: RouletteBet[], result: number) {
   );
 }
 
-export function rouletteTotal(bets: RouletteBet[]) {
+export function rouletteTotal(bets: readonly RouletteBet[]) {
   return bets.reduce((sum, bet) => sum + bet.amount, 0);
 }
 

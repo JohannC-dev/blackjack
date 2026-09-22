@@ -1,19 +1,96 @@
 import { describe, expect, test } from "bun:test";
-import { RouletteTable, ROULETTE_SPIN_MS } from "../server/roulette";
+import { Clock, Effect, Option } from "effect";
+import {
+  BettingClosed,
+  CannotBeReady,
+  InsufficientCredits,
+  InvalidBets,
+  InvalidCommand,
+  makeRouletteRuntime,
+  NotShowingRoulette,
+  ReadyLocked,
+  TableFull,
+  UnknownCommand,
+  ROULETTE_SPIN_MS,
+} from "../server/roulette";
 import { targetAt, zeroTargetAt } from "../src/components/roulette-casino";
 import {
   isValidRouletteBet,
   rouletteBetWins,
   rouletteReturn,
 } from "../src/lib/roulette";
+import type { RouletteTableState } from "../src/lib/types";
 
-const player = (id: string, balance = 1_000) => ({
-  id,
-  name: id,
-  balance,
-  connected: true,
-  lastSeen: Date.now(),
-});
+type Member = {
+  id: string;
+  name: string;
+  balance: number;
+  connected: boolean;
+  lastSeen: number;
+};
+
+/**
+ * A Roulette with an in-memory club, a loaded wheel and a clock moved by
+ * hand, so a whole round runs synchronously in a test.
+ */
+function club(draw: () => number = () => 17, tableId = "MINUIT") {
+  let now = 1_000_000;
+  const clock: Clock.Clock = {
+    [Clock.ClockTypeId]: Clock.ClockTypeId,
+    unsafeCurrentTimeMillis: () => now,
+    currentTimeMillis: Effect.sync(() => now),
+    unsafeCurrentTimeNanos: () => BigInt(now) * 1_000_000n,
+    currentTimeNanos: Effect.sync(() => BigInt(now) * 1_000_000n),
+    sleep: () => Effect.void,
+  };
+  const members = new Map<string, Member>();
+  const published: RouletteTableState[] = [];
+  const roulette = makeRouletteRuntime({
+    clock,
+    wheel: { spin: Effect.sync(draw) },
+    players: {
+      get: (id) => Effect.sync(() => Option.fromNullable(members.get(id))),
+      debit: (id, amount) =>
+        Effect.suspend(() => {
+          const member = members.get(id);
+          if (!member || member.balance < amount)
+            return Effect.fail(new InsufficientCredits());
+          member.balance -= amount;
+          return Effect.void;
+        }),
+      credit: (id, amount) =>
+        Effect.sync(() => {
+          members.get(id)!.balance += amount;
+        }),
+    },
+    transport: {
+      publish: (state) => Effect.sync(() => void published.push(state)),
+      enter: () => Effect.void,
+      exit: () => Effect.void,
+    },
+  });
+  const sit = (id: string, balance = 1_000, socket = `${id}#1`) => {
+    const member = members.get(id) ?? {
+      id,
+      name: id,
+      balance,
+      connected: true,
+      lastSeen: now,
+    };
+    members.set(id, member);
+    roulette.run((r) => r.join(socket, id, tableId));
+    return member;
+  };
+  const send = (id: string, command: unknown, socket = `${id}#1`) =>
+    roulette.run((r) => r.command(socket, id, command));
+  const state = () => Option.getOrThrow(roulette.run((r) => r.state(tableId)));
+  /** Moves the clock and lets the table react. */
+  const wait = (ms: number) => {
+    now += ms;
+    roulette.run((r) => r.tick);
+  };
+  return { roulette, members, published, sit, send, state, wait };
+}
 
 describe("Roulette européenne", () => {
   test("les chevaux et carrés ne relient que des cases voisines", () => {
@@ -116,92 +193,254 @@ describe("Roulette européenne", () => {
   });
 
   test("la table partagée tire un seul numéro pour tous les joueurs", () => {
-    const table = new RouletteTable("MINUIT", undefined, () => 17);
-    const alice = player("alice");
-    const bob = player("bob");
-    table.join(alice);
-    table.join(bob);
-    table.command("alice", {
+    const table = club(() => 17);
+    const alice = table.sit("alice");
+    const bob = table.sit("bob");
+    table.send("alice", {
       type: "bets",
       bets: [
         { kind: "straight", selection: "17", amount: 10 },
         { kind: "straight", selection: "17", amount: 5 },
       ],
     });
-    table.command("bob", {
+    table.send("bob", {
       type: "bets",
       // 17 is black.
       bets: [{ kind: "color", selection: "red", amount: 50 }],
     });
     // Bob sees Alice's chips before the spin.
-    expect(table.snapshot().players[0].bets).toEqual([
+    expect(table.state().players[0].bets).toEqual([
       { kind: "straight", selection: "17", amount: 15 },
     ]);
-    table.command("alice", { type: "ready", ready: true });
-    const now = Date.now();
-    table.tick(now);
-    expect(table.snapshot().deadline).toBeGreaterThan(now);
-    table.command("bob", { type: "ready", ready: true });
+    table.send("alice", { type: "ready", ready: true });
+    expect(table.state().deadline).not.toBeNull();
+    table.send("bob", { type: "ready", ready: true });
 
-    table.tick(now + 3_100);
-    expect(table.snapshot().phase).toBe("spinning");
+    table.wait(3_100);
+    expect(table.state().phase).toBe("spinning");
+    expect(table.state().number).toBe(17);
     // Stakes leave the wallets when the ball is launched…
     expect(alice.balance).toBe(985);
     expect(bob.balance).toBe(950);
-    expect(() => table.command("alice", { type: "bets", bets: [] })).toThrow();
+    expect(() => table.send("alice", { type: "bets", bets: [] })).toThrow(
+      BettingClosed,
+    );
 
     // …and winnings arrive when it lands.
-    table.tick(now + 3_100 + ROULETTE_SPIN_MS + 10);
-    const state = table.snapshot();
+    table.wait(ROULETTE_SPIN_MS + 10);
+    const state = table.state();
     expect(state.phase).toBe("settled");
-    expect(state.number).toBe(17);
     expect(alice.balance).toBe(985 + 15 * 36);
     expect(bob.balance).toBe(950);
     expect(state.results.map((entry) => entry.net)).toEqual([525, -50]);
+    expect(state.history).toEqual([17]);
+
+    // A single payout, however many ticks follow.
+    table.wait(100);
+    table.wait(100);
+    expect(alice.balance).toBe(985 + 15 * 36);
+    table.wait(6_000);
+    expect(table.state().phase).toBe("betting");
+    expect(table.state().players.every((p) => !p.ready)).toBe(true);
   });
 
   test("un joueur non prêt ne joue pas et garde ses crédits", () => {
-    const table = new RouletteTable("LUNA", undefined, () => 0);
-    const alice = player("alice");
-    const bob = player("bob");
-    table.join(alice);
-    table.join(bob);
-    table.command("alice", {
+    const table = club(() => 0);
+    const alice = table.sit("alice");
+    const bob = table.sit("bob");
+    table.send("alice", {
       type: "bets",
       bets: [{ kind: "color", selection: "red", amount: 25 }],
     });
-    table.command("bob", {
+    table.send("bob", {
       type: "bets",
       bets: [{ kind: "color", selection: "red", amount: 25 }],
     });
-    table.command("alice", { type: "ready", ready: true });
-    const now = Date.now();
+    table.send("alice", { type: "ready", ready: true });
     // Bob still gets ten seconds to finish his layout.
-    table.tick(now + 9_000);
-    expect(table.snapshot().phase).toBe("betting");
-    table.tick(now + 10_100);
-    expect(table.snapshot().phase).toBe("spinning");
+    table.wait(9_000);
+    expect(table.state().phase).toBe("betting");
+    table.wait(1_100);
+    expect(table.state().phase).toBe("spinning");
     expect(alice.balance).toBe(975);
     expect(bob.balance).toBe(1_000);
-    expect(table.snapshot().players[1].bets).toEqual([]);
+    expect(table.state().players[1].bets).toEqual([]);
   });
 
   test("les mises invalides ou trop élevées sont refusées", () => {
-    const table = new RouletteTable("NOVA");
-    table.join(player("alice", 100));
+    const table = club();
+    table.sit("alice", 100);
     const bets = (value: unknown) =>
-      table.command("alice", { type: "bets", bets: value as never });
+      table.send("alice", { type: "bets", bets: value });
     expect(() =>
       bets([{ kind: "straight", selection: "37", amount: 5 }]),
-    ).toThrow();
+    ).toThrow(InvalidBets);
     expect(() =>
       bets([{ kind: "color", selection: "red", amount: 7 }]),
-    ).toThrow();
+    ).toThrow(InvalidBets);
     expect(() =>
       bets([{ kind: "color", selection: "red", amount: 200 }]),
     ).toThrow("crédits");
+    expect(() => bets("rouge")).toThrow("Les mises sont invalides.");
     expect(() =>
-      table.command("alice", { type: "ready", ready: true }),
-    ).toThrow();
+      bets(
+        Array.from({ length: 101 }, () => ({
+          kind: "color",
+          selection: "red",
+          amount: 5,
+        })),
+      ),
+    ).toThrow("limitée à 500");
+    expect(() => table.send("alice", { type: "ready", ready: true })).toThrow(
+      CannotBeReady,
+    );
+    expect(() => table.send("alice", null)).toThrow(InvalidCommand);
+    expect(() => table.send("alice", { type: "ready", ready: "oui" })).toThrow(
+      InvalidCommand,
+    );
+    expect(() => table.send("alice", { type: "tricher" })).toThrow(
+      UnknownCommand,
+    );
+    // A refused command leaves the felt untouched.
+    expect(table.state().players[0].bets).toEqual([]);
+  });
+
+  test("seuls les champs attendus d’une mise sont gardés", () => {
+    const table = club();
+    table.sit("alice");
+    table.send("alice", {
+      type: "bets",
+      bets: [
+        { kind: "split", selection: "0-2", amount: 5, payout: 1_000 },
+        { kind: "split", selection: "0-2", amount: 10 },
+      ],
+    });
+    expect(table.state().players[0].bets).toEqual([
+      { kind: "split", selection: "0-2", amount: 15 },
+    ]);
+  });
+
+  test("être prêt fige les mises jusqu’à l’annulation", () => {
+    const table = club();
+    table.sit("alice");
+    const bets = [{ kind: "color" as const, selection: "red", amount: 10 }];
+    table.send("alice", { type: "bets", bets });
+    table.send("alice", { type: "ready", ready: true });
+    expect(() => table.send("alice", { type: "bets", bets })).toThrow(
+      ReadyLocked,
+    );
+    table.send("alice", { type: "ready", ready: false });
+    expect(table.state().deadline).toBeNull();
+    table.send("alice", { type: "bets", bets: [] });
+    expect(table.state().players[0].bets).toEqual([]);
+  });
+
+  test("un portefeuille dépensé ailleurs fait sauter le tour", () => {
+    const table = club();
+    const alice = table.sit("alice", 100);
+    table.send("alice", {
+      type: "bets",
+      bets: [{ kind: "color", selection: "red", amount: 80 }],
+    });
+    table.send("alice", { type: "ready", ready: true });
+    // Another game spends the credits before the ball leaves.
+    alice.balance = 30;
+    table.wait(3_100);
+    expect(table.state().phase).toBe("betting");
+    expect(table.state().deadline).toBeNull();
+    expect(alice.balance).toBe(30);
+    expect(table.state().players[0]).toMatchObject({ ready: false, bets: [] });
+  });
+
+  test("répéter rejoue la dernière mise jouée", () => {
+    const table = club(() => 1);
+    const alice = table.sit("alice");
+    expect(() => table.send("alice", { type: "repeat" })).toThrow(
+      "Aucune mise précédente",
+    );
+    const bets = [{ kind: "dozen" as const, selection: "3", amount: 20 }];
+    table.send("alice", { type: "bets", bets });
+    table.send("alice", { type: "ready", ready: true });
+    table.wait(3_100);
+    table.wait(ROULETTE_SPIN_MS);
+    table.wait(6_000);
+    expect(alice.balance).toBe(980);
+    expect(table.state().players[0].previousTotal).toBe(20);
+    table.send("alice", { type: "repeat" });
+    expect(table.state().players[0].bets).toEqual(bets);
+  });
+
+  test("quitter pendant le tirage est tout de même payé", () => {
+    const table = club(() => 17);
+    const alice = table.sit("alice");
+    table.send("alice", {
+      type: "bets",
+      bets: [{ kind: "straight", selection: "17", amount: 5 }],
+    });
+    table.send("alice", { type: "ready", ready: true });
+    table.wait(3_100);
+    table.roulette.run((r) => r.leave("alice#1", "alice"));
+    expect(table.state().players).toHaveLength(1);
+    table.wait(ROULETTE_SPIN_MS);
+    expect(alice.balance).toBe(995 + 180);
+    table.wait(6_000);
+    expect(table.state().players).toHaveLength(0);
+  });
+
+  test("seule une connexion assise à la roulette peut miser", () => {
+    const table = club();
+    table.sit("alice");
+    table.sit("alice", 1_000, "alice#2");
+    const bets = [{ kind: "color" as const, selection: "red", amount: 10 }];
+    expect(() =>
+      table.send("alice", { type: "bets", bets }, "alice#3"),
+    ).toThrow(NotShowingRoulette);
+    table.send("alice", { type: "bets", bets }, "alice#2");
+    // Closing one tab keeps the seat for the other one.
+    table.roulette.run((r) => r.leave("alice#2", "alice"));
+    expect(table.state().players[0].bets).toEqual(bets);
+    table.roulette.run((r) => r.leave("alice#1", "alice"));
+    expect(table.state().players).toHaveLength(0);
+  });
+
+  test("un joueur déconnecté libère sa place après une minute", () => {
+    const table = club();
+    const alice = table.sit("alice");
+    table.sit("bob");
+    table.roulette.run((r) => r.disconnect("alice#1", "alice"));
+    alice.connected = false;
+    table.wait(30_000);
+    expect(table.state().players).toHaveLength(2);
+    table.wait(31_000);
+    expect(table.state().players.map((p) => p.id)).toEqual(["bob"]);
+  });
+
+  test("la table accueille huit joueurs au plus", () => {
+    const table = club();
+    for (let i = 0; i < 8; i++) table.sit(`p${i}`);
+    expect(() => table.sit("p8")).toThrow(TableFull);
+    expect(table.state().players).toHaveLength(8);
+  });
+
+  test("une roue en panne n’arrête ni le serveur ni les portefeuilles", () => {
+    let broken = true;
+    const table = club(() => {
+      if (broken) throw new Error("roue bloquée");
+      return 3;
+    });
+    const alice = table.sit("alice");
+    table.send("alice", {
+      type: "bets",
+      bets: [{ kind: "color", selection: "red", amount: 10 }],
+    });
+    table.send("alice", { type: "ready", ready: true });
+    expect(() => table.wait(3_100)).not.toThrow();
+    // Nothing was debited for a spin that never started.
+    expect(table.state().phase).toBe("betting");
+    expect(alice.balance).toBe(1_000);
+    broken = false;
+    table.wait(100);
+    expect(table.state().phase).toBe("spinning");
+    expect(alice.balance).toBe(990);
   });
 });

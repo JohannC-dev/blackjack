@@ -13,6 +13,7 @@
     "test:poker-multiplayer": "bun tests/poker-multiplayer.ts",
     "test:spin-multiplayer": "bun tests/spin-multiplayer.ts",
     "test:tower-multiplayer": "bun tests/tower-multiplayer.ts",
+    "test:roulette-multiplayer": "bun tests/roulette-multiplayer.ts",
     "test:ui": "bun tests/ui-layout.ts",
     "test:poker-ui": "bun tests/poker-ui.ts",
     "test:poker-lobby": "bun tests/poker-lobby.ts",
@@ -26,6 +27,7 @@
   "dependencies": {
     "@fontsource/dm-sans": "^5.2.8",
     "@fontsource/manrope": "^5.2.8",
+    "effect": "^3.22.2",
     "lucide-react": "^0.577.0",
     "next": "16.3.5",
     "react": "^19.2.0",

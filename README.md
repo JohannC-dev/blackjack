@@ -132,6 +132,7 @@ Les tests couvrent les deux moteurs, toutes les catégories de mains Poker, la c
 
 - `server/engine.ts` : moteur et phases du Blackjack.
 - `server/poker.ts` : moteur Hold’em, matchmaking, files et tables Poker.
+- `server/roulette/` : Roulette écrite avec [Effect](https://effect.website) — erreurs typées (`errors.ts`), validation des commandes par `Schema` (`schema.ts`), table immuable (`table.ts`), registre transactionnel des tables (`service.ts`) et runtime synchrone branché sur Socket.IO (`index.ts`). Joueurs, roue, horloge et transport sont des services injectés, remplacés par des doubles dans les tests.
 - `server/index.ts` : serveur Bun/Next.js et protocole Socket.IO.
 - `src/lib/rules.ts` : valeurs des cartes et évaluation des paris annexes.
 - `src/lib/use-game.ts` : connexion, reconnexion et sauvegarde du profil.
