@@ -931,9 +931,8 @@ type BlackjackSidebarProps = {
   onMines: () => void;
   onPoker: () => void;
   onTower: () => void;
+  onChicken: () => void;
   onRoulette: () => void;
-  onTables: () => void;
-  onHistory: () => void;
   onRules: () => void;
   blackjackLabel?: string;
 };
@@ -944,9 +943,8 @@ const BlackjackSidebar = memo(function BlackjackSidebar({
   onMines,
   onPoker,
   onTower,
+  onChicken,
   onRoulette,
-  onTables,
-  onHistory,
   onRules,
   blackjackLabel,
 }: BlackjackSidebarProps) {
@@ -960,10 +958,9 @@ const BlackjackSidebar = memo(function BlackjackSidebar({
         else if (view === "mines") onMines();
         else if (view === "poker") onPoker();
         else if (view === "tower") onTower();
+        else if (view === "chicken") onChicken();
         else if (view === "roulette") onRoulette();
       }}
-      onTables={onTables}
-      onHistory={onHistory}
       onRules={onRules}
     />
   );
@@ -994,10 +991,6 @@ const BlackjackPageHeading = memo(function BlackjackPageHeading({
         </div>
         <h1>
           Blackjack <span>Européen</span>
-          <span className="live-tag">
-            <i />
-            LIVE
-          </span>
         </h1>
       </div>
       <button
@@ -1018,25 +1011,25 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
   tableId,
   isFullscreen,
   seatCount,
-  round,
   countdownDeadline,
   playerId,
   emotePlayers,
   onToggleFullscreen,
   onOpenTables,
+  onOpenHistory,
   onSendEmote,
 }: {
   connected: boolean;
   tableId: string;
   isFullscreen: boolean;
   seatCount: number;
-  round: number;
   countdownDeadline: number | null;
   playerId: string;
   emotePlayers: EmotePlayer[];
   onSendEmote: (request: EmoteRequest) => void;
   onToggleFullscreen: () => void;
   onOpenTables: () => void;
+  onOpenHistory: () => void;
 }) {
   return (
     <div className="table-toolbar">
@@ -1045,14 +1038,13 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
         <b>TABLE {tableId}</b>
         <span className="table-separator">/</span>
         <span className="table-description">Mises sur mesure</span>
-        <div className="table-round-meta" aria-label="Informations de manche">
-          <span>MANCHE {String(round).padStart(3, "0")}</span>
-          {countdownDeadline !== null && (
+        {countdownDeadline !== null && (
+          <div className="table-round-meta" aria-label="Compte à rebours">
             <span className="table-round-countdown">
               <CountdownText deadline={countdownDeadline} suffix="" />
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
       <div className="table-toolbar-actions">
         <EmoteButton
@@ -1062,6 +1054,15 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
           seated={emotePlayers.some((player) => player.id === playerId)}
           onSend={onSendEmote}
         />
+        <button
+          type="button"
+          className="poker-sound"
+          aria-label="Historique"
+          title="Historique"
+          onClick={onOpenHistory}
+        >
+          <History size={16} />
+        </button>
         <button
           type="button"
           className={`poker-sound table-fullscreen-button ${isFullscreen ? "active" : ""}`}
@@ -1761,6 +1762,7 @@ export function BlackjackCasino({
   const goMines = useCallback(() => onNavigate("mines"), [onNavigate]);
   const goPoker = useCallback(() => onNavigate("poker"), [onNavigate]);
   const goTower = useCallback(() => onNavigate("tower"), [onNavigate]);
+  const goChicken = useCallback(() => onNavigate("chicken"), [onNavigate]);
   const goRoulette = useCallback(() => onNavigate("roulette"), [onNavigate]);
   const openTables = useCallback(() => setModal("tables"), []);
   const openHistory = useCallback(() => setModal("history"), []);
@@ -1806,9 +1808,8 @@ export function BlackjackCasino({
         onMines={goMines}
         onPoker={goPoker}
         onTower={goTower}
+        onChicken={goChicken}
         onRoulette={goRoulette}
-        onTables={openTables}
-        onHistory={openHistory}
         onRules={openRules}
         blackjackLabel={profile ? "Blackjack" : "Table de cartes"}
       />
@@ -1835,7 +1836,6 @@ export function BlackjackCasino({
                   seatCount={
                     state?.seats.filter((seat) => seat.playerId).length ?? 0
                   }
-                  round={state?.round ?? 0}
                   countdownDeadline={
                     state?.phase === "settled" ? null : (state?.deadline ?? null)
                   }
@@ -1844,6 +1844,7 @@ export function BlackjackCasino({
                   onSendEmote={game.sendEmote}
                   onToggleFullscreen={toggleFullscreen}
                   onOpenTables={openTables}
+                  onOpenHistory={openHistory}
                 />
                 <div className="table-stage">
                   <div className="ambient-glow" />
@@ -1890,9 +1891,9 @@ export function BlackjackCasino({
                   {state?.phase === "shuffling" && (
                     <PokerShuffleAnimation
                       hand={state.round}
-                      eyebrow={`MANCHE ${String(state.round + 1).padStart(3, "0")} · 8 JEUX`}
+                      eyebrow="8 JEUX"
                       title="Mélange du sabot"
-                      ariaLabel={`Mélange du sabot avant la manche ${state.round + 1}`}
+                      ariaLabel="Mélange du sabot"
                     />
                   )}
                   <div className="felt-brand">
@@ -1916,7 +1917,7 @@ export function BlackjackCasino({
                           ? "RETOUR TOTAL"
                           : roundBetNet === 0
                             ? "MISE REMBOURSÉE"
-                            : "MANCHE PERDUE"}
+                            : "PERDU"}
                       </span>
                       <strong>
                         {roundBetNet < 0 ? "−" : "+"}
@@ -1926,7 +1927,6 @@ export function BlackjackCasino({
                         <small>cr.</small>
                       </strong>
                       <span className="table-round-result-countdown">
-                        <small>PROCHAINE MANCHE</small>
                         <CountdownText deadline={state?.deadline} />
                       </span>
                     </div>
@@ -2004,33 +2004,33 @@ export function BlackjackCasino({
                 </div>
                 {showControlsPanel && (
                   <div
-                    className={`controls-panel ${betting ? "controls-betting" : ""} ${myTurn || insuranceSeat ? "controls-active" : ""}`}
+                    className={`controls-panel ${betting ? "controls-betting" : ""} ${myTurn || insuranceSeat ? "controls-active controls-decision" : ""}`}
                     aria-label="Actions de jeu"
                   >
-                    <div className="controls-heading">
-                      <div>
-                        <span className="section-kicker">
-                          {betting
-                            ? "À VOUS DE MISER"
-                            : state?.phase === "insurance"
-                              ? "ASSURANCE · AS DU CROUPIER"
-                              : state?.phase === "shuffling"
-                                ? "MÉLANGE EN COURS"
-                                : myTurn
-                                  ? `MAIN ${(activeSeat?.index ?? 0) + 1} · ${activeHand ? score(activeHand.cards).total : ""} POINTS`
+                    {!myTurn && !insuranceSeat && (
+                      <div className="controls-heading">
+                        <div>
+                          <span className="section-kicker">
+                            {betting
+                              ? "À VOUS DE MISER"
+                              : state?.phase === "insurance"
+                                ? "ASSURANCE · AS DU CROUPIER"
+                                : state?.phase === "shuffling"
+                                  ? "MÉLANGE EN COURS"
                                   : "LA PARTIE CONTINUE"}
-                        </span>
-                        <h2>{subtitle}</h2>
+                          </span>
+                          <h2>{subtitle}</h2>
+                        </div>
+                        {betting && (
+                          <span className="selected-hand-label">
+                            {seat ? `Main ${seat.index + 1}` : "Spectateur"}
+                            {ownSeats.length > 1 && (
+                              <span> / {ownSeats.length} mains</span>
+                            )}
+                          </span>
+                        )}
                       </div>
-                      {betting && (
-                        <span className="selected-hand-label">
-                          {seat ? `Main ${seat.index + 1}` : "Spectateur"}
-                          {ownSeats.length > 1 && (
-                            <span> / {ownSeats.length} mains</span>
-                          )}
-                        </span>
-                      )}
-                    </div>
+                    )}
                     <AnimatedMenu active={betting} className="betting-actions">
                       {betting ? (
                         <>
