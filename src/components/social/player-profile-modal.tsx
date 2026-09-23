@@ -33,12 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatFriendCode, type PlayerProfile } from "@/lib/social";
 import { usePlayerProfile } from "@/lib/social-api";
 import { PlayerAvatar } from "./player-avatar";
-import {
-  Balance,
-  ProfileGames,
-  ProfileOverview,
-  ProfileRecords,
-} from "./profile-stats";
+import { Balance, ProfileStats } from "./profile-stats";
 import { ReferralPanel } from "./referral-panel";
 import { useSocial } from "./social-provider";
 import { VisibilitySettings } from "./visibility-settings";
@@ -284,65 +279,44 @@ function ProfileSections({ profile }: { profile: PlayerProfile }) {
       </>
     );
 
+  const stats = (
+    <ProfileStats
+      stats={profile.stats}
+      name={profile.name}
+      relation={profile.relation}
+    />
+  );
+
+  // Another player's profile holds nothing but the figures: no tabs for one.
+  if (!self) return stats;
+
   return (
-    <Tabs defaultValue="overview" className="gap-0">
+    <Tabs defaultValue="stats" className="gap-0">
       <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-white/[0.03] p-1">
-        <TabsTrigger value="overview" className="h-8 px-4">
-          Aperçu
-        </TabsTrigger>
-        <TabsTrigger value="games" className="h-8 px-4">
-          Jeux
-        </TabsTrigger>
-        <TabsTrigger value="records" className="h-8 px-4">
+        <TabsTrigger value="stats" className="h-8 px-4">
           <Medal />
-          Palmarès
+          Profil
         </TabsTrigger>
-        {self && (
-          <>
-            <TabsTrigger value="referral" className="h-8 px-4">
-              <Gift />
-              Parrainage
-            </TabsTrigger>
-            <TabsTrigger value="privacy" className="h-8 px-4">
-              <ShieldCheck />
-              Confidentialité
-            </TabsTrigger>
-          </>
-        )}
+        <TabsTrigger value="referral" className="h-8 px-4">
+          <Gift />
+          Parrainage
+        </TabsTrigger>
+        <TabsTrigger value="privacy" className="h-8 px-4">
+          <ShieldCheck />
+          Confidentialité
+        </TabsTrigger>
       </TabsList>
-      <TabsContent value="overview" className="pt-6">
-        <ProfileOverview
-          stats={profile.stats}
-          name={profile.name}
-          relation={profile.relation}
-        />
+      <TabsContent value="stats" className="pt-6">
+        {stats}
       </TabsContent>
-      <TabsContent value="games" className="pt-6">
-        <ProfileGames
-          stats={profile.stats}
-          name={profile.name}
-          relation={profile.relation}
-        />
+      <TabsContent value="referral" className="max-w-xl pt-6">
+        <ReferralPanel />
       </TabsContent>
-      <TabsContent value="records" className="pt-6">
-        <ProfileRecords
-          stats={profile.stats}
-          name={profile.name}
-          relation={profile.relation}
-        />
+      <TabsContent value="privacy" className="max-w-xl pt-6">
+        {profile.visibility && (
+          <VisibilitySettings visibility={profile.visibility} />
+        )}
       </TabsContent>
-      {self && (
-        <>
-          <TabsContent value="referral" className="max-w-xl pt-6">
-            <ReferralPanel />
-          </TabsContent>
-          <TabsContent value="privacy" className="max-w-xl pt-6">
-            {profile.visibility && (
-              <VisibilitySettings visibility={profile.visibility} />
-            )}
-          </TabsContent>
-        </>
-      )}
     </Tabs>
   );
 }
