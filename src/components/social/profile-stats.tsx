@@ -224,7 +224,6 @@ export function ProfileOverview({
 }) {
   const { summary } = stats;
   const who = relation === "self" ? "Vous" : name;
-  const lost = Math.max(summary.played - summary.won, 0);
 
   return (
     <div className="space-y-7">
@@ -235,26 +234,10 @@ export function ProfileOverview({
           <Section title="Parties" icon={Dices}>
             <dl className={statGrid}>
               <Stat
-                label="Parties jouées"
-                value={credits(summary.played)}
-                icon={Gamepad2}
-              />
-              <Stat
                 label="Parties gagnées"
                 value={credits(summary.won)}
                 icon={Trophy}
                 tone="mint"
-              />
-              <Stat
-                label="Parties perdues"
-                value={credits(lost)}
-                icon={Target}
-                tone="rose"
-              />
-              <Stat
-                label="Taux de réussite"
-                value={percent(summary.won, summary.played)}
-                icon={Percent}
               />
               <Stat
                 label="Meilleur coup"
@@ -273,66 +256,17 @@ export function ProfileOverview({
                 icon={Sparkles}
                 className="[&>dd]:truncate [&>dd]:text-xl"
               />
-              <Stat
-                label="Jeux pratiqués"
-                value={`${stats.games.length}`}
-                icon={Dices}
-                hint={stats.games
-                  .map((game) => STAT_GAME_LABELS[game.game])
-                  .join(" · ")}
-              />
-              <Stat
-                label="Parties par jeu"
-                value={average(summary.played, stats.games.length)}
-                icon={Gauge}
-                hint="En moyenne"
-              />
             </dl>
           </Section>
 
           <Section title="Gains" icon={Coins}>
             {summary.earnings ? (
               <dl className={statGrid}>
-                <SignedStat
-                  label="Résultat net"
-                  value={summary.earnings.net}
-                  hint="Toutes parties confondues"
-                />
-                <Stat
-                  label="Total misé"
-                  value={credits(summary.earnings.wagered)}
-                  icon={Coins}
-                />
-                <Stat
-                  label="Pire perte"
-                  value={signed(-summary.earnings.worstLoss)}
-                  spoken={spokenAmount(-summary.earnings.worstLoss)}
-                  icon={TrendingDown}
-                  tone="rose"
-                />
-                <Stat
-                  label="Rendement"
-                  value={signedPercent(
-                    summary.earnings.net,
-                    summary.earnings.wagered,
-                  )}
-                  icon={Percent}
-                  hint="Résultat net sur total misé"
-                  tone={summary.earnings.net < 0 ? "rose" : "mint"}
-                />
                 <Stat
                   label="Mise moyenne"
                   value={average(summary.earnings.wagered, summary.played)}
                   icon={Scale}
                   hint="Par partie"
-                />
-                <Stat
-                  label="Résultat moyen"
-                  value={signed(summary.earnings.net / summary.played)}
-                  spoken={spokenAmount(summary.earnings.net / summary.played)}
-                  icon={Gauge}
-                  hint="Par partie"
-                  tone={summary.earnings.net < 0 ? "rose" : "mint"}
                 />
               </dl>
             ) : (
