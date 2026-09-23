@@ -266,6 +266,19 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
                 });
             }),
           );
+          if (table.phase !== "settled" && next.phase === "settled")
+            outbox.push(
+              Effect.gen(function* () {
+                const wallet = yield* Wallet;
+                for (const result of next.results)
+                  wallet.recordGameResult({
+                    userId: result.playerId,
+                    game: "roulette",
+                    playId: `${table.id}:${next.round}`,
+                    net: result.net,
+                  });
+              }),
+            );
           commit(tables, outbox, table, next, now);
           for (const seat of table.seats)
             if (

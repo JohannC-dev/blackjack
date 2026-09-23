@@ -208,7 +208,6 @@ try {
   );
   assert.equal(profile.body.relation, "friend");
   assert.equal(profile.body.friends, 1);
-  assert.deepEqual(profile.body.stats, []);
   const own = await api<PlayerProfile>(
     alice.session,
     `/api/players/${alice.session.userId}`,

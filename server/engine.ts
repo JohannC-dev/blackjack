@@ -884,6 +884,12 @@ export class Table {
         (nets.get(seat.playerId!) ?? 0) +
           bets.slice(seatBetsStart).reduce((sum, bet) => sum + bet.net, 0),
       );
+      this.wallet.recordGameResult({
+        userId: seat.playerId!,
+        game: "blackjack",
+        playId: `${this.state.id}:${this.state.round}:${seat.index}`,
+        net: bets.slice(seatBetsStart).reduce((sum, bet) => sum + bet.net, 0),
+      });
     }
     for (const [playerId, amount] of payouts)
       this.wallet.credit(this.players.get(playerId)!, {
@@ -904,18 +910,25 @@ export class Table {
       });
     this.state.gambles = [
       ...this.state.gambles.filter((entry) => entry.status === "available"),
-      ...[...nets.entries()]
-        .filter(([, net]) => net > 0)
-        .map(([playerId, net]) => ({
+      ...[...historyBets.entries()]
+        .map(([playerId, bets]) => ({
           playerId,
           round: this.state.round,
-          stake: net,
+          stake: bets.reduce(
+            (sum, bet) =>
+              sum +
+              (bet.result === "win" || bet.result === "blackjack"
+                ? bet.payout
+                : 0),
+            0,
+          ),
           choice: null,
           card: null,
           result: null,
           status: "available" as const,
           streak: 0,
-        })),
+        }))
+        .filter((entry) => entry.stake > 0),
     ];
     const pendingHistory = new Set(
       this.state.gambles.map((entry) => `${entry.round}:${entry.playerId}`),

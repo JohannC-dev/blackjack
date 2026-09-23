@@ -152,6 +152,63 @@ export const walletEntry = pgTable(
   ],
 );
 
+/** One materialized profile row per player and supported game. */
+export const playerGameStats = pgTable(
+  "player_game_stats",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    game: text("game").notNull(),
+    played: integer("played").default(0).notNull(),
+    wageredMinor: bigint("wagered_minor", { mode: "number" })
+      .default(0)
+      .notNull(),
+    deltaMinor: bigint("delta_minor", { mode: "number" }).default(0).notNull(),
+    maxWinMinor: bigint("max_win_minor", { mode: "number" })
+      .default(0)
+      .notNull(),
+    maxLossMinor: bigint("max_loss_minor", { mode: "number" })
+      .default(0)
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.game] }),
+    check("player_game_stats_played_nonnegative", sql`${table.played} >= 0`),
+    check(
+      "player_game_stats_wagered_nonnegative",
+      sql`${table.wageredMinor} >= 0`,
+    ),
+    check(
+      "player_game_stats_max_win_nonnegative",
+      sql`${table.maxWinMinor} >= 0`,
+    ),
+    check(
+      "player_game_stats_max_loss_nonnegative",
+      sql`${table.maxLossMinor} >= 0`,
+    ),
+  ],
+);
+
+/** Prevents a retried game closure from incrementing the profile twice. */
+export const playerGameResult = pgTable(
+  "player_game_result",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    game: text("game").notNull(),
+    playId: text("play_id").notNull(),
+    netMinor: bigint("net_minor", { mode: "number" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.game, table.playId] }),
+  ],
+);
+
 /**
  * Public identity of a player, shared by every social feature (friends today,
  * clubs later). Kept apart from the Better Auth user table.
@@ -295,6 +352,8 @@ export const schema = {
   ...authSchema,
   walletAccount,
   walletEntry,
+  playerGameStats,
+  playerGameResult,
   playerProfile,
   friendship,
   referral,

@@ -220,7 +220,7 @@ describe("European blackjack and credit accounting", () => {
       result: "lose",
     });
   });
-  test("winnings remain optional across rounds without a streak cap", () => {
+  test("the full payout remains optional during betting without a streak cap", () => {
     const { table, p } = tableWith([card(10), card(7), card(8), card(10)]);
     begin(table, [p]);
     table.command(p.id, { type: "stand", handId: table.state.activeHandId! });
@@ -229,7 +229,7 @@ describe("European blackjack and credit accounting", () => {
     const gamble = table.state.gambles.find(
       (entry) => entry.playerId === p.id,
     )!;
-    expect(gamble.stake).toBe(25);
+    expect(gamble.stake).toBe(50);
     expect(table.state.deadline).not.toBeNull();
     table.tick(table.state.deadline!);
     expect(table.state.phase).toBe("betting");
@@ -237,10 +237,6 @@ describe("European blackjack and credit accounting", () => {
     expect(table.state.seats[2].bet).toEqual({ main: 0, three: 0, pairs: 0 });
     table.command(p.id, { type: "repeat" });
     expect(table.state.seats[2].bet).toEqual({ main: 25, three: 0, pairs: 0 });
-    table.command(p.id, { type: "ready", ready: true });
-    table.startRound();
-    expect(table.state.phase).toBe("dealing");
-    expect(table.state.gambles).toContain(gamble);
     const balanceBeforeGambles = p.balance;
     for (let streak = 1; streak <= 12; streak++) {
       const nextCard = table.shoe.at(-1)!;
@@ -251,18 +247,22 @@ describe("European blackjack and credit accounting", () => {
       expect(gamble.status).toBe("available");
       expect(gamble.result).toBe("win");
       expect(gamble.streak).toBe(streak);
-      expect(gamble.stake).toBe(25 * 2 ** streak);
+      expect(gamble.stake).toBe(50 * 2 ** streak);
     }
-    expect(p.balance).toBe(balanceBeforeGambles + 25 * (2 ** 12 - 1));
-    expect(table.state.history[0].net).toBe(25 * 2 ** 12);
+    expect(p.balance).toBe(balanceBeforeGambles + 50 * (2 ** 12 - 1));
+    expect(table.state.history[0].net).toBe(25 + 50 * (2 ** 12 - 1));
     table.command(p.id, { type: "cashout" });
     expect(gamble.status).toBe("cashed");
     expect(() => table.command(p.id, { type: "gamble", color: "red" })).toThrow(
       "Aucun gain",
     );
+    table.command(p.id, { type: "ready", ready: true });
+    table.startRound();
+    expect(table.state.phase).toBe("dealing");
+    expect(table.state.gambles).toHaveLength(0);
   });
 
-  test("a wrong color ends the gamble and removes only the current winnings", () => {
+  test("a wrong color ends the gamble and removes the full winning payout", () => {
     const { table, p } = tableWith([card(10), card(7), card(8), card(10)]);
     begin(table, [p]);
     table.command(p.id, { type: "stand", handId: table.state.activeHandId! });
@@ -279,8 +279,8 @@ describe("European blackjack and credit accounting", () => {
     });
     expect(gamble.status).toBe("lost");
     expect(gamble.result).toBe("lose");
-    expect(p.balance).toBe(before - 25);
-    expect(table.state.history[0].net).toBe(0);
+    expect(p.balance).toBe(before - 50);
+    expect(table.state.history[0].net).toBe(-25);
     expect(() => table.command(p.id, { type: "cashout" })).toThrow(
       "Aucun gain",
     );
@@ -320,6 +320,9 @@ describe("European blackjack and credit accounting", () => {
     settle(table);
     expect(p.balance).toBe(380);
     expect(table.state.history[0].net).toBe(345);
+    expect(
+      table.state.gambles.find((entry) => entry.playerId === p.id)?.stake,
+    ).toBe(405);
     expect(table.state.history[0].bets).toEqual([
       {
         type: "main",
@@ -358,6 +361,9 @@ describe("European blackjack and credit accounting", () => {
     expect(p.balance).toBe(2037.5);
     expect(ownHand(table, p).result).toBe("blackjack");
     expect(table.state.history[0].net).toBe(37.5);
+    expect(
+      table.state.gambles.find((entry) => entry.playerId === p.id)?.stake,
+    ).toBe(62.5);
   });
   test("dealer stands on soft 17", () => {
     const { table, p } = tableWith([

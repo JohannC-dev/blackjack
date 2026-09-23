@@ -13,7 +13,9 @@ async function loadOverview(signal?: AbortSignal) {
       cache: "no-store",
       signal,
     });
-  } catch {
+  } catch (failure) {
+    // Let the hook distinguish an effect cleanup from an actual network error.
+    if (signal?.aborted) throw failure;
     throw new ReferralApiError("Le club ne répond pas.");
   }
   const body = (await response.json().catch(() => null)) as
@@ -36,12 +38,17 @@ export function useReferralOverview(enabled: boolean, version = 0) {
   useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();
+    let active = true;
     setError(null);
     loadOverview(controller.signal).then(
-      (loaded) => setOverview(loaded),
+      (loaded) => {
+        if (active) {
+          setOverview(loaded);
+          setError(null);
+        }
+      },
       (failure: unknown) => {
-        if (failure instanceof DOMException && failure.name === "AbortError")
-          return;
+        if (!active || controller.signal.aborted) return;
         setError(
           failure instanceof Error
             ? failure.message
@@ -49,7 +56,10 @@ export function useReferralOverview(enabled: boolean, version = 0) {
         );
       },
     );
-    return () => controller.abort();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [enabled, version, reloads]);
 
   const reload = useCallback(() => setReloads((count) => count + 1), []);

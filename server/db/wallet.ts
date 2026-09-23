@@ -2,11 +2,12 @@ import { PgDrizzle } from "@effect/sql-drizzle/Pg";
 import { SqlClient } from "@effect/sql/SqlClient";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { Data, Effect } from "effect";
-import type { WalletOperation } from "../game-wallet";
+import type { GameResult, WalletOperation } from "../game-wallet";
 import { INITIAL_CREDIT_BALANCE } from "../../src/lib/chips";
 import { walletAccount, walletEntry } from "./schema";
+import { applyGameResult, applyWalletStatDelta } from "./game-stats";
+import { fromMinor, toMinor, MINOR_PER_CREDIT } from "./money";
 
-const MINOR_PER_CREDIT = 100;
 const INITIAL_BALANCE_MINOR = INITIAL_CREDIT_BALANCE * MINOR_PER_CREDIT;
 
 export type WalletSnapshot = {
@@ -32,17 +33,6 @@ export class InsufficientBalance extends Data.TaggedError(
   override get message() {
     return "Votre solde est insuffisant.";
   }
-}
-
-function toMinor(credits: number) {
-  const minor = Math.round(credits * MINOR_PER_CREDIT);
-  if (!Number.isSafeInteger(minor))
-    throw new Error("Montant de portefeuille invalide.");
-  return minor;
-}
-
-function fromMinor(minor: number) {
-  return minor / MINOR_PER_CREDIT;
 }
 
 const mapDatabaseError = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
@@ -166,9 +156,13 @@ const applyOperation = (input: WalletOperation) =>
       balanceAfterMinor: updated.balanceMinor,
       metadata: input.metadata ?? null,
     });
+    yield* applyWalletStatDelta(input);
   });
 
-export const applyWalletOperations = (operations: readonly WalletOperation[]) =>
+export const applyWalletOperations = (
+  operations: readonly WalletOperation[],
+  gameResults: readonly GameResult[] = [],
+) =>
   Effect.gen(function* () {
     const db = yield* PgDrizzle;
     const client = yield* SqlClient;
@@ -187,6 +181,7 @@ export const applyWalletOperations = (operations: readonly WalletOperation[]) =>
         for (const [, userOperations] of ordered)
           for (const operation of userOperations)
             yield* applyOperation(operation);
+        for (const result of gameResults) yield* applyGameResult(result);
 
         const results: WalletResult[] = [];
         for (const [userId] of ordered) {

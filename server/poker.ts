@@ -61,6 +61,8 @@ type Participant = {
   pendingLeave: boolean;
   chatJoinedAt: number;
   walletReferenceId: string;
+  initialBuyIn: number;
+  playedHand: boolean;
 };
 
 export function makePokerDeck(): Card[] {
@@ -146,6 +148,8 @@ export class PokerTable {
     player: Player,
     stack: number,
     walletReferenceId = `poker:${this.id}:${player.id}:${randomUUID()}`,
+    initialBuyIn = stack,
+    playedHand = false,
   ) {
     const available = Array.from(
       { length: this.maxSeats },
@@ -166,6 +170,8 @@ export class PokerTable {
       pendingLeave: false,
       chatJoinedAt: Date.now(),
       walletReferenceId,
+      initialBuyIn,
+      playedHand,
     });
     this.participants.sort((a, b) => a.seat - b.seat);
     this.message = `${player.name} rejoint la table.`;
@@ -371,6 +377,8 @@ export class PokerTable {
         );
         if (entry) entry.cards.push(this.draw());
       }
+    for (const entry of this.participants)
+      if (entry.cards.length) entry.playedHand = true;
     const first = headsUp
       ? small
       : this.nextSeat(big.seat, (entry) => entry.status === "active")!;
@@ -1113,12 +1121,32 @@ export class PokerManager {
     if (table) {
       const entry = table.requestLeave(player.id);
       if (!entry) return;
+      if (table.mode === "spin" && !table.prizePaid) {
+        if (entry.playedHand)
+          this.wallet.recordGameResult({
+            userId: player.id,
+            game: "poker",
+            playId: entry.walletReferenceId,
+            net: -table.stake,
+          });
+        else
+          this.wallet.credit(player, {
+            operationId: `poker:${entry.walletReferenceId}:pre-hand-refund`,
+            game: "poker",
+            kind: "refund",
+            reason: "leave-spin-before-hand",
+            referenceId: entry.walletReferenceId,
+            amount: table.stake,
+          });
+      }
+      if (table.mode === "cash" && entry.playedHand)
+        this.recordCashResult(entry);
       if (table.mode === "cash" && entry.stack > 0)
         this.wallet.credit(player, {
           operationId: `poker:${entry.walletReferenceId}:cashout`,
           game: "poker",
-          kind: "cashout",
-          reason: "leave-cash-table",
+          kind: entry.playedHand ? "cashout" : "refund",
+          reason: entry.playedHand ? "leave-cash-table" : "leave-before-hand",
           referenceId: entry.walletReferenceId,
           amount: entry.stack,
           metadata: { tableId: table.id, stake: table.stake },
@@ -1214,6 +1242,8 @@ export class PokerManager {
                 entry.player,
                 entry.stack,
                 entry.walletReferenceId,
+                entry.initialBuyIn,
+                entry.playedHand,
               );
               if (!table.participants.length) {
                 this.tables.delete(id);
@@ -1243,12 +1273,15 @@ export class PokerManager {
           (table.mode === "cash" && entry.pendingLeave)
         ) {
           if (table.inHand()) continue;
+          if (entry.playedHand) this.recordCashResult(entry);
           if (entry.stack > 0)
             this.wallet.credit(entry.player, {
               operationId: `poker:${entry.walletReferenceId}:cashout`,
               game: "poker",
-              kind: "cashout",
-              reason: "automatic-cashout",
+              kind: entry.playedHand ? "cashout" : "refund",
+              reason: entry.playedHand
+                ? "automatic-cashout"
+                : "automatic-before-hand",
               referenceId: entry.walletReferenceId,
               amount: entry.stack,
               metadata: { tableId: table.id, stake: table.stake },
@@ -1280,8 +1313,24 @@ export class PokerManager {
       amount: prize,
       metadata: { stake: table.stake, multiplier: table.wheelMultiplier },
     });
+    for (const entry of table.participants)
+      this.wallet.recordGameResult({
+        userId: entry.player.id,
+        game: "poker",
+        playId: entry.walletReferenceId,
+        net: (entry === winner ? prize : 0) - table.stake,
+      });
     table.prizePaid = true;
     table.message = `${winner.player.name} remporte ${prize} crédits.`;
     this.publishTable(table);
+  }
+
+  private recordCashResult(entry: Participant) {
+    this.wallet.recordGameResult({
+      userId: entry.player.id,
+      game: "poker",
+      playId: entry.walletReferenceId,
+      net: entry.stack - entry.initialBuyIn,
+    });
   }
 }

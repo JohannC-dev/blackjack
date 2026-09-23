@@ -20,7 +20,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         ? { "Content-Type": "application/json", ...init.headers }
         : init?.headers,
     });
-  } catch {
+  } catch (failure) {
+    if (init?.signal?.aborted) throw failure;
     throw new SocialApiError("Le club ne répond pas.");
   }
   const body = (await response.json().catch(() => null)) as
@@ -53,8 +54,10 @@ export const socialApi = {
     request<{ ok: true }>(`/api/friends/${encodeURIComponent(userId)}`, {
       method: "DELETE",
     }),
-  player: (playerId: string) =>
-    request<PlayerProfile>(`/api/players/${encodeURIComponent(playerId)}`),
+  player: (playerId: string, signal?: AbortSignal) =>
+    request<PlayerProfile>(`/api/players/${encodeURIComponent(playerId)}`, {
+      signal,
+    }),
 };
 
 /**
@@ -69,23 +72,26 @@ export function usePlayerProfile(playerId: string | null, version = 0) {
   useEffect(() => {
     if (!playerId) {
       setProfile(null);
+      setError(null);
       return;
     }
-    let cancelled = false;
+    const controller = new AbortController();
+    let active = true;
     setError(null);
-    socialApi.player(playerId).then(
+    socialApi.player(playerId, controller.signal).then(
       (loaded) => {
-        if (!cancelled) setProfile(loaded);
+        if (active) setProfile(loaded);
       },
       (failure: unknown) => {
-        if (!cancelled)
+        if (active && !controller.signal.aborted)
           setError(
             failure instanceof Error ? failure.message : "Profil indisponible.",
           );
       },
     );
     return () => {
-      cancelled = true;
+      active = false;
+      controller.abort();
     };
   }, [playerId, version, reloads]);
 

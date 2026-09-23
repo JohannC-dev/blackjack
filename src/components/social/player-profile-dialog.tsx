@@ -11,7 +11,7 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,15 +22,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { credits } from "@/lib/rules";
-import {
-  INVITE_GAME_LABELS,
-  formatFriendCode,
-  type InviteGame,
-  type PlayerProfile,
-} from "@/lib/social";
+import { formatFriendCode, type PlayerProfile } from "@/lib/social";
 import { usePlayerProfile } from "@/lib/social-api";
 import { cn } from "@/lib/utils";
 import { PlayerAvatar } from "./player-avatar";
@@ -42,14 +35,6 @@ const dateFormat = new Intl.DateTimeFormat("fr-FR", {
   year: "numeric",
 });
 
-function gameLabel(game: string) {
-  return INVITE_GAME_LABELS[game as InviteGame] ?? game;
-}
-
-function signedCredits(amount: number) {
-  return `${amount > 0 ? "+" : amount < 0 ? "−" : ""}${credits(Math.abs(amount))}`;
-}
-
 export function PlayerProfileDialog({
   playerId,
   version,
@@ -60,6 +45,9 @@ export function PlayerProfileDialog({
   onClose: () => void;
 }) {
   const { profile, error, reload } = usePlayerProfile(playerId, version);
+  const social = useSocial();
+  const referralForSelf =
+    playerId !== null && playerId === social.overview?.me.id;
   return (
     <Dialog open={!!playerId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto border-white/[0.06] bg-[#15121d] p-0 font-sans text-foreground sm:max-w-[460px]">
@@ -81,6 +69,11 @@ export function PlayerProfileDialog({
         ) : (
           <ProfileSkeleton />
         )}
+        {referralForSelf && (
+          <div className="px-6 pt-4 pb-5">
+            <ReferralPanel />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -93,15 +86,6 @@ function ProfileBody({
   profile: PlayerProfile;
   onChanged: () => void;
 }) {
-  const totals = profile.stats.reduce(
-    (sum, game) => ({
-      played: sum.played + game.played,
-      wagered: sum.wagered + game.wagered,
-      net: sum.net + game.net,
-      bestWin: Math.max(sum.bestWin, game.bestWin),
-    }),
-    { played: 0, wagered: 0, net: 0, bestWin: 0 },
-  );
   const copyCode = async () => {
     if (!profile.friendCode) return;
     try {
@@ -175,73 +159,6 @@ function ProfileBody({
         <RelationActions profile={profile} onChanged={onChanged} />
       </div>
 
-      <div className="px-6 py-5">
-        <div className="grid grid-cols-3 gap-2">
-          <StatTile
-            label="Parties"
-            value={totals.played.toLocaleString("fr-FR")}
-          />
-          <StatTile label="Misé" value={credits(totals.wagered)} />
-          <StatTile
-            label="Bilan"
-            value={signedCredits(totals.net)}
-            className={
-              totals.net > 0
-                ? "text-minuit-mint"
-                : totals.net < 0
-                  ? "text-[#f0617a]"
-                  : undefined
-            }
-          />
-        </div>
-        {totals.bestWin > 0 && (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Plus beau gain :{" "}
-            <b className="font-semibold text-foreground">
-              {credits(totals.bestWin)} crédits
-            </b>
-          </p>
-        )}
-
-        <Separator className="my-5 bg-white/[0.06]" />
-        <div className="mb-2 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-          Par jeu
-        </div>
-        {profile.stats.length ? (
-          <div className="divide-y divide-white/[0.05]">
-            {profile.stats.map((game) => (
-              <div
-                key={game.game}
-                className="flex items-center justify-between gap-3 py-2.5"
-              >
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold">
-                    {gameLabel(game.game)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {game.played.toLocaleString("fr-FR")} partie
-                    {game.played > 1 ? "s" : ""} · {credits(game.wagered)} misés
-                  </div>
-                </div>
-                <div
-                  className={cn(
-                    "text-sm font-semibold tabular-nums",
-                    game.net > 0 && "text-minuit-mint",
-                    game.net < 0 && "text-[#f0617a]",
-                  )}
-                >
-                  {signedCredits(game.net)}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="py-4 text-center text-sm text-muted-foreground">
-            Aucune partie jouée pour l’instant.
-          </p>
-        )}
-        {profile.relation === "self" && <ReferralPanel />}
-      </div>
     </>
   );
 }
@@ -342,32 +259,6 @@ function RelationActions({
   );
 }
 
-function StatTile({
-  label,
-  value,
-  className,
-}: {
-  label: string;
-  value: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
-      <div className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-        {label}
-      </div>
-      <div
-        className={cn(
-          "mt-0.5 truncate text-base font-semibold tabular-nums",
-          className,
-        )}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
 function ProfileSkeleton() {
   return (
     <div className="px-6 py-7">
@@ -380,12 +271,6 @@ function ProfileSkeleton() {
           <Skeleton className="h-3.5 w-24" />
         </div>
       </div>
-      <div className="mt-6 grid grid-cols-3 gap-2">
-        {[0, 1, 2].map((index) => (
-          <Skeleton key={index} className="h-14" />
-        ))}
-      </div>
-      <Skeleton className="mt-6 h-24" />
     </div>
   );
 }

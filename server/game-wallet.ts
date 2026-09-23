@@ -31,10 +31,20 @@ export type WalletOperation = Omit<WalletChange, "amount"> & {
   readonly delta: number;
 };
 
+export type GameResult = {
+  readonly userId: string;
+  readonly game: WalletGame;
+  /** Stable identifier of the completed hand, round, run or poker entry. */
+  readonly playId: string;
+  /** Final result of that play in credits, including its wagers. */
+  readonly net: number;
+};
+
 export interface GameWallet {
   balance(account: WalletAccount): number;
   debit(account: WalletAccount, change: WalletChange): void;
   credit(account: WalletAccount, change: WalletChange): void;
+  recordGameResult(result: GameResult): void;
 }
 
 function validateAmount(amount: number) {
@@ -58,19 +68,25 @@ export class InMemoryGameWallet implements GameWallet {
     validateAmount(change.amount);
     account.balance += change.amount;
   }
+
+  recordGameResult(_result: GameResult) {}
 }
 
 export const inMemoryGameWallet = new InMemoryGameWallet();
 
 export class RecordingGameWallet extends InMemoryGameWallet {
   private pending: WalletOperation[] | null = null;
+  private pendingResults: GameResult[] = [];
   private operationIds = new Set<string>();
+  private resultIds = new Set<string>();
 
   begin() {
     if (this.pending)
       throw new Error("Une opération financière est déjà ouverte.");
     this.pending = [];
+    this.pendingResults = [];
     this.operationIds.clear();
+    this.resultIds.clear();
   }
 
   operations() {
@@ -78,9 +94,16 @@ export class RecordingGameWallet extends InMemoryGameWallet {
     return [...this.pending];
   }
 
+  gameResults() {
+    if (!this.pending) throw new Error("Aucune opération financière ouverte.");
+    return [...this.pendingResults];
+  }
+
   complete() {
     this.pending = null;
+    this.pendingResults = [];
     this.operationIds.clear();
+    this.resultIds.clear();
   }
 
   rollback(resolve: (userId: string) => WalletAccount | undefined) {
@@ -102,6 +125,18 @@ export class RecordingGameWallet extends InMemoryGameWallet {
     this.assertCanRecord(change.operationId);
     super.credit(account, change);
     this.record(account, change, change.amount);
+  }
+
+  override recordGameResult(result: GameResult) {
+    if (!this.pending)
+      throw new Error("Le résultat du jeu est hors transaction.");
+    if (!result.playId || !Number.isSafeInteger(Math.round(result.net * 100)))
+      throw new Error("Résultat de jeu invalide.");
+    const key = `${result.userId}\0${result.game}\0${result.playId}`;
+    if (this.resultIds.has(key))
+      throw new Error("Résultat de jeu dupliqué dans la transaction.");
+    this.resultIds.add(key);
+    this.pendingResults.push(result);
   }
 
   private assertCanRecord(operationId: string) {

@@ -43,6 +43,13 @@
       "when": 1790158588285,
       "tag": "0005_dark_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790167010481,
+      "tag": "0006_cool_shadow_king",
+      "breakpoints": true
     }
   ]
 }

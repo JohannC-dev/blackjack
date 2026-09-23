@@ -223,6 +223,7 @@ export class MinesGame {
       this.payout = 0;
       this.net = -this.bet;
       this.message = "La mine a explosé. La mise est perdue.";
+      this.recordResult(player);
       this.publish();
       return;
     }
@@ -233,6 +234,7 @@ export class MinesGame {
       this.payout = minesPayout(this.bet, this.multiplier);
       this.net = this.payout - this.bet;
       this.pay(player, "all-safe");
+      this.recordResult(player);
       this.message = "Toutes les cases sûres sont ouvertes. Gain sécurisé.";
       this.publish();
       return;
@@ -269,6 +271,7 @@ export class MinesGame {
         this.payout = 0;
         this.net = -this.bet;
         this.message = "La mine a explosé. La mise est perdue.";
+        this.recordResult(player);
         this.publish();
         return;
       }
@@ -279,6 +282,7 @@ export class MinesGame {
         this.payout = minesPayout(this.bet, this.multiplier);
         this.net = this.payout - this.bet;
         this.pay(player, "pattern-all-safe");
+        this.recordResult(player);
         this.message = "Toutes les cases sûres sont ouvertes. Gain sécurisé.";
         this.publish();
         return;
@@ -288,6 +292,7 @@ export class MinesGame {
     this.payout = minesPayout(this.bet, this.multiplier);
     this.net = this.payout - this.bet;
     this.pay(player, "pattern-cashout");
+    this.recordResult(player);
     this.phase = "cashed";
     this.message = "Pattern révélé. Gain encaissé.";
     this.publish();
@@ -302,9 +307,19 @@ export class MinesGame {
     this.payout = minesPayout(this.bet, this.multiplier);
     this.net = this.payout - this.bet;
     this.pay(player, "cashout");
+    this.recordResult(player);
     this.phase = "cashed";
     this.message = "Gain encaissé. La grille est révélée.";
     this.publish();
+  }
+
+  private recordResult(player: MinesPlayer) {
+    this.wallet.recordGameResult({
+      userId: player.id,
+      game: "mines",
+      playId: this.roundId,
+      net: this.net!,
+    });
   }
 
   private pay(player: MinesPlayer, reason: string) {

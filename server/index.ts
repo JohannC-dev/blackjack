@@ -357,12 +357,13 @@ function publishWallet(playerId: string, socketId?: string) {
 
 function commitWalletOperationsEffect() {
   const operations = gameWallet.operations();
-  if (!operations.length) {
+  const gameResults = gameWallet.gameResults();
+  if (!operations.length && !gameResults.length) {
     gameWallet.complete();
     return Effect.void;
   }
   return Effect.tryPromise({
-    try: () => runDatabase(applyWalletOperations(operations)),
+    try: () => runDatabase(applyWalletOperations(operations, gameResults)),
     catch: toGameError,
   }).pipe(
     Effect.tap((results) =>

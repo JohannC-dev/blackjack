@@ -7,14 +7,12 @@ import {
   FRIEND_CODE_LENGTH,
   normalizeFriendCode,
   type FriendRequest,
-  type PlayerGameStats,
   type PlayerSearchResult,
   type Relation,
   type SocialPlayer,
 } from "../../src/lib/social";
-import { friendship, playerProfile, user, walletEntry } from "../db/schema";
+import { friendship, playerProfile, user } from "../db/schema";
 
-const MINOR_PER_CREDIT = 100;
 const MAX_FRIENDS = 200;
 const MAX_OUTGOING_REQUESTS = 50;
 
@@ -387,58 +385,6 @@ export const removeFriendship = (userId: string, otherId: string) =>
       });
   }).pipe(mapDatabaseError);
 
-/** Wallet history turned into per-game statistics. Refills are left out. */
-const gameStats = (userId: string) =>
-  Effect.gen(function* () {
-    const db = yield* PgDrizzle;
-    const rows = yield* db
-      .select({
-        game: walletEntry.game,
-        played:
-          sql<number>`count(distinct ${walletEntry.referenceId}) filter (where ${walletEntry.kind} in ('wager', 'buy-in'))`.mapWith(
-            Number,
-          ),
-        wagered:
-          sql<number>`coalesce(sum(-${walletEntry.amountMinor}) filter (where ${walletEntry.kind} in ('wager', 'additional-wager', 'buy-in')), 0)`.mapWith(
-            Number,
-          ),
-        returned:
-          sql<number>`coalesce(sum(${walletEntry.amountMinor}) filter (where ${walletEntry.kind} in ('payout', 'refund', 'cashout', 'prize')), 0)`.mapWith(
-            Number,
-          ),
-        bestWin:
-          sql<number>`coalesce(max(${walletEntry.amountMinor}) filter (where ${walletEntry.kind} in ('payout', 'cashout', 'prize')), 0)`.mapWith(
-            Number,
-          ),
-      })
-      .from(walletEntry)
-      .where(
-        and(
-          eq(walletEntry.userId, userId),
-          inArray(walletEntry.kind, [
-            "wager",
-            "additional-wager",
-            "buy-in",
-            "payout",
-            "refund",
-            "cashout",
-            "prize",
-          ]),
-        ),
-      )
-      .groupBy(walletEntry.game);
-    return rows
-      .map((row): PlayerGameStats => ({
-        game: row.game,
-        played: row.played,
-        wagered: row.wagered / MINOR_PER_CREDIT,
-        net: (row.returned - row.wagered) / MINOR_PER_CREDIT,
-        bestWin: row.bestWin / MINOR_PER_CREDIT,
-      }))
-      .filter((stats) => stats.played > 0)
-      .sort((left, right) => right.played - left.played);
-  });
-
 /** Public profile of a player, seen by the viewer. */
 export const playerProfileFor = (viewerId: string, playerId: string) =>
   Effect.gen(function* () {
@@ -453,21 +399,27 @@ export const playerProfileFor = (viewerId: string, playerId: string) =>
         message: "Ce joueur n’existe pas.",
         status: 404,
       });
-    const friendCode = yield* ensurePlayerProfile(playerId);
-    const link =
-      viewerId === playerId ? undefined : yield* findPair(viewerId, playerId);
-    const [friendCount] = yield* db
-      .select({ count: sql<number>`count(*)`.mapWith(Number) })
-      .from(friendship)
-      .where(
-        and(
-          eq(friendship.status, "accepted"),
-          or(
-            eq(friendship.requesterId, playerId),
-            eq(friendship.addresseeId, playerId),
+    const [friendCode, link, friendCounts] = yield* Effect.all(
+      [
+        ensurePlayerProfile(playerId),
+        viewerId === playerId
+          ? Effect.succeed(undefined)
+          : findPair(viewerId, playerId),
+        db
+          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .from(friendship)
+          .where(
+            and(
+              eq(friendship.status, "accepted"),
+              or(
+                eq(friendship.requesterId, playerId),
+                eq(friendship.addresseeId, playerId),
+              ),
+            ),
           ),
-        ),
-      );
+      ],
+      { concurrency: "unbounded" },
+    );
     return {
       id: found.id,
       name: found.name,
@@ -476,7 +428,6 @@ export const playerProfileFor = (viewerId: string, playerId: string) =>
       relation:
         viewerId === playerId ? ("self" as const) : relationOf(link, viewerId),
       requestId: link && link.status === "pending" ? link.id : null,
-      friends: friendCount?.count ?? 0,
-      stats: yield* gameStats(playerId),
+      friends: friendCounts[0]?.count ?? 0,
     };
   }).pipe(mapDatabaseError);

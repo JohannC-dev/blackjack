@@ -5,7 +5,6 @@ import { Fragment } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { COSMETICS, COSMETIC_KIND_LABELS } from "@/lib/cosmetics";
 import { credits } from "@/lib/rules";
@@ -59,14 +58,20 @@ export function ReferralPanel() {
 
 function Section({ children }: { children: React.ReactNode }) {
   return (
-    <>
-      <Separator className="my-5 bg-white/[0.06]" />
-      <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        <Gift className="size-3.5" />
-        Parrainage
+    <section className="space-y-3.5">
+      <div className="flex items-center gap-2.5">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-minuit-purple/10 text-minuit-purple">
+          <Gift className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-foreground">Parrainage</h3>
+          <p className="text-xs text-muted-foreground">
+            Votre code, vos filleuls et leurs récompenses
+          </p>
+        </div>
       </div>
       {children}
-    </>
+    </section>
   );
 }
 

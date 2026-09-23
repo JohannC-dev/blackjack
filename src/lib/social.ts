@@ -49,22 +49,12 @@ export type PlayerSearchResult = SocialPlayer & {
   requestId: string | null;
 };
 
-export type PlayerGameStats = {
-  game: string;
-  /** Rounds, runs or buy-ins. */
-  played: number;
-  wagered: number;
-  net: number;
-  bestWin: number;
-};
-
 export type PlayerProfile = SocialPlayer & {
   memberSince: string;
   relation: Relation;
   requestId: string | null;
   online: boolean;
   friends: number;
-  stats: PlayerGameStats[];
 };
 
 /** Games a friend can be invited to. */

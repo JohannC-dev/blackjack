@@ -2,13 +2,11 @@
 
 import {
   Check,
-  Clock3,
   Copy,
   EllipsisVertical,
   Inbox,
   LoaderCircle,
   Lock,
-  Search,
   Send,
   UserMinus,
   UserPlus,
@@ -16,8 +14,20 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { toast } from "sonner";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,35 +49,38 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FRIEND_CODE_LENGTH,
   INVITE_GAME_LABELS,
   formatFriendCode,
   normalizeFriendCode,
   type Friend,
-  type PlayerSearchResult,
 } from "@/lib/social";
-import { SocialApiError, socialApi } from "@/lib/social-api";
 import { PlayerAvatar } from "./player-avatar";
 import { useSocial } from "./social-provider";
 
-export type FriendsTab = "friends" | "requests" | "search";
+export type FriendsFocus = "friends" | "requests" | "search";
 
 export function FriendsSheet({
   open,
   onOpenChange,
-  tab,
-  onTabChange,
+  focus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  tab: FriendsTab;
-  onTabChange: (tab: FriendsTab) => void;
+  focus: FriendsFocus;
 }) {
   const social = useSocial();
-  const friends = social.overview?.friends ?? [];
   const requestCount = social.pendingCount;
+  const [requestsOpen, setRequestsOpen] = useState(false);
+  const codeInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setRequestsOpen(focus === "requests");
+    if (focus === "search")
+      requestAnimationFrame(() => codeInput.current?.focus());
+  }, [open, focus]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -87,68 +100,37 @@ export function FriendsSheet({
           <FriendCodeCard code={social.overview?.me.friendCode ?? null} />
         </SheetHeader>
 
-        <Tabs
-          value={tab}
-          onValueChange={(value) => onTabChange(value as FriendsTab)}
-          className="min-h-0 flex-1 gap-0"
+        <InviteSettings />
+        <ScrollArea className="min-h-0 flex-1">
+          <FriendsList onSearch={() => codeInput.current?.focus()} />
+        </ScrollArea>
+        <Accordion
+          type="single"
+          collapsible
+          value={requestsOpen ? "requests" : ""}
+          onValueChange={(value) => setRequestsOpen(value === "requests")}
+          className="w-full shrink-0"
         >
-          <div className="px-5 pt-4">
-            <TabsList className="grid w-full grid-cols-3 bg-white/[0.04]">
-              <TabsTrigger
-                value="friends"
-                className="data-[state=active]:bg-accent"
-              >
-                Amis
-                {!!friends.length && (
-                  <span className="text-xs text-muted-foreground">
-                    {friends.length}
-                  </span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger
-                value="requests"
-                className="data-[state=active]:bg-accent"
-              >
+          <AccordionItem
+            value="requests"
+            className="border-t border-white/[0.06] bg-white/[0.02]"
+          >
+            <AccordionTrigger className="w-full items-center px-5 py-3 font-semibold hover:bg-white/[0.03] hover:no-underline">
+              <span className="flex items-center gap-2">
                 Demandes
                 {!!requestCount && (
                   <Badge className="h-4 min-w-4 rounded-full px-1 text-[10px] tabular-nums">
                     {requestCount}
                   </Badge>
                 )}
-              </TabsTrigger>
-              <TabsTrigger
-                value="search"
-                className="data-[state=active]:bg-accent"
-              >
-                Rechercher
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent
-            value="friends"
-            className="flex min-h-0 flex-col data-[state=inactive]:hidden"
-          >
-            <InviteSettings />
-            <ScrollArea className="min-h-0 flex-1">
-              <FriendsList onSearch={() => onTabChange("search")} />
-            </ScrollArea>
-          </TabsContent>
-          <TabsContent
-            value="requests"
-            className="min-h-0 data-[state=inactive]:hidden"
-          >
-            <ScrollArea className="h-full">
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="max-h-[40vh] overflow-y-auto pb-2">
               <RequestsList />
-            </ScrollArea>
-          </TabsContent>
-          <TabsContent
-            value="search"
-            className="flex min-h-0 flex-col data-[state=inactive]:hidden"
-          >
-            <PlayerSearch active={open && tab === "search"} />
-          </TabsContent>
-        </Tabs>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+        <AddFriendForm inputRef={codeInput} />
       </SheetContent>
     </Sheet>
   );
@@ -199,10 +181,10 @@ function InviteSettings() {
   const destination = !context.canBePrivate
     ? `${game} · votre ami rejoindra le jeu`
     : context.isPrivate
-      ? `${game} · votre table privée ${context.tableId ?? ""}`
+      ? `${game} · votre table privée`
       : social.privateInvite
         ? `${game} · une nouvelle table privée`
-        : `${game} · votre table ${context.tableId ?? ""}`;
+        : `${game} · votre table`;
   return (
     <div className="mx-5 mt-4 mb-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
       <div className="flex items-center justify-between gap-3">
@@ -259,7 +241,7 @@ function FriendsList({ onSearch }: { onSearch: () => void }) {
       <EmptyState
         icon={<Users />}
         title="Pas encore d’amis"
-        text="Cherchez un joueur par son pseudo ou partagez votre code ami."
+        text="Saisissez son code ami ci-dessous ou partagez le vôtre."
         action={
           <Button size="sm" onClick={onSearch}>
             <UserPlus />
@@ -448,176 +430,63 @@ function typedFriendCode(input: string) {
   return code.length > 4 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
 }
 
-function PlayerSearch({ active }: { active: boolean }) {
+function AddFriendForm({
+  inputRef,
+}: {
+  inputRef: RefObject<HTMLInputElement | null>;
+}) {
   const social = useSocial();
   const [query, setQuery] = useState("");
-  // undefined: nothing looked up yet, null: nobody has this code.
-  const [result, setResult] = useState<PlayerSearchResult | null>();
-  const [searching, setSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [version, setVersion] = useState(0);
-
-  // A single lookup, once the code is complete.
   const code = normalizeFriendCode(query);
-  useEffect(() => {
-    setResult(undefined);
-    setError(null);
-    if (!active || !code) {
-      setSearching(false);
-      return;
-    }
-    const controller = new AbortController();
-    setSearching(true);
-    socialApi.findByCode(code, controller.signal).then(
-      (found) => {
-        setResult(found);
-        setSearching(false);
-      },
-      (failure: unknown) => {
-        if (controller.signal.aborted) return;
-        setError(
-          failure instanceof SocialApiError
-            ? failure.message
-            : "Recherche indisponible.",
-        );
-        setSearching(false);
-      },
-    );
-    return () => controller.abort();
-    // The overview refreshes the relation after an answer elsewhere.
-  }, [active, code, version, social.overview]);
 
-  const act = async (action: () => Promise<boolean>) => {
+  const add = async () => {
+    if (!code || busy) return;
     setBusy(true);
-    await action();
-    setBusy(false);
-    setVersion((value) => value + 1);
+    try {
+      if (await social.sendRequest({ code })) setQuery("");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <>
-      <div className="px-5 pt-4 pb-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            autoFocus
-            value={query}
-            onChange={(event) => setQuery(typedFriendCode(event.target.value))}
-            placeholder="Code ami (ABCD-EFGH)"
-            className="h-10 bg-white/[0.03] pl-9 font-mono tracking-[0.12em] uppercase"
-            aria-label="Code ami du joueur"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          {searching && (
-            <LoaderCircle className="absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-          )}
-        </div>
-      </div>
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="px-3 pb-4">
-          {!code ? (
-            <EmptyState
-              icon={<Search />}
-              title="Ajoutez un ami"
-              text="Saisissez son code ami complet. Il le trouve dans son menu de profil."
-            />
-          ) : error ? (
-            <EmptyState
-              icon={<Search />}
-              title="Recherche indisponible"
-              text={error}
-            />
-          ) : result === null ? (
-            <EmptyState
-              icon={<Search />}
-              title="Aucun joueur trouvé"
-              text="Vérifiez le code ami : aucun joueur ne le possède."
-            />
-          ) : (
-            result && (
-              <PlayerRow
-                id={result.id}
-                name={result.name}
-                detail={
-                  result.friendCode ? formatFriendCode(result.friendCode) : "—"
-                }
-                detailClassName="font-mono tracking-wider"
-              >
-                <SearchAction
-                  result={result}
-                  busy={busy}
-                  onAdd={() =>
-                    act(() => social.sendRequest({ userId: result.id }))
-                  }
-                  onAccept={() =>
-                    act(() => social.respond(result.requestId!, true))
-                  }
-                  onCancel={() => act(() => social.remove(result.id))}
-                />
-              </PlayerRow>
-            )
-          )}
-        </div>
-      </ScrollArea>
-    </>
-  );
-}
-
-function SearchAction({
-  result,
-  busy,
-  onAdd,
-  onAccept,
-  onCancel,
-}: {
-  result: PlayerSearchResult;
-  busy: boolean;
-  onAdd: () => void;
-  onAccept: () => void;
-  onCancel: () => void;
-}) {
-  const spinner = busy ? <LoaderCircle className="animate-spin" /> : null;
-  switch (result.relation) {
-    case "self":
-      return <Badge variant="secondary">Vous</Badge>;
-    case "friend":
-      return (
-        <Badge variant="secondary" className="gap-1">
-          <Check className="size-3" />
-          Ami
-        </Badge>
-      );
-    case "outgoing":
-      return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void add();
+      }}
+      className="flex flex-col gap-3 border-t border-white/[0.06] bg-[#13111b] px-5 py-4"
+    >
+      <Label
+        htmlFor="add-friend-code"
+        className="text-xs text-muted-foreground"
+      >
+        Ajouter un ami avec son code unique
+      </Label>
+      <div className="flex gap-2">
+        <Input
+          ref={inputRef}
+          id="add-friend-code"
+          value={query}
+          onChange={(event) => setQuery(typedFriendCode(event.target.value))}
+          placeholder="ABCD-EFGH"
+          className="h-10 min-w-0 flex-1 bg-white/[0.03] font-mono tracking-[0.12em] uppercase"
+          autoComplete="off"
+          spellCheck={false}
+          maxLength={FRIEND_CODE_LENGTH + 1}
+        />
         <Button
-          size="sm"
-          variant="ghost"
-          className="text-muted-foreground"
-          disabled={busy}
-          onClick={onCancel}
-          title="Annuler la demande"
+          type="submit"
+          className="h-10 shrink-0"
+          disabled={!code || busy}
         >
-          {spinner ?? <Clock3 />}
-          Envoyée
-        </Button>
-      );
-    case "incoming":
-      return (
-        <Button size="sm" disabled={busy} onClick={onAccept}>
-          {spinner ?? <Check />}
-          Accepter
-        </Button>
-      );
-    default:
-      return (
-        <Button size="sm" variant="secondary" disabled={busy} onClick={onAdd}>
-          {spinner ?? <UserPlus />}
+          {busy ? <LoaderCircle className="animate-spin" /> : <UserPlus />}
           Ajouter
         </Button>
-      );
-  }
+      </div>
+    </form>
+  );
 }
 
 function PlayerRow({

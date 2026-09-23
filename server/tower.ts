@@ -402,6 +402,13 @@ export class TowerManager {
     run.status = status;
     run.payout = payout;
     run.endedAt = now;
+    if (run.floor > 0 || status === "lost")
+      this.wallet.recordGameResult({
+        userId: run.player.id,
+        game: "tower",
+        playId: run.id,
+        net: payout - run.bet,
+      });
     if (payout > 0) {
       const refund = run.floor === 0 && payout === run.bet;
       let reason = "cashout";

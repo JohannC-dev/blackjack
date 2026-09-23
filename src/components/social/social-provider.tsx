@@ -26,7 +26,7 @@ import { credits } from "@/lib/rules";
 import type { ReferralTier } from "@/lib/referral";
 import type { Ack } from "@/lib/types";
 import type { useGame } from "@/lib/use-game";
-import { FriendsSheet, type FriendsTab } from "./friends-sheet";
+import { FriendsSheet, type FriendsFocus } from "./friends-sheet";
 import { PlayerProfileDialog } from "./player-profile-dialog";
 
 type Game = ReturnType<typeof useGame>;
@@ -58,7 +58,7 @@ type SocialContextValue = {
   setPrivateInvite: (value: boolean) => void;
   /** Friend currently being invited. */
   invitingId: string | null;
-  openFriends: (tab?: FriendsTab) => void;
+  openFriends: (focus?: FriendsFocus) => void;
   openProfile: (playerId: string) => void;
   refresh: () => Promise<void>;
   sendRequest: (
@@ -103,7 +103,7 @@ export function SocialProvider({
   const [privateInvite, setPrivateInvite] = useState(false);
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const [friendsOpen, setFriendsOpen] = useState(false);
-  const [friendsTab, setFriendsTab] = useState<FriendsTab>("friends");
+  const [friendsFocus, setFriendsFocus] = useState<FriendsFocus>("friends");
   const [profileId, setProfileId] = useState<string | null>(null);
   /** Bumped when friendships change, so an open profile reloads. */
   const [socialVersion, setSocialVersion] = useState(0);
@@ -130,7 +130,7 @@ export function SocialProvider({
               action: {
                 label: "Voir",
                 onClick: () => {
-                  setFriendsTab("requests");
+                  setFriendsFocus("requests");
                   setFriendsOpen(true);
                 },
               },
@@ -439,8 +439,8 @@ export function SocialProvider({
     [mutate],
   );
 
-  const openFriends = useCallback((tab: FriendsTab = "friends") => {
-    setFriendsTab(tab);
+  const openFriends = useCallback((focus: FriendsFocus = "friends") => {
+    setFriendsFocus(focus);
     setFriendsOpen(true);
   }, []);
   /**
@@ -500,8 +500,7 @@ export function SocialProvider({
       <FriendsSheet
         open={friendsOpen}
         onOpenChange={setFriendsOpen}
-        tab={friendsTab}
-        onTabChange={setFriendsTab}
+        focus={friendsFocus}
       />
       <PlayerProfileDialog
         playerId={profileId}
