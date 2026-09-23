@@ -34,7 +34,7 @@ import { formatFriendCode, type PlayerProfile } from "@/lib/social";
 import { usePlayerProfile } from "@/lib/social-api";
 import { PlayerAvatar } from "./player-avatar";
 import {
-  BalanceHero,
+  Balance,
   ProfileGames,
   ProfileOverview,
   ProfileRecords,
@@ -201,7 +201,7 @@ function ProfileBody({
               </div>
             </div>
             {self ? (
-              <BalanceHero balance={balance} />
+              <Balance balance={balance} />
             ) : (
               <RelationActions profile={profile} onChanged={onChanged} />
             )}

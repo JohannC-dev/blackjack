@@ -16,7 +16,6 @@ import {
   TrendingDown,
   TrendingUp,
   Trophy,
-  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -201,32 +200,15 @@ export function NoStatsYet({
   );
 }
 
-/** The chip balance: the first figure of a player's own profile. */
-export function BalanceHero({ balance }: { balance: number }) {
+/** The chip balance, plain: the figure and what it counts. */
+export function Balance({ balance }: { balance: number }) {
   return (
-    <section
-      className="relative shrink-0 overflow-hidden rounded-2xl border border-minuit-purple/25 bg-minuit-purple/[0.07] px-4 py-3 sm:px-5 sm:py-3.5"
-      aria-label="Solde de jetons"
-    >
-      <div
-        className="pointer-events-none absolute -top-16 -right-8 size-44 rounded-full bg-[radial-gradient(closest-side,#a880f33d,transparent)]"
-        aria-hidden="true"
-      />
-      <p className="relative flex items-center gap-2 text-[10px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
-        <Wallet className="size-3.5" aria-hidden="true" />
-        Solde de jetons
-      </p>
-      <p className="relative mt-1.5 flex items-baseline gap-2 font-display text-2xl leading-none font-semibold tabular-nums sm:text-3xl">
-        <Coins
-          className="size-6 shrink-0 self-center text-minuit-purple"
-          aria-hidden="true"
-        />
-        {credits(balance)}
-        <span className="text-sm font-normal text-muted-foreground">
-          crédits
-        </span>
-      </p>
-    </section>
+    <p className="shrink-0 font-display text-3xl leading-none font-semibold tabular-nums sm:text-4xl">
+      {credits(balance)}
+      <span className="ml-2 text-sm font-normal text-muted-foreground">
+        crédits
+      </span>
+    </p>
   );
 }
 
