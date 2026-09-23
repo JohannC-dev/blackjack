@@ -205,24 +205,24 @@ export function NoStatsYet({
 export function BalanceHero({ balance }: { balance: number }) {
   return (
     <section
-      className="relative overflow-hidden rounded-2xl border border-minuit-purple/25 bg-minuit-purple/[0.07] px-5 py-5 sm:px-6 sm:py-6"
+      className="relative flex items-center justify-between gap-4 overflow-hidden rounded-2xl border border-minuit-purple/25 bg-minuit-purple/[0.07] px-4 py-3 sm:px-5"
       aria-label="Solde de jetons"
     >
       <div
-        className="pointer-events-none absolute -top-20 -right-10 size-56 rounded-full bg-[radial-gradient(closest-side,#a880f33d,transparent)]"
+        className="pointer-events-none absolute -top-16 -right-8 size-44 rounded-full bg-[radial-gradient(closest-side,#a880f33d,transparent)]"
         aria-hidden="true"
       />
       <p className="relative flex items-center gap-2 text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
         <Wallet className="size-3.5" aria-hidden="true" />
         Solde de jetons
       </p>
-      <p className="relative mt-3 flex items-baseline gap-2.5 font-display text-4xl leading-none font-semibold tabular-nums sm:text-5xl">
+      <p className="relative flex items-baseline gap-2 font-display text-2xl leading-none font-semibold tabular-nums sm:text-3xl">
         <Coins
-          className="size-7 shrink-0 self-center text-minuit-purple sm:size-8"
+          className="size-6 shrink-0 self-center text-minuit-purple"
           aria-hidden="true"
         />
         {credits(balance)}
-        <span className="text-base font-normal text-muted-foreground">
+        <span className="text-sm font-normal text-muted-foreground">
           crédits
         </span>
       </p>
@@ -230,21 +230,15 @@ export function BalanceHero({ balance }: { balance: number }) {
   );
 }
 
-/**
- * The headline: the balance first, then what was played and the money when it
- * is shared.
- */
+/** The headline: what was played, and the money when it is shared. */
 export function ProfileOverview({
   stats,
   name,
   relation,
-  balance,
 }: {
   stats: PlayerStats;
   name: string;
   relation: Relation;
-  /** The player's own chip balance, shown first. Null for other players. */
-  balance: number | null;
 }) {
   const { summary } = stats;
   const who = relation === "self" ? "Vous" : name;
@@ -252,8 +246,6 @@ export function ProfileOverview({
 
   return (
     <div className="space-y-7">
-      {balance !== null && <BalanceHero balance={balance} />}
-
       {!summary.played ? (
         <NoStatsYet name={name} relation={relation} />
       ) : (

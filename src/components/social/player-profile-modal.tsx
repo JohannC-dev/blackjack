@@ -33,7 +33,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatFriendCode, type PlayerProfile } from "@/lib/social";
 import { usePlayerProfile } from "@/lib/social-api";
 import { PlayerAvatar } from "./player-avatar";
-import { ProfileGames, ProfileOverview, ProfileRecords } from "./profile-stats";
+import {
+  BalanceHero,
+  ProfileGames,
+  ProfileOverview,
+  ProfileRecords,
+} from "./profile-stats";
 import { ReferralPanel } from "./referral-panel";
 import { useSocial } from "./social-provider";
 import { VisibilitySettings } from "./visibility-settings";
@@ -76,7 +81,7 @@ export function PlayerProfileModal({
     <Dialog open={!!playerId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="flex max-h-[min(90dvh,860px)] w-[calc(100vw-1.5rem)] max-w-[880px] flex-col gap-0 overflow-hidden rounded-2xl border-white/[0.07] bg-[#15121d] p-0 font-sans text-foreground shadow-[0_40px_120px_#000000cc] sm:max-w-[880px]"
+        className="flex h-[min(92dvh,840px)] w-[calc(100vw-1.5rem)] max-w-[880px] flex-col gap-0 overflow-hidden rounded-2xl border-white/[0.07] bg-[#15121d] p-0 font-sans text-foreground shadow-[0_40px_120px_#000000cc] sm:max-w-[880px]"
       >
         <CloseButton />
         {profile ? (
@@ -219,8 +224,13 @@ function ProfileBody({
           </dl>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-5 pb-7 sm:px-7">
-        <ProfileSections profile={profile} balance={balance} />
+      {self && (
+        <div className="shrink-0 px-5 pt-4 sm:px-7">
+          <BalanceHero balance={balance} />
+        </div>
+      )}
+      <div className="scroll-hidden min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-4 pb-7 sm:px-7">
+        <ProfileSections profile={profile} />
       </div>
     </>
   );
@@ -257,13 +267,7 @@ function IdentityFact({
  * Everything below the identity card. Parrainage and confidentialité are two
  * separate tabs: a reward programme and a setting have nothing in common.
  */
-function ProfileSections({
-  profile,
-  balance,
-}: {
-  profile: PlayerProfile;
-  balance: number;
-}) {
+function ProfileSections({ profile }: { profile: PlayerProfile }) {
   const self = profile.relation === "self";
 
   if (!profile.stats)
@@ -312,7 +316,6 @@ function ProfileSections({
           stats={profile.stats}
           name={profile.name}
           relation={profile.relation}
-          balance={self ? balance : null}
         />
       </TabsContent>
       <TabsContent value="games" className="pt-6">
