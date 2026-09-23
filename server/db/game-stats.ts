@@ -5,7 +5,14 @@ import type { GameResult, WalletOperation } from "../game-wallet";
 import { toMinor } from "./money";
 import { playerGameResult, playerGameStats } from "./schema";
 
-const GAMES = new Set(["blackjack", "roulette", "poker", "tower", "mines"]);
+const GAMES = new Set([
+  "blackjack",
+  "roulette",
+  "poker",
+  "tower",
+  "mines",
+  "chicken",
+]);
 
 /** Called only after the corresponding wallet entry has been inserted. */
 export const applyWalletStatDelta = (operation: WalletOperation) =>

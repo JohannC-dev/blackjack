@@ -168,3 +168,11 @@ label[data-slot] {
   font-weight: 700;
   cursor: pointer;
 }
+
+/* A pane that scrolls without showing a bar, used by the profile modal. */
+.scroll-hidden {
+  scrollbar-width: none;
+}
+.scroll-hidden::-webkit-scrollbar {
+  display: none;
+}

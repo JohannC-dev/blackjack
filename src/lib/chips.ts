@@ -208,3 +208,24 @@ export function chipLabel(amount: number) {
   }
   return String(amount);
 }
+
+/** Anything that can report a wallet balance, whatever game is on screen. */
+type BalanceGame = {
+  balance: number | null;
+  pokerState: { balance: number } | null;
+  state: { players: Array<{ id: string; balance: number }> } | null;
+  playerId: string;
+  profile: { balance: number } | null;
+};
+
+/** The one balance the club shows, wherever it comes from. */
+export function getClubBalance(game: BalanceGame) {
+  return (
+    game.balance ??
+    game.pokerState?.balance ??
+    game.state?.players.find((player) => player.id === game.playerId)
+      ?.balance ??
+    game.profile?.balance ??
+    0
+  );
+}

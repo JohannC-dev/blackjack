@@ -17,6 +17,7 @@ import { MinesCasino } from "../games/mines/mines-casino";
 import { CasinoHome, PokerCasino } from "../games/poker/poker-casino";
 import { RouletteCasino } from "../games/roulette/roulette-casino";
 import { TowerCasino } from "../games/tower/tower-casino";
+import { ChickenCasino } from "../games/chicken/chicken-casino";
 import { SocialProvider } from "../social/social-provider";
 
 export function Casino() {
@@ -55,6 +56,8 @@ export function Casino() {
       <PokerCasino game={game} onNavigate={navigate} />
     ) : view === "tower" ? (
       <TowerCasino game={game} onNavigate={navigate} />
+    ) : view === "chicken" ? (
+      <ChickenCasino game={game} onNavigate={navigate} />
     ) : view === "mines" ? (
       <MinesCasino game={game} onNavigate={navigate} />
     ) : view === "roulette" ? (
@@ -70,11 +73,13 @@ export function Casino() {
   const pokerExitDestination =
     pendingView === "mines"
       ? "le jeu de la Mine"
-      : pendingView === "roulette"
-        ? "la Roulette"
-        : pendingView === "home"
-          ? "l\u2019accueil du club"
-          : "le Blackjack";
+      : pendingView === "chicken"
+        ? "Chicken"
+        : pendingView === "roulette"
+          ? "la Roulette"
+          : pendingView === "home"
+            ? "l\u2019accueil du club"
+            : "le Blackjack";
 
   return (
     <ServerClockProvider offset={game.serverTimeOffset}>

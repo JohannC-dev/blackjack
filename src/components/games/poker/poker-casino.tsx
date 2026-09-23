@@ -56,6 +56,7 @@ import { EmoteButton, EmoteLayer, type EmotePlayer } from "../../ui/emotes";
 import { GamePoster } from "../../ui/game-poster";
 import { MineBomb, MineDiamond } from "../mines/mine-art";
 import { TowerPosterArt } from "../tower/tower-art";
+import { ChickenArt } from "../chicken/chicken-art";
 import { RoulettePosterArt } from "../roulette/roulette-wheel";
 
 type Game = ReturnType<typeof useGame>;
@@ -104,7 +105,7 @@ export function CasinoHome({
                 <em>votre table.</em>
               </h1>
               <p>
-                Cinq jeux, un seul portefeuille. Entrez sans attendre — les
+                Six jeux, un seul portefeuille. Entrez sans attendre — les
                 cartes et la grille sont déjà prêtes.
               </p>
               <div className="club-trust">
@@ -229,6 +230,22 @@ export function CasinoHome({
               description="Choisissez votre objectif, trouvez les diamants, encaissez."
               action="Commencer l’extraction"
               onClick={() => onNavigate("mines")}
+            />
+            <GamePoster
+              className="chicken-poster"
+              index="06"
+              artClassName="chicken-poster-art"
+              art={
+                <>
+                  <span className="chicken-poster-road" />
+                  <ChickenArt />
+                </>
+              }
+              eyebrow="NOUVEAU · SOLO & LIVE"
+              title="Chicken"
+              description="Sautez, encaissez et croisez les autres poulets sur la route."
+              action="Traverser la route"
+              onClick={() => onNavigate("chicken")}
             />
           </section>
         </main>

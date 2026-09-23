@@ -1,4 +1,5 @@
-export { CasinoRail, ClubHeader, getClubBalance } from "./casino-shell";
+export { CasinoRail, ClubHeader } from "./casino-shell";
+export { getClubBalance } from "@/lib/chips";
 export { BlackjackIcon } from "./blackjack-icon";
 export { Chip } from "./chip";
 export { CountdownText, useCountdownSeconds } from "./countdown";

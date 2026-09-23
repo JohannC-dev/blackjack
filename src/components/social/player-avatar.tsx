@@ -21,7 +21,7 @@ export function PlayerAvatar({
   name: string;
   /** Shows a presence dot when defined. */
   online?: boolean;
-  size?: "sm" | "default" | "lg" | "xl";
+  size?: "sm" | "default" | "lg" | "xl" | "2xl";
   className?: string;
 }) {
   const hue = hueOf(id);
@@ -33,16 +33,19 @@ export function PlayerAvatar({
           size === "default" && "size-9",
           size === "lg" && "size-11",
           size === "xl" && "size-16",
+          size === "2xl" && "size-20 sm:size-24",
         )}
       >
         <AvatarFallback
           className={cn(
             "font-bold text-white/90",
-            size === "xl"
-              ? "text-2xl"
-              : size === "lg"
-                ? "text-base"
-                : "text-xs",
+            size === "2xl"
+              ? "text-4xl"
+              : size === "xl"
+                ? "text-2xl"
+                : size === "lg"
+                  ? "text-base"
+                  : "text-xs",
           )}
           style={{
             background: `linear-gradient(140deg, hsl(${hue} 42% 38%), hsl(${(hue + 40) % 360} 36% 22%))`,
@@ -55,7 +58,7 @@ export function PlayerAvatar({
         <span
           className={cn(
             "absolute right-0 bottom-0 block rounded-full ring-2 ring-popover",
-            size === "xl" ? "size-3.5" : "size-2.5",
+            size === "2xl" ? "size-4" : size === "xl" ? "size-3.5" : "size-2.5",
             online ? "bg-minuit-mint" : "bg-[#4b4559]",
           )}
           aria-hidden="true"
