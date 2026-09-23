@@ -61,6 +61,11 @@ import {
   copyBetChips,
   emptyBetChips,
 } from "@/lib/chips";
+import {
+  REFERRAL_WELCOME_BALANCE,
+  REFERRAL_WELCOME_BONUS,
+} from "@/lib/referral";
+import { normalizeFriendCode } from "@/lib/social";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
 import { useGameAudio } from "@/lib/audio-context";
 import type {
@@ -1110,6 +1115,7 @@ export function BlackjackCasino({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authMode, setAuthMode] = useState<"sign-in" | "sign-up">("sign-up");
+  const [referralCode, setReferralCode] = useState("");
   const [authPending, setAuthPending] = useState(false);
   const [tableCode, setTableCode] = useState("");
   const [selectedSeat, setSelectedSeat] = useState(2);
@@ -2167,7 +2173,13 @@ export function BlackjackCasino({
             <span className="floating-star star-one">✦</span>
             <span className="floating-star star-two">✧</span>
             <span className="welcome-art-tag">
-              <Coins size={13} />2 000 crédits offerts
+              <Coins size={13} />
+              {credits(
+                authMode === "sign-up" && normalizeFriendCode(referralCode)
+                  ? REFERRAL_WELCOME_BALANCE
+                  : INITIAL_CREDIT_BALANCE,
+              )}{" "}
+              crédits offerts
             </span>
           </div>
           <div className="welcome-content">
@@ -2191,6 +2203,8 @@ export function BlackjackCasino({
                   name: authMode === "sign-up" ? name : undefined,
                   email,
                   password,
+                  referralCode:
+                    authMode === "sign-up" ? referralCode : undefined,
                 });
                 setAuthPending(false);
                 if (message) game.setError(message);
@@ -2235,6 +2249,31 @@ export function BlackjackCasino({
                   authMode === "sign-up" ? "new-password" : "current-password"
                 }
               />
+              {authMode === "sign-up" && (
+                <>
+                  <label htmlFor="player-referral">
+                    Code de parrainage{" "}
+                    <span className="welcome-optional">facultatif</span>
+                  </label>
+                  <input
+                    id="player-referral"
+                    placeholder="ABCD-EFGH"
+                    value={referralCode}
+                    onChange={(event) =>
+                      setReferralCode(event.target.value.toUpperCase())
+                    }
+                    maxLength={9}
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-describedby="player-referral-help"
+                  />
+                  <p id="player-referral-help" className="welcome-hint">
+                    {normalizeFriendCode(referralCode)
+                      ? `Votre parrain vous offre ${credits(REFERRAL_WELCOME_BONUS)} crédits de plus.`
+                      : "Le code d’un joueur du club, pour démarrer avec 50 % de crédits en plus."}
+                  </p>
+                </>
+              )}
               <button
                 className="button primary"
                 type="submit"

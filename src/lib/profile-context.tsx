@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from "react";
 import { authClient } from "./auth-client";
+import { REFERRAL_CODE_FIELD } from "./referral";
+import { normalizeFriendCode } from "./social";
 import type { Profile } from "./types";
 
 export type Credentials = {
@@ -17,6 +19,8 @@ export type Credentials = {
   readonly email: string;
   readonly password: string;
   readonly name?: string;
+  /** Parrainage code, only ever accepted while signing up. */
+  readonly referralCode?: string;
 };
 
 type ProfileContextValue = {
@@ -59,10 +63,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   const authenticate = useCallback(async (credentials: Credentials) => {
     if (credentials.mode === "sign-up") {
+      const referralCode = normalizeFriendCode(credentials.referralCode ?? "");
       const result = await authClient.signUp.email({
         name: credentials.name?.trim() ?? "",
         email: credentials.email.trim(),
         password: credentials.password,
+        // Travels with the sign-up: the server binds the parrainage there.
+        ...(referralCode ? { [REFERRAL_CODE_FIELD]: referralCode } : {}),
       });
       return result.error?.message ?? null;
     }

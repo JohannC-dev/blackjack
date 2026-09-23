@@ -4172,6 +4172,25 @@ h1 > span:not(.live-tag) {
   font-size: 11px;
   padding: 14px;
 }
+.welcome-optional {
+  color: #7d6e8a;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.welcome-hint {
+  margin-top: 7px;
+  font-size: 9px;
+  line-height: 1.5;
+  color: #8d7f9b;
+}
+#player-referral {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+#player-referral::placeholder {
+  letter-spacing: 0.18em;
+}
 .welcome-content .button {
   width: 100%;
   margin-top: 13px;

@@ -21,6 +21,8 @@ import { RecordingGameWallet } from "./game-wallet";
 import { refillWallet } from "./refill";
 import { handleSocialRequest } from "./social/http";
 import { areFriends, friendIdsOf } from "./social/repository";
+import { handleReferralRequest } from "./referral/http";
+import { onReferralCompleted } from "./referral/events";
 import {
   GameError,
   ServerClock,
@@ -113,6 +115,12 @@ const http = createServer(async (req, res) => {
     })
   )
     return;
+  if (
+    await handleReferralRequest(req, res, {
+      isOnline: (userId) => !!playerSockets.get(userId)?.size,
+    })
+  )
+    return;
   handler(req, res);
 });
 const io = new Server(http, {
@@ -166,6 +174,22 @@ function notifySocial(userIds: readonly string[]) {
   for (const userId of new Set(userIds))
     emitToPlayer(userId, "friends:changed");
 }
+
+/**
+ * A filleul just signed up with a parrainage code. A connected parrain sees
+ * their new credits and their filleul straight away.
+ */
+onReferralCompleted((event) => {
+  const parrain = playersById.get(event.parrainId);
+  if (parrain)
+    Effect.runPromise(refreshWalletEffect(parrain)).catch((error: unknown) =>
+      console.error("Parrainage · portefeuille", error),
+    );
+  emitToPlayer(event.parrainId, "referral:filleul", {
+    filleul: event.filleul,
+    tiers: event.tiers,
+  });
+});
 
 /** A player came online or left: their friends refresh their list. */
 function notifyPresence(userId: string) {

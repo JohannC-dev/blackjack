@@ -22,6 +22,8 @@ import {
   type SocialOverview,
 } from "@/lib/social";
 import { SocialApiError, socialApi } from "@/lib/social-api";
+import { credits } from "@/lib/rules";
+import type { ReferralTier } from "@/lib/referral";
 import type { Ack } from "@/lib/types";
 import type { useGame } from "@/lib/use-game";
 import { FriendsSheet, type FriendsTab } from "./friends-sheet";
@@ -49,6 +51,8 @@ type SocialContextValue = {
   gameInvites: GameInvite[];
   /** Received friend requests and game invitations waiting for an answer. */
   pendingCount: number;
+  /** Bumped when a filleul arrives, so an open parrainage panel reloads. */
+  referralVersion: number;
   inviteContext: InviteContext;
   privateInvite: boolean;
   setPrivateInvite: (value: boolean) => void;
@@ -103,6 +107,8 @@ export function SocialProvider({
   const [profileId, setProfileId] = useState<string | null>(null);
   /** Bumped when friendships change, so an open profile reloads. */
   const [socialVersion, setSocialVersion] = useState(0);
+  /** Bumped when the parrainage changed, so its panel reloads. */
+  const [referralVersion, setReferralVersion] = useState(0);
   /** Private Roulette table this player created or was invited to. */
   const [privateRouletteId, setPrivateRouletteId] = useState<string | null>(
     null,
@@ -183,18 +189,33 @@ export function SocialProvider({
         },
       });
     };
+    const onFilleul = (event: {
+      filleul?: { name?: string };
+      tiers?: ReferralTier[];
+    }) => {
+      const name = event?.filleul?.name?.trim() || "Un joueur";
+      const tier = event?.tiers?.[event.tiers.length - 1];
+      toast.success(`${name} a rejoint le club avec votre code`, {
+        description: tier
+          ? `Palier « ${tier.label} » atteint · ${credits(tier.reward)} crédits`
+          : "Votre parrainage avance.",
+      });
+      setReferralVersion((version) => version + 1);
+    };
     const onReply = (reply: GameInviteReply) => {
       if (!reply?.by) return;
       if (reply.accepted) toast.success(`${reply.by.name} vous rejoint.`);
       else toast(`${reply.by.name} a décliné votre invitation.`);
     };
     socket.on("friends:changed", onChanged);
+    socket.on("referral:filleul", onFilleul);
     socket.on("friends:invite", onInvite);
     socket.on("friends:invite:reply", onReply);
     // Presence may have changed while disconnected.
     socket.on("connect", onChanged);
     return () => {
       socket.off("friends:changed", onChanged);
+      socket.off("referral:filleul", onFilleul);
       socket.off("friends:invite", onInvite);
       socket.off("friends:invite:reply", onReply);
       socket.off("connect", onChanged);
@@ -437,6 +458,7 @@ export function SocialProvider({
       error,
       gameInvites,
       pendingCount: (overview?.incoming.length ?? 0) + gameInvites.length,
+      referralVersion,
       inviteContext,
       privateInvite,
       setPrivateInvite,
@@ -464,6 +486,7 @@ export function SocialProvider({
       openProfile,
       overview,
       privateInvite,
+      referralVersion,
       refresh,
       remove,
       respond,
