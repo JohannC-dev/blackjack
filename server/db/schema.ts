@@ -347,6 +347,17 @@ export const playerCosmetic = pgTable(
   (table) => [primaryKey({ columns: [table.userId, table.cosmeticId] })],
 );
 
+/** The release currently advertised to connected browsers. */
+export const deploymentVersion = pgTable(
+  "deployment_version",
+  {
+    id: integer("id").primaryKey(),
+    codeRevision: text("code_revision").notNull(),
+    databaseRevision: text("database_revision").notNull(),
+  },
+  (table) => [check("deployment_version_singleton", sql`${table.id} = 1`)],
+);
+
 export const authSchema = { user, session, account, verification };
 export const schema = {
   ...authSchema,
@@ -359,4 +370,5 @@ export const schema = {
   referral,
   referralReward,
   playerCosmetic,
+  deploymentVersion,
 };

@@ -8,6 +8,10 @@ import { Table, type Player } from "./engine";
 import { auth } from "./auth";
 import { runDatabase } from "./db/client";
 import {
+  currentDeploymentVersion,
+  publishDeploymentVersion,
+} from "./db/version";
+import {
   applyWalletOperations,
   getOrCreateWallet,
   readWallet,
@@ -77,6 +81,20 @@ const http = createServer(async (req, res) => {
   if (req.url === "/api/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+  if (req.url === "/api/version" && req.method === "GET") {
+    try {
+      const version = await currentDeploymentVersion();
+      res.writeHead(200, {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Content-Type": "application/json",
+      });
+      res.end(JSON.stringify(version));
+    } catch {
+      res.writeHead(503, { "Cache-Control": "no-store" });
+      res.end();
+    }
     return;
   }
   if (req.url === "/api/profile" && req.method === "GET") {
@@ -1063,6 +1081,7 @@ const listenEffect = Effect.async<void, GameError>((resume) => {
   http.listen(port, hostname, () => resume(Effect.succeed(undefined)));
 });
 await Effect.runPromise(listenEffect);
+if (!dev) await publishDeploymentVersion();
 console.log(
   `MINUIT · http://localhost:${port} · ${dev ? "development" : "production"}`,
 );

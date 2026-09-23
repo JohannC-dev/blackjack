@@ -68,6 +68,7 @@ export function useGame() {
     socketRef.current = socket;
     setSocket(socket);
     socket.on("connect", () => {
+      window.dispatchEvent(new Event("deployment:check"));
       walletSeq.current = 0;
       const synchronizeClock = () => {
         const sentAt = Date.now();
