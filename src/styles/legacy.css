@@ -2075,6 +2075,26 @@ button:disabled:active {
   gap: 24px;
   margin-left: auto;
 }
+.topbar-right .global-sound {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  color: #9289a4;
+  background: #201b2c;
+  border-color: #3b2e51;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease;
+}
+.topbar-right .global-sound:hover,
+.topbar-right .global-sound.active {
+  color: #c8b1ff;
+  border-color: #8c6db9;
+}
+.topbar-right .global-sound:focus-visible {
+  outline: 2px solid #b79afa;
+  outline-offset: 2px;
+}
 .play-money {
   font-size: 8px;
   letter-spacing: 1.15px;

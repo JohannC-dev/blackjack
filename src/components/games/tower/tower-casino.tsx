@@ -8,7 +8,6 @@ import {
   Skull,
   Sparkles,
   Users,
-  Volume2,
   X,
 } from "lucide-react";
 import {
@@ -36,6 +35,7 @@ import {
   towerPayout,
 } from "@/lib/tower";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
+import { useGameAudio } from "@/lib/audio-context";
 import {
   playTowerCashout,
   playTowerCollapse,
@@ -110,10 +110,12 @@ export function TowerCasino({
   /** Floor shown while a Lucky Tower rides to the top, for the show only. */
   const [climb, setClimb] = useState<number | null>(null);
   const [pendingPick, setPendingPick] = useState<number | null>(null);
-  const [sound, setSound] = useState(false);
+  const { enabled: sound, contextRef: audioRef } = useGameAudio(
+    preloadCasinoSounds,
+    preloadTowerSounds,
+  );
   const [rulesOpen, setRulesOpen] = useState(false);
   const [metrics, setMetrics] = useState({ view: 0, tower: 0, pitch: 0 });
-  const audioRef = useRef<AudioContext | null>(null);
   const soundRef = useRef(false);
   soundRef.current = sound;
   const timers = useRef<number[]>([]);
@@ -415,20 +417,6 @@ export function TowerCasino({
                 <Users size={15} />
                 {ghosts.filter((ghost) => ghost.status === "playing").length}
               </span>
-              <button
-                type="button"
-                className={`poker-sound ${sound ? "active" : ""}`}
-                aria-label={sound ? "Couper les sons" : "Activer les sons"}
-                onClick={() => {
-                  const context = (audioRef.current ??= new AudioContext());
-                  void context.resume();
-                  preloadCasinoSounds(context);
-                  preloadTowerSounds(context);
-                  setSound(!sound);
-                }}
-              >
-                <Volume2 size={15} />
-              </button>
               <button
                 type="button"
                 className="poker-sound"

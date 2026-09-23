@@ -39,7 +39,6 @@ import {
   Sparkles,
   Spade,
   Users,
-  Volume2,
   Wallet,
   X,
 } from "lucide-react";
@@ -63,6 +62,7 @@ import {
   emptyBetChips,
 } from "@/lib/chips";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
+import { useGameAudio } from "@/lib/audio-context";
 import type {
   Bet,
   BetChips,
@@ -985,25 +985,21 @@ const BlackjackPageHeading = memo(function BlackjackPageHeading({
 const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
   connected,
   tableId,
-  sound,
   isFullscreen,
   seatCount,
   playerId,
   emotePlayers,
-  onToggleSound,
   onToggleFullscreen,
   onOpenTables,
   onSendEmote,
 }: {
   connected: boolean;
   tableId: string;
-  sound: boolean;
   isFullscreen: boolean;
   seatCount: number;
   playerId: string;
   emotePlayers: EmotePlayer[];
   onSendEmote: (request: EmoteRequest) => void;
-  onToggleSound: () => void;
   onToggleFullscreen: () => void;
   onOpenTables: () => void;
 }) {
@@ -1023,17 +1019,6 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
           seated={emotePlayers.some((player) => player.id === playerId)}
           onSend={onSendEmote}
         />
-        <button
-          type="button"
-          className={`poker-sound ${sound ? "active" : ""}`}
-          aria-label={
-            sound ? "Couper les sons Blackjack" : "Activer les sons Blackjack"
-          }
-          aria-pressed={sound}
-          onClick={onToggleSound}
-        >
-          <Volume2 size={15} />
-        </button>
         <button
           type="button"
           className={`poker-sound table-fullscreen-button ${isFullscreen ? "active" : ""}`}
@@ -1100,14 +1085,14 @@ export function BlackjackCasino({
     error: boolean;
     visible: boolean;
   } | null>(null);
-  const [sound, setSound] = useState(false);
+  const { enabled: sound, contextRef: audioRef } =
+    useGameAudio(preloadCasinoSounds);
   const [doubleChoice, setDoubleChoice] = useState<string | null>(null);
   const [doubleChoiceClosing, setDoubleChoiceClosing] = useState(false);
   const [gambleOpen, setGambleOpen] = useState(false);
   const [gamblePromptFeatured, setGamblePromptFeatured] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<AudioContext | null>(null);
   const previousCards = useRef(0);
   const previousOwnBet = useRef(0);
   const hasSeenOwnBet = useRef(false);
@@ -1502,14 +1487,6 @@ export function BlackjackCasino({
       setModal("invite");
     }
   }, [shareUrl]);
-  const toggleSound = useCallback(() => {
-    if (!sound) {
-      const context = (audioRef.current ??= new AudioContext());
-      void context.resume();
-      preloadCasinoSounds(context);
-    }
-    setSound(!sound);
-  }, [sound]);
   const toggleFullscreen = useCallback(async () => {
     const shell = shellRef.current;
     if (!shell) return;
@@ -1602,7 +1579,6 @@ export function BlackjackCasino({
                   tableId={
                     state?.visibility === "private" ? state.id : "PUBLIQUE"
                   }
-                  sound={sound}
                   isFullscreen={isFullscreen}
                   seatCount={
                     state?.seats.filter((seat) => seat.playerId).length ?? 0
@@ -1610,7 +1586,6 @@ export function BlackjackCasino({
                   playerId={playerId}
                   emotePlayers={emotePlayers}
                   onSendEmote={game.sendEmote}
-                  onToggleSound={toggleSound}
                   onToggleFullscreen={toggleFullscreen}
                   onOpenTables={openTables}
                 />

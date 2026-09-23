@@ -8,7 +8,6 @@ import {
   Plus,
   Repeat2,
   Square,
-  Volume2,
   X,
 } from "lucide-react";
 import {
@@ -21,6 +20,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
+import { useGameAudio } from "@/lib/audio-context";
 import {
   MINES_MAX_BET,
   MINES_MIN_BET,
@@ -603,7 +603,10 @@ export function MinesCasino({
   const state = game.minesState;
   const [bet, setBet] = useState<number>(MINES_MIN_BET);
   const [target, setTarget] = useState<MinesTarget>(200);
-  const [sound, setSound] = useState(false);
+  const { enabled: sound, contextRef: audioRef } = useGameAudio(
+    preloadCasinoSounds,
+    preloadTowerSounds,
+  );
   const [pattern, setPattern] = useState<number[]>([]);
   const [patternMode, setPatternMode] = useState(false);
   const [looping, setLooping] = useState(false);
@@ -625,7 +628,6 @@ export function MinesCasino({
     () => cells.filter((cell) => cell.status === "hidden").length,
     [cells],
   );
-  const audioRef = useRef<AudioContext | null>(null);
   const soundRef = useRef(false);
   soundRef.current = sound;
   const previousState = useRef<MinesState | null>(null);
@@ -891,22 +893,6 @@ export function MinesCasino({
               <h1>
                 La <em>Mine</em>
               </h1>
-            </div>
-            <div className="mines-page-actions">
-              <button
-                type="button"
-                className={`poker-sound ${sound ? "active" : ""}`}
-                aria-label={sound ? "Couper les sons" : "Activer les sons"}
-                onClick={() => {
-                  const context = (audioRef.current ??= new AudioContext());
-                  void context.resume();
-                  preloadCasinoSounds(context);
-                  preloadTowerSounds(context);
-                  setSound(!sound);
-                }}
-              >
-                <Volume2 size={15} />
-              </button>
             </div>
           </header>
 

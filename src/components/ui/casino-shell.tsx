@@ -8,9 +8,12 @@ import {
   Settings2,
   Spade,
   Users,
+  Volume2,
+  VolumeX,
   Wallet,
 } from "lucide-react";
 import { memo, type ReactNode } from "react";
+import { useAudioSettings } from "@/lib/audio-context";
 import { credits } from "@/lib/rules";
 import type { CasinoView } from "@/lib/navigation";
 import { BlackjackIcon } from "./blackjack-icon";
@@ -171,6 +174,7 @@ export const ClubHeader = memo(function ClubHeader({
   href?: string;
   onSignOut?: () => void | Promise<void>;
 }) {
+  const { enabled: soundEnabled, toggle: toggleSound } = useAudioSettings();
   const brand = (
     <>
       MINUIT<span>&#9679;</span>
@@ -188,6 +192,20 @@ export const ClubHeader = memo(function ClubHeader({
       )}
       <span className="topbar-divider" />
       <div className="topbar-right">
+        <button
+          type="button"
+          className={`poker-sound global-sound ${soundEnabled ? "active" : ""}`}
+          aria-label={
+            soundEnabled ? "Couper tous les sons" : "Activer tous les sons"
+          }
+          title={
+            soundEnabled ? "Couper tous les sons" : "Activer tous les sons"
+          }
+          aria-pressed={soundEnabled}
+          onClick={toggleSound}
+        >
+          {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
+        </button>
         <div className="wallet">
           <Wallet size={17} />
           <b key={balance}>{credits(balance)}</b>

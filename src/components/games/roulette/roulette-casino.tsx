@@ -1,8 +1,9 @@
 "use client";
 
-import { Check, CircleDot, Repeat2, RotateCcw, Volume2, X } from "lucide-react";
+import { Check, CircleDot, Repeat2, RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
+import { useGameAudio } from "@/lib/audio-context";
 import { CASINO_CHIP_DENOMINATIONS, mergeChipCounts } from "@/lib/chips";
 import {
   ROULETTE_MAX_BETS,
@@ -44,8 +45,8 @@ export function RouletteCasino({
   const { enterRoulette, leaveRoulette } = game;
   const [chip, setChip] = useState<number>(CASINO_CHIP_DENOMINATIONS[0]);
   const [undo, setUndo] = useState<RouletteBet[][]>([]);
-  const [sound, setSound] = useState(false);
-  const audioRef = useRef<AudioContext | null>(null);
+  const { enabled: sound, contextRef: audioRef } =
+    useGameAudio(preloadCasinoSounds);
   const soundRef = useRef(false);
   soundRef.current = sound;
   const stageRef = useRef<HTMLDivElement>(null);
@@ -262,20 +263,6 @@ export function RouletteCasino({
                     </li>
                   ))}
                 </ol>
-                <button
-                  type="button"
-                  className={`poker-sound ${sound ? "active" : ""}`}
-                  aria-label={sound ? "Couper les sons" : "Activer les sons"}
-                  aria-pressed={sound}
-                  onClick={() => {
-                    const context = (audioRef.current ??= new AudioContext());
-                    void context.resume();
-                    preloadCasinoSounds(context);
-                    setSound(!sound);
-                  }}
-                >
-                  <Volume2 size={15} />
-                </button>
               </div>
             </div>
 
@@ -441,7 +428,7 @@ export function RouletteCasino({
                     key={amount}
                     amount={amount}
                     selected={chip === amount}
-                    disabled={!betting || ready}
+                    disabled={!betting || ready || amount > balance - total}
                     onClick={setChip}
                   />
                 ))}

@@ -15,7 +15,6 @@ import {
   Spade,
   Trophy,
   Users,
-  Volume2,
   Wallet,
   X,
 } from "lucide-react";
@@ -42,6 +41,7 @@ import {
   playCasinoSound,
   preloadCasinoSounds,
 } from "@/lib/casino-audio";
+import { useGameAudio } from "@/lib/audio-context";
 import type { PokerAction, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import { CasinoRail, ClubHeader, getClubBalance } from "../../ui";
@@ -413,24 +413,20 @@ const PokerTableHeading = memo(function PokerTableHeading({
   kicker,
   title,
   chatCount,
-  sound,
   totalSeats,
   occupiedSeats,
   onLeave,
   onOpenChat,
-  onToggleSound,
   emoteSlot,
 }: {
   emoteSlot: ReactNode;
   kicker: string;
   title: string;
   chatCount: number;
-  sound: boolean;
   totalSeats: number;
   occupiedSeats: number;
   onLeave: () => void;
   onOpenChat: () => void;
-  onToggleSound: () => void;
 }) {
   return (
     <div className="poker-table-heading">
@@ -453,14 +449,6 @@ const PokerTableHeading = memo(function PokerTableHeading({
         {!!chatCount && <b>{chatCount}</b>}
       </button>
       {emoteSlot}
-      <button
-        type="button"
-        className={`poker-sound ${sound ? "active" : ""}`}
-        aria-label={sound ? "Couper les sons Poker" : "Activer les sons Poker"}
-        onClick={onToggleSound}
-      >
-        <Volume2 size={15} />
-      </button>
       <div className="table-players-count">
         <Users size={16} /> {occupiedSeats} / {totalSeats}
       </div>
@@ -476,8 +464,8 @@ function PokerTable({ game }: { game: Game }) {
   const [chat, setChat] = useState("");
   const [blocked, setBlocked] = useState<string[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
-  const [sound, setSound] = useState(false);
-  const audioRef = useRef<AudioContext | null>(null);
+  const { enabled: sound, contextRef: audioRef } =
+    useGameAudio(preloadCasinoSounds);
   const previousAudioState = useRef({
     hand: table.hand,
     cards: table.community.length,
@@ -671,12 +659,6 @@ function PokerTable({ game }: { game: Game }) {
     void game.pokerCommand({ type: "leave" });
   }, [game.pokerCommand]);
   const openChat = useCallback(() => setChatOpen(true), []);
-  const toggleSound = useCallback(() => {
-    const context = (audioRef.current ??= new AudioContext());
-    void context.resume();
-    preloadCasinoSounds(context);
-    setSound(!sound);
-  }, [sound]);
   return (
     <main className="poker-table-page">
       <EmoteLayer
@@ -693,12 +675,10 @@ function PokerTable({ game }: { game: Game }) {
             : `Blinds ${table.smallBlind} / ${table.bigBlind}`
         }
         chatCount={table.chat.length}
-        sound={sound}
         totalSeats={totalSeats}
         occupiedSeats={table.seats.length}
         onLeave={leaveTable}
         onOpenChat={openChat}
-        onToggleSound={toggleSound}
         emoteSlot={emoteSlot}
       />
       <div className="poker-room-layout">
