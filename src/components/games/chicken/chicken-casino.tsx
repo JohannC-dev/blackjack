@@ -13,9 +13,7 @@ import {
   ArrowRight,
   ChevronDown,
   CircleHelp,
-  LockKeyhole,
   Play,
-  RotateCcw,
   Repeat2,
   Square,
   Users,
@@ -48,7 +46,6 @@ import {
   playChickenStep,
 } from "@/lib/chicken-audio";
 import { useGame } from "@/lib/use-game";
-import { useSocial } from "../../social/social-provider";
 import {
   BetChipPicker,
   CasinoRail,
@@ -82,7 +79,6 @@ export function ChickenCasino({
   game: Game;
   onNavigate: (view: CasinoView) => void;
 }) {
-  const social = useSocial();
   const state = game.chickenState;
   const run = state?.run;
   const active = run?.status === "playing";
@@ -398,49 +394,10 @@ export function ChickenCasino({
             <div className={styles.titleBlock}>
               <span className="eyebrow">LE CLUB / JEU SOLO & LIVE</span>
               <h1>
-                Chicken<span>.</span>
+                Le <span>Poulet</span>
               </h1>
             </div>
             <div className={styles.stripTools}>
-              <span
-                className={styles.liveCount}
-                title="Joueurs sur cette route"
-              >
-                <Users size={15} /> {state?.members ?? 0}/10
-              </span>
-              <span className={styles.roomName}>
-                {state?.visibility === "private"
-                  ? "Salon privé"
-                  : "Route publique"}
-              </span>
-              {state?.visibility === "private" ? (
-                <>
-                  <button
-                    type="button"
-                    className={styles.toolButton}
-                    onClick={() => social.openFriends("friends")}
-                  >
-                    <Users size={15} /> Inviter
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.toolButton}
-                    disabled={disabled || active}
-                    onClick={() => void game.joinChickenRoom(null)}
-                  >
-                    <RotateCcw size={15} /> Public
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  className={styles.toolButton}
-                  disabled={disabled || active}
-                  onClick={() => void game.createPrivateChickenRoom()}
-                >
-                  <LockKeyhole size={15} /> Salon privé
-                </button>
-              )}
               <button
                 type="button"
                 className="poker-sound"

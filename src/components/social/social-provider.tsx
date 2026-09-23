@@ -173,9 +173,13 @@ export function SocialProvider({
         id: `invite-${invite.id}`,
         description: `${INVITE_GAME_LABELS[invite.game]}${
           invite.private
-            ? " · table privée"
+            ? invite.game === "chicken"
+              ? " · route privée"
+              : " · table privée"
             : invite.tableId
-              ? " · sa table"
+              ? invite.game === "chicken"
+                ? " · sa route"
+                : " · sa table"
               : ""
         }`,
         duration: 30_000,
@@ -297,7 +301,7 @@ export function SocialProvider({
         let { tableId } = inviteContext;
         const { game: target } = inviteContext;
         if (
-          (privateInvite || target === "chicken") &&
+          privateInvite &&
           inviteContext.canBePrivate &&
           !inviteContext.isPrivate
         ) {
@@ -315,7 +319,11 @@ export function SocialProvider({
             if (tableId) setPrivateRouletteId(tableId);
           }
           if (!tableId) {
-            toast.error("La table privée n’a pas pu être créée.");
+            toast.error(
+              target === "chicken"
+                ? "La route privée n’a pas pu être créée."
+                : "La table privée n’a pas pu être créée.",
+            );
             return false;
           }
         }
@@ -325,7 +333,11 @@ export function SocialProvider({
             target === "chicken") &&
           !tableId
         ) {
-          toast.error("Votre table est en cours de connexion, réessayez.");
+          toast.error(
+            target === "chicken"
+              ? "Votre route est en cours de connexion, réessayez."
+              : "Votre table est en cours de connexion, réessayez.",
+          );
           return false;
         }
         const ack = await new Promise<Ack | null>((resolve) =>
@@ -345,7 +357,9 @@ export function SocialProvider({
         toast.success(`Invitation envoyée à ${friend.name}.`, {
           description: `${INVITE_GAME_LABELS[target]}${
             tableId && tableId !== inviteContext.tableId
-              ? " · nouvelle table privée"
+              ? target === "chicken"
+                ? " · nouvelle route privée"
+                : " · nouvelle table privée"
               : ""
           }`,
         });

@@ -108,19 +108,20 @@ export class ChickenManager {
     return state;
   }
 
-  /** Only a validated friend invitation grants entrance to a private room. */
+  /** Validates the current room and grants private-room invitations. */
   invite(fromId: string, friendId: string, roomId: string, now = Date.now()) {
     const room = this.roomOf(fromId);
-    if (!room || room.id !== roomId || room.visibility !== "private")
-      throw new Error("Rejoignez d’abord ce salon privé Chicken.");
+    if (!room || room.id !== roomId)
+      throw new Error("Rejoignez d’abord votre route Chicken.");
     if (room.members.size >= CHICKEN_ROOM_SIZE)
       throw new Error(
         "Ce salon est plein. Réessayez lorsqu’une place se libère.",
       );
-    this.grants.set(`${friendId}:${roomId}`, now + INVITE_TTL_MS);
+    if (room.visibility === "private")
+      this.grants.set(`${friendId}:${roomId}`, now + INVITE_TTL_MS);
   }
 
-  /** Opens the public road, a new private road, or an invited private road. */
+  /** Opens the public road, a new private road, or an invited room. */
   enter(
     player: Player,
     options: {
@@ -140,9 +141,8 @@ export class ChickenManager {
       );
     else if (options.roomId) {
       target = this.rooms.get(options.roomId);
-      if (!target || target.visibility !== "private")
-        throw new Error("Ce salon privé n’existe plus.");
-      if (previousId !== target.id) {
+      if (!target) throw new Error("Cette route Chicken n’existe plus.");
+      if (target.visibility === "private" && previousId !== target.id) {
         const expiresAt = this.grants.get(`${player.id}:${target.id}`);
         if (!expiresAt || expiresAt < now)
           throw new Error("Cette invitation Chicken a expiré.");

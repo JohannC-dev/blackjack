@@ -177,15 +177,15 @@ function FriendCodeCard({ code }: { code: string | null }) {
 function InviteSettings() {
   const social = useSocial();
   const context = social.inviteContext;
-  const requiredPrivate = context.game === "chicken";
   const game = INVITE_GAME_LABELS[context.game];
+  const place = context.game === "chicken" ? "route" : "table";
   const destination = !context.canBePrivate
     ? `${game} · votre ami rejoindra le jeu`
     : context.isPrivate
-      ? `${game} · votre table privée`
-      : requiredPrivate || social.privateInvite
-        ? `${game} · une nouvelle table privée`
-        : `${game} · votre table`;
+      ? `${game} · votre ${place} privée`
+      : social.privateInvite
+        ? `${game} · une nouvelle ${place} privée`
+        : `${game} · votre ${place}`;
   return (
     <div className="mx-5 mt-4 mb-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
       <div className="flex items-center justify-between gap-3">
@@ -195,7 +195,7 @@ function InviteSettings() {
         >
           <span className="flex items-center gap-1.5 text-[13px] font-semibold">
             <Lock className="size-3.5 text-minuit-purple" />
-            Créer une table privée
+            Créer une {place} privée
           </span>
           <span className="truncate text-xs font-normal text-muted-foreground">
             {destination.trim()}
@@ -204,13 +204,9 @@ function InviteSettings() {
         <Switch
           id="private-invite"
           checked={
-            requiredPrivate ||
-            context.isPrivate ||
-            (context.canBePrivate && social.privateInvite)
+            context.isPrivate || (context.canBePrivate && social.privateInvite)
           }
-          disabled={
-            !context.canBePrivate || context.isPrivate || requiredPrivate
-          }
+          disabled={!context.canBePrivate || context.isPrivate}
           onCheckedChange={social.setPrivateInvite}
         />
       </div>
@@ -348,7 +344,13 @@ function RequestsList() {
               id={invite.from.id}
               name={invite.from.name}
               online
-              detail={`${INVITE_GAME_LABELS[invite.game]}${invite.private ? " · table privée" : ""}`}
+              detail={`${INVITE_GAME_LABELS[invite.game]}${
+                invite.private
+                  ? invite.game === "chicken"
+                    ? " · route privée"
+                    : " · table privée"
+                  : ""
+              }`}
               detailClassName="text-minuit-purple"
             >
               <Button

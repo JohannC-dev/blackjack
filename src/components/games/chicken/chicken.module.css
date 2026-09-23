@@ -8,8 +8,6 @@
 }
 .strip,
 .stripTools,
-.liveCount,
-.toolButton,
 .stageFooter,
 .stageFooter span,
 .stageFooter button {
@@ -34,35 +32,6 @@
 .stripTools {
   gap: 9px;
   margin-left: auto;
-}
-.liveCount {
-  gap: 6px;
-  color: var(--muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
-.roomName {
-  color: #c4b7d4;
-  font-size: 11px;
-  white-space: nowrap;
-}
-.toolButton {
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 11px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.toolButton:hover:not(:disabled) {
-  border-color: #a589e5;
-}
-.toolButton:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 .rules {
   position: relative;
@@ -921,9 +890,6 @@
   .stripTools {
     margin-left: 0;
     justify-content: flex-start;
-  }
-  .roomName {
-    display: none;
   }
   .stage {
     height: 350px;

@@ -985,15 +985,11 @@ io.on("connection", (socket) => {
             isPrivate = room.visibility === "private";
           } else if (request.game === "chicken") {
             const room = chicken.roomOf(sender.id);
-            if (
-              !tableId ||
-              room?.id !== tableId ||
-              room.visibility !== "private"
-            )
+            if (!tableId || !room || room.id !== tableId)
               return yield* Effect.fail(
-                new GameError("Rejoignez d’abord un salon privé Chicken."),
+                new GameError("Rejoignez d’abord votre route Chicken."),
               );
-            isPrivate = true;
+            isPrivate = room.visibility === "private";
           } else if (tableId)
             return yield* Effect.fail(
               new GameError("Ce jeu ne se joue pas à une table."),
