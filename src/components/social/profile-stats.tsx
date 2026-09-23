@@ -1,14 +1,12 @@
 "use client";
 
 import {
-  Crown,
   Flame,
   Gamepad2,
   Lock,
   Medal,
   Scale,
   Sparkles,
-  Target,
   Trophy,
   type LucideIcon,
 } from "lucide-react";
@@ -35,10 +33,6 @@ function spokenAmount(value: number) {
   if (value > 0) return `plus ${amount}`;
   if (value < 0) return `moins ${amount}`;
   return amount;
-}
-
-function percent(part: number, whole: number) {
-  return whole ? `${Math.round((part / whole) * 100)} %` : "—";
 }
 
 function average(total: number, count: number) {
@@ -238,16 +232,6 @@ function ProfileRecords({ stats }: { stats: PlayerStats }) {
   const best = stats.games.reduce((top, game) =>
     game.bestWin > top.bestWin ? game : top,
   );
-  const paid = stats.games.filter((game) => game.earnings);
-  const richest = paid.length
-    ? paid.reduce((top, game) =>
-        game.earnings!.net > top.earnings!.net ? game : top,
-      )
-    : null;
-  const steadiest = stats.games.reduce((top, game) =>
-    game.won / game.played > top.won / top.played ? game : top,
-  );
-
   return (
     <>
       <Section title="Podium des jeux" icon={Medal}>
@@ -295,21 +279,6 @@ function ProfileRecords({ stats }: { stats: PlayerStats }) {
             icon={Flame}
             hint={STAT_GAME_LABELS[best.game]}
             tone="mint"
-          />
-          {richest && (
-            <Stat
-              label="Jeu le plus rentable"
-              value={STAT_GAME_LABELS[richest.game]}
-              icon={Crown}
-              className="[&>dd]:truncate [&>dd]:text-xl"
-            />
-          )}
-          <Stat
-            label="Jeu le plus régulier"
-            value={STAT_GAME_LABELS[steadiest.game]}
-            icon={Target}
-            hint={`${percent(steadiest.won, steadiest.played)} de réussite`}
-            className="[&>dd]:truncate [&>dd]:text-xl"
           />
           <Stat
             label="Jeu le plus joué"
