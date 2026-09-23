@@ -3,14 +3,21 @@ import { PgDrizzle } from "@effect/sql-drizzle/Pg";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { Data, Effect } from "effect";
 import {
+  allows,
+  DEFAULT_VISIBILITY,
   FRIEND_CODE_ALPHABET,
   FRIEND_CODE_LENGTH,
+  isAudience,
   normalizeFriendCode,
   type FriendRequest,
+  type PlayerProfile,
   type PlayerSearchResult,
+  type PlayerStats,
+  type ProfileVisibility,
   type Relation,
   type SocialPlayer,
 } from "../../src/lib/social";
+import { statsFor } from "../db/player-stats";
 import { friendship, playerProfile, user } from "../db/schema";
 
 const MAX_FRIENDS = 200;
@@ -56,17 +63,33 @@ function relationOf(row: FriendshipRow | undefined, userId: string): Relation {
   return row.requesterId === userId ? "outgoing" : "incoming";
 }
 
-/** Gives the player a friend code the first time it is needed. */
-export const ensurePlayerProfile = (userId: string) =>
+/** Gives the player a friend code and visibility dials the first time. */
+export const ensureProfileRow = (userId: string) =>
   Effect.gen(function* () {
     const db = yield* PgDrizzle;
     for (let attempt = 0; attempt < 8; attempt++) {
       const [existing] = yield* db
-        .select({ friendCode: playerProfile.friendCode })
+        .select({
+          friendCode: playerProfile.friendCode,
+          visibility: playerProfile.visibility,
+          earningsVisibility: playerProfile.earningsVisibility,
+        })
         .from(playerProfile)
         .where(eq(playerProfile.userId, userId))
         .limit(1);
-      if (existing) return existing.friendCode;
+      if (existing)
+        return {
+          friendCode: existing.friendCode,
+          // A hand-edited row must not open a profile the player closed.
+          visibility: {
+            profile: isAudience(existing.visibility)
+              ? existing.visibility
+              : DEFAULT_VISIBILITY.profile,
+            earnings: isAudience(existing.earningsVisibility)
+              ? existing.earningsVisibility
+              : DEFAULT_VISIBILITY.earnings,
+          } satisfies ProfileVisibility,
+        };
       // A code already taken by someone else leaves no row: draw again.
       yield* db
         .insert(playerProfile)
@@ -74,6 +97,28 @@ export const ensurePlayerProfile = (userId: string) =>
         .onConflictDoNothing();
     }
     return yield* Effect.die("No free friend code after 8 attempts");
+  }).pipe(mapDatabaseError);
+
+export const ensurePlayerProfile = (userId: string) =>
+  Effect.map(ensureProfileRow(userId), (row) => row.friendCode);
+
+/** Saves the two dials. Parrainage is not one of them: it is never shared. */
+export const setProfileVisibility = (
+  userId: string,
+  visibility: ProfileVisibility,
+) =>
+  Effect.gen(function* () {
+    yield* ensureProfileRow(userId);
+    const db = yield* PgDrizzle;
+    yield* db
+      .update(playerProfile)
+      .set({
+        visibility: visibility.profile,
+        earningsVisibility: visibility.earnings,
+        updatedAt: new Date(),
+      })
+      .where(eq(playerProfile.userId, userId));
+    return visibility;
   }).pipe(mapDatabaseError);
 
 const playersById = (ids: readonly string[]) =>
@@ -385,7 +430,11 @@ export const removeFriendship = (userId: string, otherId: string) =>
       });
   }).pipe(mapDatabaseError);
 
-/** Public profile of a player, seen by the viewer. */
+/**
+ * Public profile of a player, seen by the viewer. What comes back depends on
+ * the two dials the player set; the parts they closed are absent from the
+ * payload rather than blanked, so nothing leaks over the wire.
+ */
 export const playerProfileFor = (viewerId: string, playerId: string) =>
   Effect.gen(function* () {
     const db = yield* PgDrizzle;
@@ -399,12 +448,11 @@ export const playerProfileFor = (viewerId: string, playerId: string) =>
         message: "Ce joueur n’existe pas.",
         status: 404,
       });
-    const [friendCode, link, friendCounts] = yield* Effect.all(
+    const self = viewerId === playerId;
+    const [row, link, friendCounts, stats] = yield* Effect.all(
       [
-        ensurePlayerProfile(playerId),
-        viewerId === playerId
-          ? Effect.succeed(undefined)
-          : findPair(viewerId, playerId),
+        ensureProfileRow(playerId),
+        self ? Effect.succeed(undefined) : findPair(viewerId, playerId),
         db
           .select({ count: sql<number>`count(*)`.mapWith(Number) })
           .from(friendship)
@@ -417,17 +465,34 @@ export const playerProfileFor = (viewerId: string, playerId: string) =>
               ),
             ),
           ),
+        statsFor(playerId),
       ],
       { concurrency: "unbounded" },
     );
+    const relation = self ? ("self" as const) : relationOf(link, viewerId);
+    const openProfile = allows(row.visibility.profile, relation);
+    const openEarnings =
+      openProfile && allows(row.visibility.earnings, relation);
+
     return {
       id: found.id,
       name: found.name,
-      friendCode,
+      friendCode: row.friendCode,
       memberSince: found.createdAt.toISOString(),
-      relation:
-        viewerId === playerId ? ("self" as const) : relationOf(link, viewerId),
+      relation,
       requestId: link && link.status === "pending" ? link.id : null,
       friends: friendCounts[0]?.count ?? 0,
-    };
+      stats: openProfile ? withoutHiddenEarnings(stats, openEarnings) : null,
+      guild: null,
+      visibility: self ? row.visibility : null,
+    } satisfies Omit<PlayerProfile, "online">;
   }).pipe(mapDatabaseError);
+
+/** Drops the money from a set of stats when the viewer may not read it. */
+function withoutHiddenEarnings(stats: PlayerStats, open: boolean): PlayerStats {
+  if (open) return stats;
+  return {
+    summary: { ...stats.summary, earnings: null },
+    games: stats.games.map((game) => ({ ...game, earnings: null })),
+  };
+}

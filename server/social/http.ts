@@ -6,6 +6,7 @@ import { Effect, Either, Schema } from "effect";
 import type {
   PlayerProfile,
   PlayerSearchResult,
+  ProfileVisibility,
   SocialOverview,
 } from "../../src/lib/social";
 import { auth } from "../auth";
@@ -19,6 +20,7 @@ import {
   removeFriendship,
   respondToFriendRequest,
   sendFriendRequest,
+  setProfileVisibility,
   socialOverview,
 } from "./repository";
 
@@ -34,6 +36,11 @@ const RequestBody = Schema.Union(
   Schema.Struct({ userId: Id }),
   Schema.Struct({ code: Schema.String.pipe(Schema.maxLength(16)) }),
 );
+const AudienceValue = Schema.Literal("public", "friends", "private");
+const VisibilityBody = Schema.Struct({
+  profile: AudienceValue,
+  earnings: AudienceValue,
+});
 
 /** Runs a database effect; refusals become HTTP errors. */
 async function run<A, E>(effect: Effect.Effect<A, E, PgDrizzle | SqlClient>) {
@@ -141,6 +148,24 @@ export async function handleSocialRequest(
       await run(removeFriendship(me, parts[1]!));
       deps.notify([me, parts[1]!]);
       send(res, 200, { ok: true });
+      return true;
+    }
+
+    // PATCH /api/players/me/visibility
+    if (
+      method === "PATCH" &&
+      parts[0] === "players" &&
+      parts[1] === "me" &&
+      parts[2] === "visibility" &&
+      parts.length === 3
+    ) {
+      const body = Schema.decodeUnknownEither(VisibilityBody)(
+        await readJson(req),
+      );
+      if (Either.isLeft(body))
+        throw new HttpError(400, "Réglage de visibilité invalide.");
+      const visibility = await run(setProfileVisibility(me, body.right));
+      send(res, 200, visibility satisfies ProfileVisibility);
       return true;
     }
 

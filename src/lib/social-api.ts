@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   PlayerProfile,
   PlayerSearchResult,
+  ProfileVisibility,
   SocialOverview,
 } from "./social";
 
@@ -53,6 +54,12 @@ export const socialApi = {
   remove: (userId: string) =>
     request<{ ok: true }>(`/api/friends/${encodeURIComponent(userId)}`, {
       method: "DELETE",
+    }),
+  /** Saves who may read the profile and the money. */
+  setVisibility: (visibility: ProfileVisibility) =>
+    request<ProfileVisibility>("/api/players/me/visibility", {
+      method: "PATCH",
+      body: JSON.stringify(visibility),
     }),
   player: (playerId: string, signal?: AbortSignal) =>
     request<PlayerProfile>(`/api/players/${encodeURIComponent(playerId)}`, {

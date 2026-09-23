@@ -214,6 +214,59 @@ try {
   );
   assert.equal(own.body.relation, "self");
   assert.equal(own.body.friends, 2);
+  // Gains are shared with friends by default, the profile with everyone.
+  assert.deepEqual(own.body.visibility, {
+    profile: "public",
+    earnings: "friends",
+  });
+  assert.equal(profile.body.visibility, null, "visibility leaked to a friend");
+  assert.ok(profile.body.stats, "a public profile carries its stats");
+  assert.ok(profile.body.stats?.summary.earnings, "a friend reads the gains");
+
+  // Closing the gains leaves the rest of the profile readable.
+  await api(alice.session, "/api/players/me/visibility", {
+    method: "PATCH",
+    body: { profile: "public", earnings: "private" },
+  });
+  const guarded = await api<PlayerProfile>(
+    bob.session,
+    `/api/players/${alice.session.userId}`,
+  );
+  assert.ok(guarded.body.stats, "the profile stays open");
+  assert.equal(
+    guarded.body.stats?.summary.earnings,
+    null,
+    "private gains reached a friend",
+  );
+  for (const game of guarded.body.stats?.games ?? [])
+    assert.equal(game.earnings, null, "private gains reached a friend by game");
+
+  // Closing the profile hides the statistics entirely.
+  await api(alice.session, "/api/players/me/visibility", {
+    method: "PATCH",
+    body: { profile: "private", earnings: "public" },
+  });
+  const closed = await api<PlayerProfile>(
+    bob.session,
+    `/api/players/${alice.session.userId}`,
+  );
+  assert.equal(closed.body.stats, null, "a private profile leaked its stats");
+  assert.equal(closed.body.relation, "friend", "the relation stays readable");
+  const stillMine = await api<PlayerProfile>(
+    alice.session,
+    `/api/players/${alice.session.userId}`,
+  );
+  assert.ok(stillMine.body.stats?.summary.earnings, "hidden from its owner");
+
+  const refused = await api(alice.session, "/api/players/me/visibility", {
+    method: "PATCH",
+    body: { profile: "everyone", earnings: "public" },
+  });
+  assert.equal(refused.status, 400);
+  await api(alice.session, "/api/players/me/visibility", {
+    method: "PATCH",
+    body: { profile: "public", earnings: "friends" },
+  });
 
   // Invitation to the current public Blackjack table.
   const wrongTable = await emit(alice, "friends:invite", {

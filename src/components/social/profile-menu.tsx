@@ -1,7 +1,6 @@
 "use client";
 
-import { Copy, Gift, LogOut, UserPlus, UserRound, Users } from "lucide-react";
-import { toast } from "sonner";
+import { LogOut, UserRound, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -35,16 +34,6 @@ export function ProfileMenu({
         {initial}
       </span>
     );
-
-  const copyCode = async () => {
-    if (!me?.friendCode) return;
-    try {
-      await navigator.clipboard.writeText(formatFriendCode(me.friendCode));
-      toast.success("Code ami copié.");
-    } catch {
-      toast.error("Copie impossible.");
-    }
-  };
 
   return (
     <DropdownMenu modal={false}>
@@ -117,21 +106,6 @@ export function ProfileMenu({
                     {pending}
                   </Badge>
                 )}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => social.openFriends("search")}>
-                <UserPlus />
-                Ajouter un ami
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={!me}
-                onSelect={() => me && social.openProfile(me.id)}
-              >
-                <Gift />
-                Parrainage
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={!me?.friendCode} onSelect={copyCode}>
-                <Copy />
-                Copier mon code
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </>
