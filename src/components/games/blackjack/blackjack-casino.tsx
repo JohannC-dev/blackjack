@@ -1091,6 +1091,203 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
   );
 });
 
+export function WelcomeAuthModal({
+  game,
+}: {
+  game: ReturnType<typeof useGame>;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"sign-in" | "sign-up">("sign-in");
+  const [referralCode, setReferralCode] = useState("");
+  const [authPending, setAuthPending] = useState(false);
+
+  return (
+    <Modal
+      title={
+        authMode === "sign-in" ? "Connexion à Minuit" : "Bienvenue chez Minuit"
+      }
+      className="welcome-modal"
+    >
+      <div className="welcome-art">
+        <div className="welcome-halo" />
+        <PlayingCard
+          card={{ id: "welcome1", rank: 1, suit: "spades" }}
+          decorative
+        />
+        <PlayingCard
+          card={{ id: "welcome2", rank: 13, suit: "hearts" }}
+          decorative
+        />
+        <span className="floating-star star-one">✦</span>
+        <span className="floating-star star-two">✧</span>
+        {authMode === "sign-up" && (
+          <span className="welcome-art-tag">
+            <Coins size={13} />
+            {credits(
+              normalizeFriendCode(referralCode)
+                ? REFERRAL_WELCOME_BALANCE
+                : INITIAL_CREDIT_BALANCE,
+            )}{" "}
+            crédits offerts
+          </span>
+        )}
+      </div>
+      <div className="welcome-content">
+        <span className="section-kicker">
+          {authMode === "sign-in"
+            ? "CONNEXION À MINUIT"
+            : "BIENVENUE CHEZ MINUIT"}
+        </span>
+        <h2>
+          {authMode === "sign-in" ? (
+            "Bon retour au club."
+          ) : (
+            <>
+              La soirée commence
+              <br />
+              avec vous.
+            </>
+          )}
+        </h2>
+        <p>
+          {authMode === "sign-in" ? (
+            "Retrouvez votre table et vos amis."
+          ) : (
+            <>
+              Choisissez un pseudo, prenez place.
+              <br />
+              On s’occupe des cartes.
+            </>
+          )}
+        </p>
+        <form
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setAuthPending(true);
+            const message = await game.register({
+              mode: authMode,
+              name: authMode === "sign-up" ? name : undefined,
+              email,
+              password,
+              referralCode:
+                authMode === "sign-up" ? referralCode : undefined,
+            });
+            setAuthPending(false);
+            if (message) game.setError(message);
+          }}
+        >
+          {authMode === "sign-up" && (
+            <>
+              <label htmlFor="player-name">Votre pseudo</label>
+              <input
+                autoFocus
+                id="player-name"
+                placeholder="Comment vous appelle-t-on ?"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                minLength={1}
+                maxLength={18}
+                required
+                autoComplete="nickname"
+              />
+            </>
+          )}
+          <label htmlFor="player-email">Votre email</label>
+          <input
+            autoFocus={authMode === "sign-in"}
+            id="player-email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+            autoComplete="email"
+          />
+          <label htmlFor="player-password">Votre mot de passe</label>
+          <input
+            id="player-password"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            minLength={8}
+            maxLength={128}
+            required
+            autoComplete={
+              authMode === "sign-up" ? "new-password" : "current-password"
+            }
+          />
+          {authMode === "sign-up" && (
+            <>
+              <label htmlFor="player-referral">
+                Code de parrainage{" "}
+                <span className="welcome-optional">facultatif</span>
+              </label>
+              <input
+                id="player-referral"
+                placeholder="ABCD-EFGH"
+                value={referralCode}
+                onChange={(event) =>
+                  setReferralCode(event.target.value.toUpperCase())
+                }
+                maxLength={9}
+                autoComplete="off"
+                spellCheck={false}
+                aria-describedby="player-referral-help"
+              />
+              <p id="player-referral-help" className="welcome-hint">
+                {normalizeFriendCode(referralCode)
+                  ? `Votre parrain vous offre ${credits(REFERRAL_WELCOME_BONUS)} crédits de plus.`
+                  : "Le code d’un joueur du club, pour démarrer avec 50 % de crédits en plus."}
+              </p>
+            </>
+          )}
+          <button
+            className="button primary"
+            type="submit"
+            disabled={
+              authPending ||
+              !email.trim() ||
+              password.length < 8 ||
+              (authMode === "sign-up" && !name.trim())
+            }
+          >
+            {authPending
+              ? authMode === "sign-in"
+                ? "Connexion..."
+                : "Création..."
+              : authMode === "sign-up"
+                ? "Créer mon compte"
+                : "Se connecter"}
+            <ArrowRight size={18} />
+          </button>
+        </form>
+        {game.error && (
+          <div className="welcome-error" role="alert">
+            {game.error}
+          </div>
+        )}
+        <button
+          type="button"
+          className="welcome-auth-switch"
+          onClick={() => {
+            game.setError("");
+            setAuthMode((mode) =>
+              mode === "sign-up" ? "sign-in" : "sign-up",
+            );
+          }}
+        >
+          {authMode === "sign-up" ? "J’ai déjà un compte" : "Créer un compte"}
+        </button>
+        <div className="welcome-note">
+          <ShieldCheck size={13} />
+          Compte protégé. Uniquement des crédits fictifs.
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function BlackjackCasino({
   game,
   onNavigate,
@@ -1103,7 +1300,6 @@ export function BlackjackCasino({
     playerId,
     connected,
     profile,
-    loaded,
     command,
     joinBlackjack,
     pending,
@@ -1111,12 +1307,6 @@ export function BlackjackCasino({
   const [modal, setModal] = useState<
     "rules" | "tables" | "history" | "invite" | null
   >(null);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [authMode, setAuthMode] = useState<"sign-in" | "sign-up">("sign-up");
-  const [referralCode, setReferralCode] = useState("");
-  const [authPending, setAuthPending] = useState(false);
   const [tableCode, setTableCode] = useState("");
   const [selectedSeat, setSelectedSeat] = useState(2);
   const [betHistory, setBetHistory] = useState<
@@ -2156,162 +2346,6 @@ export function BlackjackCasino({
             <X size={15} />
           </button>
         </div>
-      )}
-
-      {loaded && !profile && (
-        <Modal title="Bienvenue chez Minuit" className="welcome-modal">
-          <div className="welcome-art">
-            <div className="welcome-halo" />
-            <PlayingCard
-              card={{ id: "welcome1", rank: 1, suit: "spades" }}
-              decorative
-            />
-            <PlayingCard
-              card={{ id: "welcome2", rank: 13, suit: "hearts" }}
-              decorative
-            />
-            <span className="floating-star star-one">✦</span>
-            <span className="floating-star star-two">✧</span>
-            <span className="welcome-art-tag">
-              <Coins size={13} />
-              {credits(
-                authMode === "sign-up" && normalizeFriendCode(referralCode)
-                  ? REFERRAL_WELCOME_BALANCE
-                  : INITIAL_CREDIT_BALANCE,
-              )}{" "}
-              crédits offerts
-            </span>
-          </div>
-          <div className="welcome-content">
-            <span className="section-kicker">BIENVENUE CHEZ MINUIT</span>
-            <h2>
-              La soirée commence
-              <br />
-              avec vous.
-            </h2>
-            <p>
-              Choisissez un pseudo, prenez place.
-              <br />
-              On s’occupe des cartes.
-            </p>
-            <form
-              onSubmit={async (event) => {
-                event.preventDefault();
-                setAuthPending(true);
-                const message = await game.register({
-                  mode: authMode,
-                  name: authMode === "sign-up" ? name : undefined,
-                  email,
-                  password,
-                  referralCode:
-                    authMode === "sign-up" ? referralCode : undefined,
-                });
-                setAuthPending(false);
-                if (message) game.setError(message);
-              }}
-            >
-              {authMode === "sign-up" && (
-                <>
-                  <label htmlFor="player-name">Votre pseudo</label>
-                  <input
-                    autoFocus
-                    id="player-name"
-                    placeholder="Comment vous appelle-t-on ?"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    minLength={1}
-                    maxLength={18}
-                    required
-                    autoComplete="nickname"
-                  />
-                </>
-              )}
-              <label htmlFor="player-email">Votre email</label>
-              <input
-                autoFocus={authMode === "sign-in"}
-                id="player-email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-                autoComplete="email"
-              />
-              <label htmlFor="player-password">Votre mot de passe</label>
-              <input
-                id="player-password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                minLength={8}
-                maxLength={128}
-                required
-                autoComplete={
-                  authMode === "sign-up" ? "new-password" : "current-password"
-                }
-              />
-              {authMode === "sign-up" && (
-                <>
-                  <label htmlFor="player-referral">
-                    Code de parrainage{" "}
-                    <span className="welcome-optional">facultatif</span>
-                  </label>
-                  <input
-                    id="player-referral"
-                    placeholder="ABCD-EFGH"
-                    value={referralCode}
-                    onChange={(event) =>
-                      setReferralCode(event.target.value.toUpperCase())
-                    }
-                    maxLength={9}
-                    autoComplete="off"
-                    spellCheck={false}
-                    aria-describedby="player-referral-help"
-                  />
-                  <p id="player-referral-help" className="welcome-hint">
-                    {normalizeFriendCode(referralCode)
-                      ? `Votre parrain vous offre ${credits(REFERRAL_WELCOME_BONUS)} crédits de plus.`
-                      : "Le code d’un joueur du club, pour démarrer avec 50 % de crédits en plus."}
-                  </p>
-                </>
-              )}
-              <button
-                className="button primary"
-                type="submit"
-                disabled={
-                  authPending ||
-                  !email.trim() ||
-                  password.length < 8 ||
-                  (authMode === "sign-up" && !name.trim())
-                }
-              >
-                {authPending
-                  ? "Connexion..."
-                  : authMode === "sign-up"
-                    ? "Créer mon compte"
-                    : "Entrer dans le club"}
-                <ArrowRight size={18} />
-              </button>
-            </form>
-            <button
-              type="button"
-              className="welcome-auth-switch"
-              onClick={() => {
-                game.setError("");
-                setAuthMode((mode) =>
-                  mode === "sign-up" ? "sign-in" : "sign-up",
-                );
-              }}
-            >
-              {authMode === "sign-up"
-                ? "J’ai déjà un compte"
-                : "Créer un compte"}
-            </button>
-            <div className="welcome-note">
-              <ShieldCheck size={13} />
-              Compte protégé. Uniquement des crédits fictifs.
-            </div>
-          </div>
-        </Modal>
       )}
 
       {modal === "rules" && (

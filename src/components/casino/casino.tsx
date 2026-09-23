@@ -9,7 +9,10 @@ import { REFILL_BALANCE, REFILL_THRESHOLD } from "@/lib/chips";
 import { credits } from "@/lib/rules";
 import type { CasinoView } from "@/lib/navigation";
 import { useGame } from "@/lib/use-game";
-import { BlackjackCasino } from "../games/blackjack/blackjack-casino";
+import {
+  BlackjackCasino,
+  WelcomeAuthModal,
+} from "../games/blackjack/blackjack-casino";
 import { MinesCasino } from "../games/mines/mines-casino";
 import { CasinoHome, PokerCasino } from "../games/poker/poker-casino";
 import { RouletteCasino } from "../games/roulette/roulette-casino";
@@ -45,12 +48,6 @@ export function Casino() {
     }
     setView(next);
   }, []);
-  if (!game.profile)
-    return (
-      <ServerClockProvider offset={game.serverTimeOffset}>
-        <BlackjackCasino game={game} onNavigate={navigate} />
-      </ServerClockProvider>
-    );
   const content =
     view === "home" ? (
       <CasinoHome game={game} onNavigate={navigate} />
@@ -83,6 +80,7 @@ export function Casino() {
     <ServerClockProvider offset={game.serverTimeOffset}>
       <SocialProvider game={game} view={view} onNavigate={navigate}>
         {content}
+        {game.loaded && !game.profile && <WelcomeAuthModal game={game} />}
         {canRefill && refillDismissed && !showRefill && (
           <button
             type="button"

@@ -11707,3 +11707,9 @@ h1 > span:not(.live-tag) {
 .welcome-auth-switch:hover {
   color: #eadcf6;
 }
+.welcome-error {
+  margin-top: 12px;
+  color: #f1a4b1;
+  font: 500 11px "DM Sans", sans-serif;
+  line-height: 1.5;
+}
