@@ -19,6 +19,7 @@ import {
 import { PokerManager } from "./poker";
 import { makeRoomRuntime, roomChannel } from "./rooms";
 import { TowerManager } from "./tower";
+import { ChickenManager } from "./chicken";
 import { MinesGame } from "./mines";
 import { makeRouletteRuntime } from "./roulette";
 import { RecordingGameWallet } from "./game-wallet";
@@ -48,6 +49,8 @@ import {
   PokerCommandSchema,
   RouletteJoinSchema,
   TowerCommandSchema,
+  ChickenCommandSchema,
+  ChickenJoinSchema,
 } from "./protocol";
 import type {
   Ack,
@@ -55,6 +58,7 @@ import type {
   MinesCommand,
   PokerCommand,
   TowerCommand,
+  ChickenCommand,
   Wallet,
 } from "../src/lib/types";
 import {
@@ -219,6 +223,7 @@ function notifyPresence(userId: string) {
 const wallets = new Map<string, Wallet>();
 /** Sockets of each player currently showing the Tower. */
 const towerSockets = new Map<string, Set<string>>();
+const chickenSockets = new Map<string, Set<string>>();
 type TowerSocketIntent = { kind: "join" | "leave"; version: number };
 const towerSocketIntents = new Map<string, TowerSocketIntent>();
 
@@ -297,6 +302,15 @@ const tower = new TowerManager(
   undefined,
   // Development only: TOWER_NO_TRAPS=1 bun run dev reaches the top every time.
   dev && process.env.TOWER_NO_TRAPS === "1",
+  gameWallet,
+);
+const chicken = new ChickenManager(
+  (playerId, state) => {
+    for (const socketId of chickenSockets.get(playerId) ?? [])
+      io.to(socketId).emit("chicken:state", state);
+  },
+  (channel, state) => io.to(channel).emit("chicken:feed", state),
+  undefined,
   gameWallet,
 );
 if (dev && process.env.TOWER_NO_TRAPS === "1")
@@ -432,6 +446,16 @@ function leaveTowerEffect(socketId: string, player: Player, abandon: boolean) {
     const shouldLeave = yield* detachTowerSocketEffect(socketId, player);
     if (shouldLeave) yield* tower.leaveEffect(player, undefined, { abandon });
   });
+}
+
+function detachChickenSocket(socketId: string, player: Player) {
+  const sockets = chickenSockets.get(player.id);
+  const channel = chicken.roomIdOf(player.id);
+  if (channel) io.in(socketId).socketsLeave(channel);
+  if (!sockets?.delete(socketId)) return false;
+  if (sockets.size) return false;
+  chickenSockets.delete(player.id);
+  return true;
 }
 
 function replyError(ack: unknown, error: unknown) {
@@ -715,6 +739,32 @@ io.on("connection", (socket) => {
       ),
     );
   });
+  socket.on(
+    "chicken:command",
+    (command: unknown, ack: (value: Ack) => void) => {
+      replyWalletEffect(
+        ack,
+        inputEffect(
+          ChickenCommandSchema,
+          command,
+          "Action Chicken invalide.",
+          (parsed) =>
+            Effect.gen(function* () {
+              const currentPlayer = yield* gameEffect((clock) => {
+                throttle(clock.now());
+                if (!player) throw new Error("Connectez-vous au club.");
+                return player;
+              });
+              yield* refreshWalletEffect(currentPlayer);
+              yield* chicken.commandEffect(
+                currentPlayer,
+                parsed as ChickenCommand,
+              );
+            }),
+        ),
+      );
+    },
+  );
   socket.on("mines:command", (command: unknown, ack: (value: Ack) => void) => {
     replyWalletEffect(
       ack,
@@ -849,6 +899,62 @@ io.on("connection", (socket) => {
       }),
     );
   });
+  socket.on("chicken:join", (data: unknown, ack?: (value: Ack) => void) => {
+    if (typeof data === "function") {
+      ack = data as (value: Ack) => void;
+      data = {};
+    }
+    replyWalletEffect(
+      ack,
+      inputEffect(
+        ChickenJoinSchema,
+        data ?? {},
+        "Salon Chicken invalide.",
+        (options) =>
+          Effect.gen(function* () {
+            const currentPlayer = yield* gameEffect((clock) => {
+              throttle(clock.now());
+              if (!player) throw new Error("Connectez-vous au club.");
+              return player;
+            });
+            yield* refreshWalletEffect(currentPlayer);
+            const previous = chicken.roomIdOf(currentPlayer.id);
+            const target = yield* chicken.enterEffect(currentPlayer, options);
+            yield* gameEffect(() => {
+              const sockets =
+                chickenSockets.get(currentPlayer.id) ?? new Set<string>();
+              sockets.add(socket.id);
+              chickenSockets.set(currentPlayer.id, sockets);
+              for (const socketId of sockets) {
+                if (previous && previous !== target.channel)
+                  io.in(socketId).socketsLeave(previous);
+                io.in(socketId).socketsJoin(target.channel);
+              }
+              chicken.refresh(currentPlayer);
+            });
+            return target.roomId;
+          }),
+      ),
+      (roomId) => ({ ok: true, tableId: roomId }),
+    );
+  });
+  socket.on("chicken:leave", (ack: (value: Ack) => void) => {
+    replyWalletEffect(
+      ack,
+      Effect.gen(function* () {
+        const currentPlayer = yield* gameEffect((clock) => {
+          throttle(clock.now());
+          if (!player) throw new Error("Connectez-vous au club.");
+          return player;
+        });
+        yield* refreshWalletEffect(currentPlayer);
+        const last = yield* gameEffect(() =>
+          detachChickenSocket(socket.id, currentPlayer),
+        );
+        if (last) yield* chicken.leaveEffect(currentPlayer);
+      }),
+    );
+  });
   // Game invitations are relayed live between friends and never stored.
   socket.on("friends:invite", (data: unknown, ack: (value: Ack) => void) => {
     replyEffect(
@@ -877,6 +983,13 @@ io.on("connection", (socket) => {
                 new GameError("Rejoignez d’abord cette table de Roulette."),
               );
             isPrivate = room.visibility === "private";
+          } else if (request.game === "chicken") {
+            const room = chicken.roomOf(sender.id);
+            if (!tableId || !room || room.id !== tableId)
+              return yield* Effect.fail(
+                new GameError("Rejoignez d’abord votre route Chicken."),
+              );
+            isPrivate = room.visibility === "private";
           } else if (tableId)
             return yield* Effect.fail(
               new GameError("Ce jeu ne se joue pas à une table."),
@@ -897,6 +1010,10 @@ io.on("connection", (socket) => {
           if (now - (lastInvites.get(key) ?? 0) < 5000)
             return yield* Effect.fail(
               new GameError("Invitation déjà envoyée, patientez un instant."),
+            );
+          if (request.game === "chicken" && tableId)
+            yield* gameEffect(() =>
+              chicken.invite(sender.id, request.friendId, tableId, now),
             );
           lastInvites.set(key, now);
           emitToPlayer(request.friendId, "friends:invite", {
@@ -1010,6 +1127,11 @@ io.on("connection", (socket) => {
     runOrThrow(
       Effect.gen(function* () {
         yield* leaveTowerEffect(socket.id, disconnectedPlayer, false);
+        const lastChickenSocket = yield* gameEffect(() =>
+          detachChickenSocket(socket.id, disconnectedPlayer),
+        );
+        if (lastChickenSocket)
+          yield* chicken.leaveEffect(disconnectedPlayer, true);
         yield* gameEffect(() => towerSocketIntents.delete(socket.id));
         yield* gameEffect(() => {
           roulette.run((r) => r.disconnect(socket.id, disconnectedPlayer.id));
@@ -1056,12 +1178,14 @@ const maintenanceEffect = Effect.provide(
       walletTransactionEffect(gameEffect(() => roulette.run((r) => r.tick))),
     );
     yield* Effect.either(walletTransactionEffect(tower.tickEffect(now)));
+    yield* Effect.either(walletTransactionEffect(chicken.tickEffect(now)));
     for (const [token, profile] of profiles)
       if (!profile.connected && now - profile.lastSeen > 24 * 60 * 60_000) {
         yield* Effect.either(
           gameEffect(() => roulette.run((r) => r.forget(profile.id))),
         );
         yield* Effect.either(tower.forgetEffect(profile.id));
+        yield* Effect.either(chicken.forgetEffect(profile.id));
         yield* Effect.either(
           gameEffect(() => {
             profiles.delete(token);

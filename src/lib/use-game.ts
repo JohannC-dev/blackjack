@@ -15,6 +15,9 @@ import type {
   TowerClientState,
   TowerCommand,
   TowerPublicState,
+  ChickenClientState,
+  ChickenPublicState,
+  ChickenCommand,
   Wallet,
 } from "./types";
 import { useProfile, type Credentials } from "./profile-context";
@@ -27,6 +30,9 @@ export function useGame() {
   const [state, setState] = useState<TableState | null>(null);
   const [pokerState, setPokerState] = useState<PokerClientState | null>(null);
   const [towerState, setTowerState] = useState<TowerClientState | null>(null);
+  const [chickenState, setChickenState] = useState<ChickenClientState | null>(
+    null,
+  );
   /** Difference to add to the browser clock to compare it with server deadlines. */
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
   const [minesState, setMinesState] = useState<MinesState | null>(null);
@@ -47,6 +53,8 @@ export function useGame() {
   const clockSyncTimer = useRef<number | null>(null);
   /** Whether the Tower view is open, so a reconnection re-enters its room. */
   const towerOpen = useRef(false);
+  const chickenOpen = useRef(false);
+  const chickenRoom = useRef<string | null>(null);
   /** Whether the Roulette view is open, so a reconnection re-enters its room. */
   const rouletteOpen = useRef(false);
   /** Roulette table asked for explicitly (invitation or private table). */
@@ -117,6 +125,8 @@ export function useGame() {
             setPlayerId(ack.playerId!);
             setConnected(true);
             if (towerOpen.current) socket.emit("tower:join");
+            if (chickenOpen.current)
+              socket.emit("chicken:join", { roomId: chickenRoom.current });
             if (rouletteOpen.current)
               socket.emit("roulette:join", { tableId: rouletteTable.current });
           },
@@ -142,6 +152,15 @@ export function useGame() {
     socket.on("tower:feed", (snapshot: TowerPublicState) => {
       if (!snapshot || !towerOpen.current) return;
       setTowerState((current) =>
+        current ? { ...current, ...snapshot } : current,
+      );
+    });
+    socket.on("chicken:state", (snapshot: ChickenClientState) => {
+      if (snapshot && chickenOpen.current) setChickenState(snapshot);
+    });
+    socket.on("chicken:feed", (snapshot: ChickenPublicState) => {
+      if (!snapshot || !chickenOpen.current) return;
+      setChickenState((current) =>
         current ? { ...current, ...snapshot } : current,
       );
     });
@@ -272,6 +291,31 @@ export function useGame() {
         });
     });
   }, []);
+  const chickenCommand = useCallback(
+    (action: ChickenCommand): Promise<boolean> => {
+      const socket = socketRef.current;
+      if (!socket?.connected) {
+        setError("La connexion à Chicken est interrompue.");
+        return Promise.resolve(false);
+      }
+      setPending(true);
+      return new Promise((resolve) => {
+        socket
+          .timeout(6000)
+          .emit(
+            "chicken:command",
+            action,
+            (timeout: Error | null, ack: Ack) => {
+              setPending(false);
+              if (timeout) setError("Chicken ne répond pas.");
+              else if (!ack.ok) setError(ack.error);
+              resolve(!timeout && ack?.ok);
+            },
+          );
+      });
+    },
+    [],
+  );
   const sendEmote = useCallback((request: EmoteRequest) => {
     socketRef.current?.emit("emote", request);
   }, []);
@@ -333,6 +377,65 @@ export function useGame() {
     setTowerState(null);
     socketRef.current?.emit("tower:leave");
   }, []);
+  const enterChicken = useCallback(() => {
+    chickenOpen.current = true;
+    const socket = socketRef.current;
+    if (socket?.connected && idRef.current)
+      socket.emit(
+        "chicken:join",
+        { roomId: chickenRoom.current },
+        (ack: Ack) => {
+          if (!ack.ok) {
+            if (chickenRoom.current && ack.error.includes("n’existe plus")) {
+              chickenRoom.current = null;
+              socket.emit("chicken:join", { joinPublic: true });
+            } else setError(ack.error);
+          }
+        },
+      );
+  }, []);
+  const leaveChicken = useCallback(() => {
+    chickenOpen.current = false;
+    chickenRoom.current = null;
+    setChickenState(null);
+    socketRef.current?.emit("chicken:leave");
+  }, []);
+  const joinChickenRoom = useCallback(
+    (roomId: string | null, createPrivate = false): Promise<boolean> => {
+      const socket = socketRef.current;
+      if (!socket?.connected) {
+        setError("La connexion à Chicken est interrompue.");
+        return Promise.resolve(false);
+      }
+      return new Promise((resolve) => {
+        socket
+          .timeout(6000)
+          .emit(
+            "chicken:join",
+            createPrivate
+              ? { createPrivate: true }
+              : roomId
+                ? { roomId }
+                : { joinPublic: true },
+            (timeout: Error | null, ack: Ack) => {
+              if (timeout) setError("Le salon Chicken ne répond pas.");
+              else if (!ack.ok) setError(ack.error);
+              else
+                chickenRoom.current =
+                  createPrivate || roomId ? (ack.tableId ?? roomId) : null;
+              resolve(!timeout && ack?.ok);
+            },
+          );
+      });
+    },
+    [],
+  );
+  const createPrivateChickenRoom = useCallback(async (): Promise<
+    string | null
+  > => {
+    const joined = await joinChickenRoom(null, true);
+    return joined ? chickenRoom.current : null;
+  }, [joinChickenRoom]);
   /** Opens a Roulette table assigned independently from the club table. */
   const enterRoulette = useCallback(() => {
     rouletteOpen.current = true;
@@ -445,6 +548,7 @@ export function useGame() {
     state,
     pokerState,
     towerState,
+    chickenState,
     balance,
     minesState,
     rouletteState,
@@ -465,6 +569,11 @@ export function useGame() {
     towerCommand,
     enterTower,
     leaveTower,
+    chickenCommand,
+    enterChicken,
+    leaveChicken,
+    joinChickenRoom,
+    createPrivateChickenRoom,
     rouletteCommand,
     enterRoulette,
     leaveRoulette,

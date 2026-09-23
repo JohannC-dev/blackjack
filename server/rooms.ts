@@ -10,7 +10,7 @@ import {
 } from "effect";
 import type { RoomVisibility } from "../src/lib/types";
 
-export type RoomGame = "blackjack" | "roulette" | "tower" | "poker";
+export type RoomGame = "blackjack" | "roulette" | "tower" | "poker" | "chicken";
 export type Room = {
   readonly id: string;
   readonly visibility: RoomVisibility;

@@ -18,6 +18,7 @@ import { credits } from "@/lib/rules";
 import type { CasinoView } from "@/lib/navigation";
 import { BlackjackIcon } from "./blackjack-icon";
 import { MineBomb } from "../games/mines/mine-art";
+import { ChickenArt } from "../games/chicken/chicken-art";
 import { ProfileMenu } from "../social/profile-menu";
 
 type Navigate = (view: CasinoView) => void;
@@ -99,6 +100,11 @@ export const CasinoRail = memo(function CasinoRail({
         )}
         {item("poker", "Poker", <RailGameIcon game="poker" />)}
         {item("tower", "La Tower", <RailGameIcon game="tower" />)}
+        {item(
+          "chicken",
+          "Chicken",
+          <ChickenArt className="h-[30px] w-[30px]" />,
+        )}
         {item("roulette", "Roulette", <RailGameIcon game="roulette" />)}
         {onTables && (
           <button

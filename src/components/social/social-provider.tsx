@@ -174,9 +174,13 @@ export function SocialProvider({
         id: `invite-${invite.id}`,
         description: `${INVITE_GAME_LABELS[invite.game]}${
           invite.private
-            ? " · table privée"
+            ? invite.game === "chicken"
+              ? " · route privée"
+              : " · table privée"
             : invite.tableId
-              ? " · sa table"
+              ? invite.game === "chicken"
+                ? " · sa route"
+                : " · sa table"
               : ""
         }`,
         duration: 30_000,
@@ -236,6 +240,13 @@ export function SocialProvider({
   }, [gameInvites.length]);
 
   const inviteContext = useMemo((): InviteContext => {
+    if (view === "chicken")
+      return {
+        game: "chicken",
+        tableId: game.chickenState?.roomId ?? null,
+        isPrivate: game.chickenState?.visibility === "private",
+        canBePrivate: true,
+      };
     if (view === "roulette")
       return {
         game: "roulette",
@@ -260,6 +271,8 @@ export function SocialProvider({
     };
   }, [
     game.rouletteState?.id,
+    game.chickenState?.roomId,
+    game.chickenState?.visibility,
     game.state?.id,
     game.state?.visibility,
     privateRouletteId,
@@ -299,18 +312,33 @@ export function SocialProvider({
               return false;
             }
             tableId = await current.createPrivateTable();
+          } else if (target === "chicken") {
+            tableId = await current.createPrivateChickenRoom();
           } else {
             const code = randomTableCode();
             tableId = (await current.joinRouletteTable(code)) ? code : null;
             if (tableId) setPrivateRouletteId(tableId);
           }
           if (!tableId) {
-            toast.error("La table privée n’a pas pu être créée.");
+            toast.error(
+              target === "chicken"
+                ? "La route privée n’a pas pu être créée."
+                : "La table privée n’a pas pu être créée.",
+            );
             return false;
           }
         }
-        if ((target === "blackjack" || target === "roulette") && !tableId) {
-          toast.error("Votre table est en cours de connexion, réessayez.");
+        if (
+          (target === "blackjack" ||
+            target === "roulette" ||
+            target === "chicken") &&
+          !tableId
+        ) {
+          toast.error(
+            target === "chicken"
+              ? "Votre route est en cours de connexion, réessayez."
+              : "Votre table est en cours de connexion, réessayez.",
+          );
           return false;
         }
         const ack = await new Promise<Ack | null>((resolve) =>
@@ -330,7 +358,9 @@ export function SocialProvider({
         toast.success(`Invitation envoyée à ${friend.name}.`, {
           description: `${INVITE_GAME_LABELS[target]}${
             tableId && tableId !== inviteContext.tableId
-              ? " · nouvelle table privée"
+              ? target === "chicken"
+                ? " · nouvelle route privée"
+                : " · nouvelle table privée"
               : ""
           }`,
         });
@@ -381,6 +411,11 @@ export function SocialProvider({
         if (invite.private) setPrivateRouletteId(invite.tableId);
         if (!(await current.joinRouletteTable(invite.tableId))) {
           toast.error("Impossible de rejoindre cette table.");
+          return;
+        }
+      } else if (invite.game === "chicken" && invite.tableId) {
+        if (!(await current.joinChickenRoom(invite.tableId))) {
+          toast.error("Impossible de rejoindre ce salon Chicken.");
           return;
         }
       }
