@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -33,7 +34,19 @@ import {
   chickenMultiplier,
   chickenPayout,
 } from "@/lib/chicken";
-import type { ChickenAutoConfig, ChickenDifficulty } from "@/lib/types";
+import type {
+  ChickenAutoConfig,
+  ChickenDifficulty,
+  ChickenRun,
+} from "@/lib/types";
+import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
+import { useGameAudio } from "@/lib/audio-context";
+import {
+  playChickenCashout,
+  playChickenCollision,
+  playChickenStart,
+  playChickenStep,
+} from "@/lib/chicken-audio";
 import { useGame } from "@/lib/use-game";
 import { useSocial } from "../../social/social-provider";
 import {
@@ -74,6 +87,11 @@ export function ChickenCasino({
   const run = state?.run;
   const active = run?.status === "playing";
   const autoRunning = Boolean(state?.auto);
+  const { enabled: sound, contextRef: audioRef } =
+    useGameAudio(preloadCasinoSounds);
+  const soundRef = useRef(sound);
+  soundRef.current = sound;
+  const previousRun = useRef<ChickenRun | null | undefined>(undefined);
   const [difficulty, setDifficulty] = useState<ChickenDifficulty>("medium");
   const [bet, setBet] = useState<number>(CHICKEN_MIN_BET);
   const [mode, setMode] = useState<"manual" | "auto">("manual");
@@ -90,6 +108,8 @@ export function ChickenCasino({
   const maxSteps = CHICKEN_MULTIPLIERS[currentDifficulty].length;
   const currentStep = run?.step ?? 0;
   const runId = run?.id ?? null;
+  const balance = getClubBalance(game);
+  const maxBet = Math.min(CHICKEN_MAX_BET, Math.floor(balance));
   const [scene, setScene] = useState<Scene>(() => ({
     runId,
     step: currentStep,
@@ -135,6 +155,23 @@ export function ChickenCasino({
   useEffect(() => {
     if (run?.status === "playing") setDifficulty(run.difficulty);
   }, [run?.difficulty, run?.status]);
+
+  useEffect(() => {
+    const previous = previousRun.current;
+    previousRun.current = run ?? null;
+    if (previous === undefined || !run) return;
+    const context = audioRef.current;
+    if (!soundRef.current || !context) return;
+
+    if (!previous || previous.id !== run.id) {
+      if (run.status === "playing") playChickenStart(context);
+      return;
+    }
+    if (previous.status !== "playing") return;
+    if (run.status === "lost") playChickenCollision(context);
+    else if (run.status === "cashed" || run.status === "finished")
+      playChickenCashout(context, run.step > previous.step ? 0.35 : 0);
+  }, [run]);
 
   useEffect(
     () => () => {
@@ -189,6 +226,8 @@ export function ChickenCasino({
       if (!autoRunning && !reduceMotion) setTransitioning(true);
       const finishSafe = () => {
         const nextStep = visualStep + 1;
+        const context = audioRef.current;
+        if (soundRef.current && context) playChickenStep(context, nextStep);
         setScene((previous) => ({
           ...previous,
           step: nextStep,
@@ -315,11 +354,20 @@ export function ChickenCasino({
     ],
   );
 
+  const selectChip = useCallback(
+    (amount: number) => {
+      if (active || autoRunning || amount > maxBet) return;
+      setBet(amount);
+      if (sound && audioRef.current) playCasinoSound(audioRef.current, "chips");
+    },
+    [active, autoRunning, audioRef, maxBet, sound],
+  );
+
   const start = () => {
     if (
       disabled ||
       !chickenBet(bet) ||
-      bet > (game.balance ?? 0) ||
+      bet > balance ||
       (mode === "auto" && !validAuto)
     )
       return;
@@ -607,10 +655,10 @@ export function ChickenCasino({
             >
               <BetChipPicker
                 bet={active && run ? run.bet : bet}
-                maxBet={CHICKEN_MAX_BET}
-                balance={game.balance ?? 0}
+                maxBet={maxBet}
+                balance={balance}
                 disabled={active || autoRunning}
-                onSelect={setBet}
+                onSelect={selectChip}
               />
             </GameControlGroup>
             {autoRunning ? (
@@ -644,7 +692,7 @@ export function ChickenCasino({
                 disabled={
                   disabled ||
                   !chickenBet(bet) ||
-                  bet > (game.balance ?? 0) ||
+                  bet > balance ||
                   (mode === "auto" && !validAuto)
                 }
                 icon={<Play size={20} />}

@@ -1,5 +1,5 @@
 import type { ChickenDifficulty } from "./types";
-import { CASINO_CHIP_DENOMINATIONS } from "./chips";
+import { CASINO_MAX_BET, CASINO_CHIP_DENOMINATIONS } from "./chips";
 
 /** Stake Originals Chicken payout table, published in September 2025.
  * https://cdn.sanity.io/images/tdrhge4k/stake-com-production/097749a062a724c0e601f3a51c1210d495e61bac-1500x1872.png
@@ -40,8 +40,8 @@ export const CHICKEN_DIFFICULTY_ORDER = [
   "expert",
 ] as const;
 export const CHICKEN_MIN_BET = CASINO_CHIP_DENOMINATIONS[0];
-/** Limits the 181060.88× final payout to a safe wallet amount. */
-export const CHICKEN_MAX_BET = 50_000_000;
+/** Chicken shares the casino wager ceiling used by Tower and Mines. */
+export const CHICKEN_MAX_BET = CASINO_MAX_BET;
 export const CHICKEN_BET_STEP = CASINO_CHIP_DENOMINATIONS[0];
 export const CHICKEN_ROOM_SIZE = 10;
 

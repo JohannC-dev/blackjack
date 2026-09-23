@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { CHICKEN_MAX_BET, CHICKEN_MIN_BET } from "../src/lib/chicken";
 import { MINES_TARGETS } from "../src/lib/mines";
 
 const TableId = Schema.String.pipe(Schema.pattern(/^[A-Z0-9]{4,12}$/));
@@ -137,7 +138,9 @@ const ChickenDifficulty = Schema.Union(
   Schema.Literal("hard"),
   Schema.Literal("expert"),
 );
-const ChickenBet = Schema.Int.pipe(Schema.between(5_000, 50_000_000));
+const ChickenBet = Schema.Int.pipe(
+  Schema.between(CHICKEN_MIN_BET, CHICKEN_MAX_BET),
+);
 const AutoPercent = Schema.Number.pipe(
   Schema.finite(),
   Schema.between(-100, 500),

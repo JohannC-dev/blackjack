@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { ChickenManager, CHICKEN_ABANDON_MS } from "../server/chicken";
 import {
   CHICKEN_DIFFICULTIES,
+  CHICKEN_MAX_BET,
   CHICKEN_MULTIPLIERS,
+  chickenBet,
   chickenPayout,
 } from "../src/lib/chicken";
 import type { Player } from "../server/engine";
@@ -31,6 +33,23 @@ const create = (random: (max: number) => number = (max) => max - 1) => {
 };
 
 describe("Chicken", () => {
+  test("accepts the billion-credit chip with the shared casino limit", () => {
+    expect(CHICKEN_MAX_BET).toBe(20_000_000_000);
+    expect(chickenBet(1_000_000_000)).toBe(true);
+
+    const { manager } = create();
+    const alice = makePlayer("billion");
+    alice.balance = 1_000_000_000_000;
+    manager.enter(alice);
+    manager.command(
+      alice,
+      { type: "start", difficulty: "medium", bet: 1_000_000_000 },
+      1_000,
+    );
+
+    expect(alice.balance).toBe(999_000_000_000);
+  });
+
   test("the published table follows the twenty-position draw at 98%", () => {
     for (const [difficulty, config] of Object.entries(CHICKEN_DIFFICULTIES) as [
       keyof typeof CHICKEN_DIFFICULTIES,
