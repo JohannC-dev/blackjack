@@ -4183,6 +4183,23 @@ h1 > span:not(.live-tag) {
   line-height: 1.5;
   color: #8d7f9b;
 }
+.welcome-turnstile {
+  display: flex;
+  justify-content: center;
+  max-width: 100%;
+  margin-top: 16px;
+  overflow: hidden;
+}
+.welcome-turnstile > div {
+  max-width: 100%;
+}
+.welcome-captcha-hint {
+  margin-top: 7px;
+  color: #8d7f9b;
+  font-size: 9px;
+  line-height: 1.5;
+  text-align: center;
+}
 #player-referral {
   font-family: var(--font-mono, ui-monospace, monospace);
   letter-spacing: 0.18em;
