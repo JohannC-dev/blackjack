@@ -90,6 +90,8 @@ function club(draw: () => number = () => 17, tableId = "MINUIT") {
   return { roulette, members, published, sit, send, state, wait };
 }
 
+const NUMBERS = Array.from({ length: 36 }, (_, index) => index + 1);
+
 describe("Roulette européenne", () => {
   test("les chevaux et carrés ne relient que des cases voisines", () => {
     const bet = (kind: "split" | "corner", selection: string) =>
@@ -117,15 +119,57 @@ describe("Roulette européenne", () => {
       kind: "corner",
       selection: "17-18-20-21",
     });
-    // Outer edges fall back to the plain number or a single split.
-    expect(targetAt(3, 0.5, 0.05).selection).toBe("3");
-    expect(targetAt(36, 0.95, 0.05).selection).toBe("36");
-    for (const number of [1, 2, 3, 17, 34, 35, 36])
+    // Outer edges leave the layout: transversale pleine and sixain.
+    expect(targetAt(3, 0.5, 0.05)).toEqual({
+      kind: "street",
+      selection: "1-2-3",
+    });
+    expect(targetAt(1, 0.5, 0.95).selection).toBe("1-2-3");
+    expect(targetAt(36, 0.95, 0.05)).toEqual({
+      kind: "street",
+      selection: "34-35-36",
+    });
+    expect(targetAt(3, 0.95, 0.05)).toEqual({
+      kind: "line",
+      selection: "1-2-3-4-5-6",
+    });
+    expect(targetAt(6, 0.05, 0.05).selection).toBe("1-2-3-4-5-6");
+    expect(targetAt(4, 0.05, 0.95).selection).toBe("1-2-3-4-5-6");
+    for (const number of NUMBERS)
       for (const x of [0.05, 0.5, 0.95])
         for (const y of [0.05, 0.5, 0.95])
           expect(
             isValidRouletteBet({ ...targetAt(number, x, y), amount: CHIP }),
           ).toBe(true);
+  });
+
+  test("les transversales et sixains suivent les colonnes du tapis", () => {
+    const bet = (kind: "street" | "line", selection: string) =>
+      isValidRouletteBet({ kind, selection, amount: CHIP });
+    expect(bet("street", "1-2-3")).toBe(true);
+    expect(bet("street", "34-35-36")).toBe(true);
+    expect(bet("street", "2-3-4")).toBe(false);
+    expect(bet("street", "0-1-2")).toBe(false);
+    expect(bet("line", "1-2-3-4-5-6")).toBe(true);
+    expect(bet("line", "31-32-33-34-35-36")).toBe(true);
+    expect(bet("line", "3-4-5-6-7-8")).toBe(false);
+    expect(bet("line", "34-35-36-37-38-39")).toBe(false);
+    // 11 pour 1 on three numbers, 5 pour 1 on six: same 97,3 % return.
+    expect(
+      rouletteReturn([{ kind: "street", selection: "1-2-3", amount: 10 }], 2),
+    ).toBe(120);
+    expect(
+      rouletteReturn(
+        [{ kind: "line", selection: "1-2-3-4-5-6", amount: 10 }],
+        6,
+      ),
+    ).toBe(60);
+    expect(rouletteBetWins({ kind: "line", selection: "1-2-3-4-5-6" }, 7)).toBe(
+      false,
+    );
+    expect(rouletteBetWins({ kind: "street", selection: "1-2-3" }, 0)).toBe(
+      false,
+    );
   });
 
   test("une case n’a qu’une seule écriture", () => {

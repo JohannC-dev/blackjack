@@ -505,6 +505,16 @@
   white-space: nowrap;
   transform: translateX(-50%);
 }
+/* Transversales and sixains rest on the top line of the layout: their chips
+   and their preview lean back inside the tapis instead of hanging over it. */
+.roulette-anchor.is-outer .table-chip.roulette-chip {
+  transform: translate(-50%, -14%);
+}
+.roulette-anchor.is-outer .roulette-preview-label {
+  top: calc(var(--cell) * 0.5);
+  bottom: auto;
+}
+
 /* Result: every winning spot lights up, chips or not. */
 /* A locked felt (ready, spinning, results) keeps full strength: dimming the
    spots would also dim their chips but not the split and corner ones. */
