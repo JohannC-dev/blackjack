@@ -11,7 +11,7 @@ ARG SOURCE_COMMIT
 ENV NEXT_PUBLIC_SOURCE_COMMIT=${SOURCE_COMMIT}
 RUN test -n "$SOURCE_COMMIT" || (echo "SOURCE_COMMIT build arg is required" >&2; exit 1)
 COPY . .
-RUN bun run build --webpack
+RUN bun run build
 
 FROM bun-base AS production-dependencies
 COPY package.json bun.lock ./
