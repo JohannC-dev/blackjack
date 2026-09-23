@@ -205,18 +205,18 @@ export function NoStatsYet({
 export function BalanceHero({ balance }: { balance: number }) {
   return (
     <section
-      className="relative flex items-center justify-between gap-4 overflow-hidden rounded-2xl border border-minuit-purple/25 bg-minuit-purple/[0.07] px-4 py-3 sm:px-5"
+      className="relative shrink-0 overflow-hidden rounded-2xl border border-minuit-purple/25 bg-minuit-purple/[0.07] px-4 py-3 sm:px-5 sm:py-3.5"
       aria-label="Solde de jetons"
     >
       <div
         className="pointer-events-none absolute -top-16 -right-8 size-44 rounded-full bg-[radial-gradient(closest-side,#a880f33d,transparent)]"
         aria-hidden="true"
       />
-      <p className="relative flex items-center gap-2 text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
+      <p className="relative flex items-center gap-2 text-[10px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
         <Wallet className="size-3.5" aria-hidden="true" />
         Solde de jetons
       </p>
-      <p className="relative flex items-baseline gap-2 font-display text-2xl leading-none font-semibold tabular-nums sm:text-3xl">
+      <p className="relative mt-1.5 flex items-baseline gap-2 font-display text-2xl leading-none font-semibold tabular-nums sm:text-3xl">
         <Coins
           className="size-6 shrink-0 self-center text-minuit-purple"
           aria-hidden="true"

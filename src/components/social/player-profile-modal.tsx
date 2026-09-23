@@ -200,7 +200,11 @@ function ProfileBody({
                 </DialogDescription>
               </div>
             </div>
-            <RelationActions profile={profile} onChanged={onChanged} />
+            {self ? (
+              <BalanceHero balance={balance} />
+            ) : (
+              <RelationActions profile={profile} onChanged={onChanged} />
+            )}
           </div>
           <dl className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3">
             <IdentityFact
@@ -224,11 +228,6 @@ function ProfileBody({
           </dl>
         </div>
       </div>
-      {self && (
-        <div className="shrink-0 px-5 pt-4 sm:px-7">
-          <BalanceHero balance={balance} />
-        </div>
-      )}
       <div className="scroll-hidden min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-4 pb-7 sm:px-7">
         <ProfileSections profile={profile} />
       </div>
