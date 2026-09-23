@@ -112,24 +112,28 @@ const ownedCosmetics = (userId: string) =>
   });
 
 /**
- * Grants every tier the parrain has reached and not been paid for yet. The
- * wallet operation ids are stable, so an interrupted settlement credits
- * nothing twice when it runs again.
+ * Grants every tier reached by one filleul and not paid for yet. The wallet
+ * operation ids are stable, so retries never credit the same tier twice.
  */
-const settleTiers = (parrainId: string) =>
+const settleTiers = (
+  parrainId: string,
+  filleulId: string,
+  wagered: number,
+) =>
   Effect.gen(function* () {
     const db = yield* PgDrizzle;
-    const [counted] = yield* db
-      .select({ count: sql<number>`count(*)`.mapWith(Number) })
-      .from(referral)
-      .where(eq(referral.parrainId, parrainId));
-    const reached = tiersReachedBy(counted?.count ?? 0);
+    const reached = tiersReachedBy(wagered);
     if (!reached.length) return [] as ReferralTier[];
 
     const paid = yield* db
       .select({ tier: referralReward.tier })
       .from(referralReward)
-      .where(eq(referralReward.userId, parrainId));
+      .where(
+        and(
+          eq(referralReward.userId, parrainId),
+          eq(referralReward.filleulId, filleulId),
+        ),
+      );
     const already = new Set(paid.map((row) => row.tier));
     const missing = reached.filter((tier) => !already.has(tier.tier));
     if (!missing.length) return [] as ReferralTier[];
@@ -138,11 +142,11 @@ const settleTiers = (parrainId: string) =>
       missing.map((tier) =>
         grant(
           parrainId,
-          `parrainage:tier:${parrainId}:${tier.tier}`,
+          `parrainage:tier:${parrainId}:${filleulId}:${tier.tier}`,
           `tier-${tier.tier}`,
-          parrainId,
+          filleulId,
           tier.reward,
-          { filleuls: tier.filleuls },
+          { filleulId, wagered, threshold: tier.wagered },
         ),
       ),
     );
@@ -152,6 +156,7 @@ const settleTiers = (parrainId: string) =>
       .values(
         missing.map((tier) => ({
           userId: parrainId,
+          filleulId,
           tier: tier.tier,
           amount: tier.reward,
         })),
@@ -237,11 +242,10 @@ export const registerReferral = (filleulId: string, input: string) =>
           PARRAINAGE_COSMETICS,
           "parrainage-filleul",
         );
-        const tiers = yield* settleTiers(parrain.id);
         return {
           parrain: { id: parrain.id, name: parrain.name },
           welcomeBonus: REFERRAL_WELCOME_BONUS,
-          tiers,
+          tiers: [],
         } satisfies ReferralRegistration;
       }),
     );
@@ -295,7 +299,6 @@ export const referralOverview = (userId: string, deps: ReferralDeps) =>
   Effect.gen(function* () {
     const db = yield* PgDrizzle;
     const code = yield* ensurePlayerProfile(userId);
-    yield* settleTiers(userId);
 
     const [parrainRow] = yield* db
       .select({
@@ -324,23 +327,46 @@ export const referralOverview = (userId: string, deps: ReferralDeps) =>
       .orderBy(desc(referral.createdAt));
 
     const activity = yield* activityOf(filleulRows.map((row) => row.id));
-    const filleuls = filleulRows.map(
-      (row): Filleul => ({
+    for (const row of filleulRows)
+      yield* settleTiers(
+        userId,
+        row.id,
+        activity.get(row.id)?.wagered ?? 0,
+      );
+
+    const rewards = yield* db
+      .select()
+      .from(referralReward)
+      .where(eq(referralReward.userId, userId));
+    const granted = new Map<string, typeof rewards>();
+    for (const reward of rewards) {
+      const rows = granted.get(reward.filleulId) ?? [];
+      rows.push(reward);
+      granted.set(reward.filleulId, rows);
+    }
+    const filleuls = filleulRows.map((row): Filleul => {
+      const wagered = activity.get(row.id)?.wagered ?? 0;
+      const paid = new Map(
+        (granted.get(row.id) ?? []).map((reward) => [reward.tier, reward]),
+      );
+      return {
         id: row.id,
         name: row.name,
         friendCode: row.friendCode,
         joinedAt: row.joinedAt.toISOString(),
         online: deps.isOnline(row.id),
         played: activity.get(row.id)?.played ?? 0,
-        wagered: activity.get(row.id)?.wagered ?? 0,
-      }),
-    );
-
-    const rewards = yield* db
-      .select()
-      .from(referralReward)
-      .where(eq(referralReward.userId, userId));
-    const granted = new Map(rewards.map((row) => [row.tier, row]));
+        wagered,
+        tiers: REFERRAL_TIERS.map(
+          (tier): ReferralTierState => ({
+            ...tier,
+            reached: paid.has(tier.tier),
+            grantedAt: paid.get(tier.tier)?.createdAt.toISOString() ?? null,
+          }),
+        ),
+        nextTier: nextTierAfter(wagered),
+      };
+    });
 
     return {
       code,
@@ -353,15 +379,7 @@ export const referralOverview = (userId: string, deps: ReferralDeps) =>
           } satisfies SocialPlayer & { since: string })
         : null,
       filleuls,
-      tiers: REFERRAL_TIERS.map(
-        (tier): ReferralTierState => ({
-          ...tier,
-          reached: granted.has(tier.tier) || filleuls.length >= tier.filleuls,
-          grantedAt: granted.get(tier.tier)?.createdAt.toISOString() ?? null,
-        }),
-      ),
       earned: rewards.reduce((total, row) => total + row.amount, 0),
-      nextTier: nextTierAfter(filleuls.length),
       cosmetics: yield* ownedCosmetics(userId),
     } satisfies ReferralOverview;
   }).pipe(mapDatabaseError);

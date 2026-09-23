@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Copy, Gift, Lock, Sparkles, Users } from "lucide-react";
+import { Fragment } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { COSMETICS, COSMETIC_KIND_LABELS } from "@/lib/cosmetics";
 import { credits } from "@/lib/rules";
 import {
   REFERRAL_WELCOME_BONUS,
+  type Filleul,
   type ReferralOverview,
   type ReferralTierState,
 } from "@/lib/referral";
@@ -126,7 +128,16 @@ function ReferralBody({ overview }: { overview: ReferralOverview }) {
         </button>
       )}
 
-      <TierLadder overview={overview} count={count} />
+      <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+        <span className="font-semibold tracking-[0.14em] uppercase">
+          Progression des filleuls
+        </span>
+        <span>
+          {overview.earned > 0
+            ? `${credits(overview.earned)} gagnés`
+            : "Aucune récompense"}
+        </span>
+      </div>
 
       <div className="mt-4 mb-2 flex items-center gap-2 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
         <Users className="size-3.5" />
@@ -135,40 +146,44 @@ function ReferralBody({ overview }: { overview: ReferralOverview }) {
       {count ? (
         <div className="divide-y divide-white/[0.05]">
           {overview.filleuls.map((filleul) => (
-            <button
-              key={filleul.id}
-              type="button"
-              onClick={() => social.openProfile(filleul.id)}
-              className="flex w-full items-center gap-2.5 py-2.5 text-left hover:bg-white/[0.02]"
-            >
-              <PlayerAvatar
-                id={filleul.id}
-                name={filleul.name}
-                online={filleul.online}
-                size="sm"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold">
-                  {filleul.name}
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  Depuis le {dayFormat.format(new Date(filleul.joinedAt))}
-                  {filleul.played > 0
-                    ? ` · ${filleul.played.toLocaleString("fr-FR")} partie${
-                        filleul.played > 1 ? "s" : ""
-                      }`
-                    : " · n’a pas encore joué"}
-                </span>
-              </span>
-              <span
-                className={cn(
-                  "shrink-0 text-xs",
-                  filleul.online ? "text-minuit-mint" : "text-muted-foreground",
-                )}
+            <Fragment key={filleul.id}>
+              <button
+                type="button"
+                onClick={() => social.openProfile(filleul.id)}
+                className="flex w-full items-center gap-2.5 py-2.5 text-left hover:bg-white/[0.02]"
               >
-                {filleul.online ? "En ligne" : "Hors ligne"}
-              </span>
-            </button>
+                <PlayerAvatar
+                  id={filleul.id}
+                  name={filleul.name}
+                  online={filleul.online}
+                  size="sm"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">
+                    {filleul.name}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    Depuis le {dayFormat.format(new Date(filleul.joinedAt))}
+                    {filleul.played > 0
+                      ? ` · ${filleul.played.toLocaleString("fr-FR")} partie${
+                          filleul.played > 1 ? "s" : ""
+                        } · ${credits(filleul.wagered)} misés`
+                      : " · n’a pas encore joué"}
+                  </span>
+                </span>
+                <span
+                  className={cn(
+                    "shrink-0 text-xs",
+                    filleul.online
+                      ? "text-minuit-mint"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {filleul.online ? "En ligne" : "Hors ligne"}
+                </span>
+              </button>
+              <TierLadder filleul={filleul} />
+            </Fragment>
           ))}
         </div>
       ) : (
@@ -183,32 +198,31 @@ function ReferralBody({ overview }: { overview: ReferralOverview }) {
 }
 
 function TierLadder({
-  overview,
-  count,
+  filleul,
 }: {
-  overview: ReferralOverview;
-  count: number;
+  filleul: Filleul;
 }) {
-  const next = overview.nextTier;
-  const previous = [...overview.tiers]
+  const next = filleul.nextTier;
+  const previous = [...filleul.tiers]
     .reverse()
-    .find((tier) => tier.reached)?.filleuls;
-  const floor = next ? (previous ?? 0) : count;
-  const span = next ? next.filleuls - floor : 1;
+    .find((tier) => tier.reached)?.wagered;
+  const floor = next ? (previous ?? 0) : filleul.wagered;
+  const span = next ? next.wagered - floor : 1;
   const progress = next
-    ? Math.min(100, Math.max(0, ((count - floor) / Math.max(1, span)) * 100))
+    ? Math.min(
+        100,
+        Math.max(0, ((filleul.wagered - floor) / Math.max(1, span)) * 100),
+      )
     : 100;
 
   return (
-    <div className="mt-4">
+    <div className="border-b border-white/[0.05] px-2 pb-3">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-          Paliers
+        <span className="text-xs text-muted-foreground">
+          {credits(filleul.wagered)} misés
         </span>
         <span className="text-xs text-muted-foreground">
-          {overview.earned > 0
-            ? `${credits(overview.earned)} crédits gagnés`
-            : "Aucun palier atteint"}
+          {next ? `Prochain : ${credits(next.wagered)}` : "Tous les paliers"}
         </span>
       </div>
       <div
@@ -226,21 +240,19 @@ function TierLadder({
       </div>
       <p className="mt-1.5 text-xs text-muted-foreground">
         {next
-          ? `Encore ${next.filleuls - count} filleul${
-              next.filleuls - count > 1 ? "s" : ""
-            } pour « ${next.label} » · ${credits(next.reward)} crédits`
-          : "Tous les paliers sont atteints. Merci d’animer le club."}
+          ? `Encore ${credits(next.wagered - filleul.wagered)} à miser pour « ${next.label} » · ${credits(next.reward)}`
+          : "Tous les paliers sont atteints pour ce filleul."}
       </p>
       <ul className="mt-3 space-y-1.5">
-        {overview.tiers.map((tier) => (
-          <TierRow key={tier.tier} tier={tier} count={count} />
+        {filleul.tiers.map((tier) => (
+          <TierRow key={tier.tier} tier={tier} />
         ))}
       </ul>
     </div>
   );
 }
 
-function TierRow({ tier, count }: { tier: ReferralTierState; count: number }) {
+function TierRow({ tier }: { tier: ReferralTierState }) {
   return (
     <li
       className={cn(
@@ -264,8 +276,7 @@ function TierRow({ tier, count }: { tier: ReferralTierState; count: number }) {
           {tier.label}
         </span>
         <span className="block text-xs text-muted-foreground">
-          {tier.filleuls} filleul{tier.filleuls > 1 ? "s" : ""}
-          {!tier.reached && ` · ${tier.filleuls - count} restant${tier.filleuls - count > 1 ? "s" : ""}`}
+          {credits(tier.wagered)} misés
         </span>
       </span>
       <span

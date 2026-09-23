@@ -21,19 +21,19 @@ export const REFERRAL_WELCOME_BALANCE =
 export type ReferralTier = {
   /** 1 to 5, in order. */
   readonly tier: number;
-  /** Filleuls needed to reach it. */
-  readonly filleuls: number;
+  /** Credits wagered by one filleul to reach it. */
+  readonly wagered: number;
   readonly reward: number;
   readonly label: string;
 };
 
-/** The five parrain tiers. Reaching one grants its credits, once and for all. */
+/** The five tiers apply independently to every filleul. */
 export const REFERRAL_TIERS: readonly ReferralTier[] = [
-  { tier: 1, filleuls: 1, reward: 250_000, label: "Premier filleul" },
-  { tier: 2, filleuls: 3, reward: 500_000, label: "Petite table" },
-  { tier: 3, filleuls: 5, reward: 1_000_000, label: "Cercle" },
-  { tier: 4, filleuls: 10, reward: 2_500_000, label: "Salon privé" },
-  { tier: 5, filleuls: 25, reward: 5_000_000, label: "Maître de nuit" },
+  { tier: 1, wagered: 2_000_000, reward: 250_000, label: "Mise de départ" },
+  { tier: 2, wagered: 10_000_000, reward: 500_000, label: "Petite table" },
+  { tier: 3, wagered: 50_000_000, reward: 1_000_000, label: "Cercle" },
+  { tier: 4, wagered: 100_000_000, reward: 2_500_000, label: "Salon privé" },
+  { tier: 5, wagered: 500_000_000, reward: 5_000_000, label: "Maître de nuit" },
 ];
 
 /** Tier that also unlocks the parrainage cosmetics for the parrain. */
@@ -41,12 +41,12 @@ export const REFERRAL_COSMETIC_TIER = 1;
 
 export const REFERRAL_TIER_COUNT = REFERRAL_TIERS.length;
 
-export function tiersReachedBy(filleuls: number) {
-  return REFERRAL_TIERS.filter((tier) => filleuls >= tier.filleuls);
+export function tiersReachedBy(wagered: number) {
+  return REFERRAL_TIERS.filter((tier) => wagered >= tier.wagered);
 }
 
-export function nextTierAfter(filleuls: number) {
-  return REFERRAL_TIERS.find((tier) => filleuls < tier.filleuls) ?? null;
+export function nextTierAfter(wagered: number) {
+  return REFERRAL_TIERS.find((tier) => wagered < tier.wagered) ?? null;
 }
 
 export type ReferralTierState = ReferralTier & {
@@ -63,6 +63,8 @@ export type Filleul = SocialPlayer & {
   /** Rounds, runs and buy-ins across every game. */
   played: number;
   wagered: number;
+  tiers: ReferralTierState[];
+  nextTier: ReferralTier | null;
 };
 
 export type ReferralOverview = {
@@ -71,10 +73,7 @@ export type ReferralOverview = {
   /** Who parrained the player, when someone did. */
   parrain: (SocialPlayer & { since: string }) | null;
   filleuls: Filleul[];
-  tiers: ReferralTierState[];
-  /** Credits already granted by the tiers. */
+  /** Credits already granted across all filleuls. */
   earned: number;
-  /** Filleuls still needed for the next tier, null once all are reached. */
-  nextTier: ReferralTier | null;
   cosmetics: OwnedCosmetic[];
 };

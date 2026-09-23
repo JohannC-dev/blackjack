@@ -255,6 +255,9 @@ export const referralReward = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    filleulId: text("filleul_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
     tier: integer("tier").notNull(),
     amount: bigint("amount", { mode: "number" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -262,7 +265,7 @@ export const referralReward = pgTable(
       .notNull(),
   },
   (table) => [
-    primaryKey({ columns: [table.userId, table.tier] }),
+    primaryKey({ columns: [table.userId, table.filleulId, table.tier] }),
     check("referral_reward_tier_range", sql`${table.tier} between 1 and 5`),
   ],
 );
