@@ -7,7 +7,10 @@ import "@fontsource/manrope/800.css";
 import "@fontsource/dm-sans/400.css";
 import "@fontsource/dm-sans/500.css";
 import "./globals.css";
-import "./table-center.css";
+import "../styles/legacy.css";
+import "../styles/roulette.css";
+import "../styles/table-center.css";
+import { VersionNotice } from "@/components/version-notice";
 
 export const metadata: Metadata = {
   title: "MINUIT — Le blackjack, entre amis.",
@@ -24,7 +27,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="fr">
-      <body>{children}</body>
+      <body>
+        {children}
+        <VersionNotice />
+      </body>
     </html>
   );
 }

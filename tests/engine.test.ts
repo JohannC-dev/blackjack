@@ -37,7 +37,7 @@ function tableWith(draws: Card[], players = [player()]) {
     ...Array.from({ length: 200 }, () => card(10)),
     ...draws.toReversed(),
   ];
-  const table = new Table("TEST", undefined, shoe);
+  const table = new Table("TEST", undefined, shoe, undefined, true);
   players.forEach((p) => {
     table.add(p);
     const seat = table.state.seats.find((s) => s.playerId === p.id)!;
@@ -49,7 +49,11 @@ function tableWith(draws: Card[], players = [player()]) {
   });
   return { table, p: players[0], players };
 }
-function begin(table: Table, players: Player[]) {
+function begin(
+  table: Table,
+  players: Player[],
+  insurance: "decline" | "manual" = "decline",
+) {
   players.forEach((p) => table.command(p.id, { type: "ready", ready: true }));
   table.startRound();
   let now = Date.now() + 1000;
@@ -58,6 +62,14 @@ function begin(table: Table, players: Player[]) {
     now += 1000;
   }
   if (table.state.phase === "bonuses") table.tick(now + 4000);
+  if (table.state.phase === "insurance" && insurance === "decline") {
+    for (const seat of table.state.seats.filter((seat) => seat.hands.length))
+      table.command(seat.playerId!, {
+        type: "insurance",
+        seat: seat.index,
+        take: false,
+      });
+  }
 }
 function settle(table: Table) {
   let now = Date.now() + 100_000;
@@ -85,7 +97,7 @@ describe("Contextual casino chip stacks", () => {
       casinoChipStackForAmount(500, 500).columns.map(
         (column) => column.denomination,
       ),
-    ).toEqual([100, 50, 25]);
+    ).toEqual([500_000, 100_000, 20_000]);
   });
 });
 
@@ -147,7 +159,68 @@ describe("Cards and requested side-bet paytables", () => {
 });
 
 describe("European blackjack and credit accounting", () => {
-  test("winnings remain optional across rounds without a streak cap", () => {
+  test("offers insurance on a dealer ace before actions and pays 2:1 on dealer blackjack", () => {
+    const { table, p } = tableWith([card(9), card(1), card(8), card(10)]);
+    begin(table, [p], "manual");
+    expect(table.state.phase).toBe("insurance");
+    expect(table.state.activeHandId).toBeNull();
+    expect(() =>
+      table.command(p.id, { type: "stand", handId: ownHand(table, p).id }),
+    ).toThrow();
+    table.command(p.id, { type: "insurance", seat: 2, take: true });
+    expect(table.state.phase).toBe("playing");
+    expect(p.balance).toBe(1962.5);
+    expect(() =>
+      table.command(p.id, { type: "insurance", seat: 2, take: true }),
+    ).toThrow();
+    table.command(p.id, { type: "stand", handId: ownHand(table, p).id });
+    settle(table);
+    expect(p.balance).toBe(2000);
+    expect(
+      table.state.history[0].bets.find((bet) => bet.type === "insurance"),
+    ).toMatchObject({
+      bet: 12.5,
+      payout: 37.5,
+      net: 25,
+      result: "win",
+    });
+  });
+  test("insurance expires before the first decision and a losing policy stays lost", () => {
+    const { table, p } = tableWith([card(9), card(1), card(8), card(7)]);
+    begin(table, [p], "manual");
+    const deadline = table.state.deadline!;
+    table.tick(deadline);
+    expect(table.state.phase).toBe("playing");
+    expect(ownHand(table, p).id).toBe(table.state.activeHandId!);
+    table.command(p.id, { type: "stand", handId: ownHand(table, p).id });
+    settle(table);
+    expect(
+      table.state.history[0].bets.some((bet) => bet.type === "insurance"),
+    ).toBe(false);
+
+    const insured = tableWith([card(9), card(1), card(8), card(7)]);
+    begin(insured.table, [insured.p], "manual");
+    insured.table.command(insured.p.id, {
+      type: "insurance",
+      seat: 2,
+      take: true,
+    });
+    insured.table.command(insured.p.id, {
+      type: "stand",
+      handId: ownHand(insured.table, insured.p).id,
+    });
+    settle(insured.table);
+    expect(
+      insured.table.state.history[0].bets.find(
+        (bet) => bet.type === "insurance",
+      ),
+    ).toMatchObject({
+      payout: 0,
+      net: -12.5,
+      result: "lose",
+    });
+  });
+  test("the full payout remains optional during betting without a streak cap", () => {
     const { table, p } = tableWith([card(10), card(7), card(8), card(10)]);
     begin(table, [p]);
     table.command(p.id, { type: "stand", handId: table.state.activeHandId! });
@@ -156,7 +229,7 @@ describe("European blackjack and credit accounting", () => {
     const gamble = table.state.gambles.find(
       (entry) => entry.playerId === p.id,
     )!;
-    expect(gamble.stake).toBe(25);
+    expect(gamble.stake).toBe(50);
     expect(table.state.deadline).not.toBeNull();
     table.tick(table.state.deadline!);
     expect(table.state.phase).toBe("betting");
@@ -164,10 +237,6 @@ describe("European blackjack and credit accounting", () => {
     expect(table.state.seats[2].bet).toEqual({ main: 0, three: 0, pairs: 0 });
     table.command(p.id, { type: "repeat" });
     expect(table.state.seats[2].bet).toEqual({ main: 25, three: 0, pairs: 0 });
-    table.command(p.id, { type: "ready", ready: true });
-    table.startRound();
-    expect(table.state.phase).toBe("dealing");
-    expect(table.state.gambles).toContain(gamble);
     const balanceBeforeGambles = p.balance;
     for (let streak = 1; streak <= 12; streak++) {
       const nextCard = table.shoe.at(-1)!;
@@ -178,18 +247,22 @@ describe("European blackjack and credit accounting", () => {
       expect(gamble.status).toBe("available");
       expect(gamble.result).toBe("win");
       expect(gamble.streak).toBe(streak);
-      expect(gamble.stake).toBe(25 * 2 ** streak);
+      expect(gamble.stake).toBe(50 * 2 ** streak);
     }
-    expect(p.balance).toBe(balanceBeforeGambles + 25 * (2 ** 12 - 1));
-    expect(table.state.history[0].net).toBe(25 * 2 ** 12);
+    expect(p.balance).toBe(balanceBeforeGambles + 50 * (2 ** 12 - 1));
+    expect(table.state.history[0].net).toBe(25 + 50 * (2 ** 12 - 1));
     table.command(p.id, { type: "cashout" });
     expect(gamble.status).toBe("cashed");
     expect(() => table.command(p.id, { type: "gamble", color: "red" })).toThrow(
       "Aucun gain",
     );
+    table.command(p.id, { type: "ready", ready: true });
+    table.startRound();
+    expect(table.state.phase).toBe("dealing");
+    expect(table.state.gambles).toHaveLength(0);
   });
 
-  test("a wrong color ends the gamble and removes only the current winnings", () => {
+  test("a wrong color ends the gamble and removes the full winning payout", () => {
     const { table, p } = tableWith([card(10), card(7), card(8), card(10)]);
     begin(table, [p]);
     table.command(p.id, { type: "stand", handId: table.state.activeHandId! });
@@ -206,8 +279,8 @@ describe("European blackjack and credit accounting", () => {
     });
     expect(gamble.status).toBe("lost");
     expect(gamble.result).toBe("lose");
-    expect(p.balance).toBe(before - 25);
-    expect(table.state.history[0].net).toBe(0);
+    expect(p.balance).toBe(before - 50);
+    expect(table.state.history[0].net).toBe(-25);
     expect(() => table.command(p.id, { type: "cashout" })).toThrow(
       "Aucun gain",
     );
@@ -247,6 +320,9 @@ describe("European blackjack and credit accounting", () => {
     settle(table);
     expect(p.balance).toBe(380);
     expect(table.state.history[0].net).toBe(345);
+    expect(
+      table.state.gambles.find((entry) => entry.playerId === p.id)?.stake,
+    ).toBe(405);
     expect(table.state.history[0].bets).toEqual([
       {
         type: "main",
@@ -285,6 +361,9 @@ describe("European blackjack and credit accounting", () => {
     expect(p.balance).toBe(2037.5);
     expect(ownHand(table, p).result).toBe("blackjack");
     expect(table.state.history[0].net).toBe(37.5);
+    expect(
+      table.state.gambles.find((entry) => entry.playerId === p.id)?.stake,
+    ).toBe(62.5);
   });
   test("dealer stands on soft 17", () => {
     const { table, p } = tableWith([
@@ -513,7 +592,7 @@ describe("European blackjack and credit accounting", () => {
 
 describe("Multiplayer authority and lifecycle", () => {
   test("a Blackjack spectator does not reserve a seat", () => {
-    const table = new Table("TEST");
+    const table = new Table("TEST", undefined, undefined, undefined, true);
     const spectator = player("Poker only");
 
     table.observe(spectator);
@@ -805,9 +884,8 @@ describe("Multiplayer authority and lifecycle", () => {
     });
     expect(() => table.command(p.id, { type: "claim", seat: 1 })).not.toThrow();
   });
-  test("next round resets state and credits can only be refilled when depleted", () => {
+  test("next round resets state", () => {
     const { table, p } = tableWith([card(10), card(10), card(8), card(7)]);
-    expect(() => table.command(p.id, { type: "refill" })).toThrow("sous 5");
     begin(table, [p]);
     table.command(p.id, { type: "stand", handId: table.state.activeHandId! });
     settle(table);
@@ -822,9 +900,6 @@ describe("Multiplayer authority and lifecycle", () => {
       three: 0,
       pairs: 0,
     });
-    p.balance = 0;
-    table.command(p.id, { type: "refill" });
-    expect(p.balance).toBe(2000);
   });
   test("repeat restores every previous seat wager atomically", () => {
     const { table, p } = tableWith([card(10), card(10), card(8), card(7)]);

@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import { Context, Effect, Layer, type Option } from "effect";
 import type { RouletteTableState } from "../../src/lib/types";
-import type { InsufficientCredits } from "./errors";
+import type { GameWallet } from "../game-wallet";
 
 /** What the Roulette needs to know about a club member. */
 export type RoulettePlayer = {
@@ -12,23 +12,20 @@ export type RoulettePlayer = {
   readonly lastSeen: number;
 };
 
-/**
- * The club members and their wallet, shared with the other games. A debit
- * checks the balance and takes the credits in one step, so a wallet spent
- * elsewhere in the meantime can never go negative.
- */
+/** The club members shared with the other games. */
 export class Players extends Context.Tag("roulette/Players")<
   Players,
   {
     readonly get: (
       playerId: string,
     ) => Effect.Effect<Option.Option<RoulettePlayer>>;
-    readonly debit: (
-      playerId: string,
-      amount: number,
-    ) => Effect.Effect<void, InsufficientCredits>;
-    readonly credit: (playerId: string, amount: number) => Effect.Effect<void>;
   }
+>() {}
+
+/** The wallet port used by every game engine. */
+export class Wallet extends Context.Tag("roulette/Wallet")<
+  Wallet,
+  GameWallet
 >() {}
 
 /** Source of the winning number. */

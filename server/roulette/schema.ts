@@ -1,4 +1,5 @@
 import { Effect, Either, Schema } from "effect";
+import { mergeChipCounts } from "../../src/lib/chips";
 import {
   isValidRouletteBet,
   rouletteBetId,
@@ -28,6 +29,11 @@ export const RouletteBetSchema = Schema.Struct({
   kind: BetKind,
   selection: Schema.String,
   amount: Schema.Number,
+  chips: Schema.optional(
+    Schema.Array(
+      Schema.Struct({ denomination: Schema.Number, count: Schema.Number }),
+    ),
+  ),
 }).pipe(Schema.filter((bet) => isValidRouletteBet(bet)));
 
 const CommandInput = Schema.Union(
@@ -54,17 +60,31 @@ export const decodeBets = (input: unknown) =>
       const bet = decoded.right;
       const id = rouletteBetId(bet);
       const amount = (merged.get(id)?.amount ?? 0) + bet.amount;
-      merged.set(id, { kind: bet.kind, selection: bet.selection, amount });
+      const previous = merged.get(id);
+      let chips = bet.chips ? mergeChipCounts([], bet.chips) : undefined;
+      if (previous && (previous.chips || bet.chips)) {
+        chips = mergeChipCounts(
+          previous.chips ?? [{ denomination: previous.amount, count: 1 }],
+          bet.chips ?? [{ denomination: bet.amount, count: 1 }],
+        );
+      }
+      merged.set(id, {
+        kind: bet.kind,
+        selection: bet.selection,
+        amount,
+        chips,
+      });
     }
     const bets = [...merged.values()];
     if (bets.length > ROULETTE_MAX_BETS)
       return yield* new InvalidBets({
         message: "Trop de mises différentes sur le tapis.",
       });
-    if (bets.some((bet) => bet.amount > ROULETTE_MAX_PER_SPOT))
+    if (bets.some((bet) => bet.amount > ROULETTE_MAX_PER_SPOT)) {
       return yield* new InvalidBets({
         message: `La mise est limitée à ${ROULETTE_MAX_PER_SPOT} crédits par case.`,
       });
+    }
     return bets;
   });
 

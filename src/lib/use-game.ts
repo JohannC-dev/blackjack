@@ -9,7 +9,6 @@ import type {
   MinesState,
   PokerClientState,
   PokerCommand,
-  Profile,
   RouletteCommand,
   RouletteTableState,
   TableState,
@@ -18,19 +17,18 @@ import type {
   TowerPublicState,
   Wallet,
 } from "./types";
-import { newToken } from "./identity";
+import { useProfile, type Credentials } from "./profile-context";
 import type { EmoteEvent, EmoteRequest, ReceivedEmote } from "./emotes";
 
-const STORAGE_KEY = "minuit.profile.v1";
 export function useGame() {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const { profile, loaded, balance, setBalance, authenticate, signOut } =
+    useProfile();
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState<TableState | null>(null);
   const [pokerState, setPokerState] = useState<PokerClientState | null>(null);
   const [towerState, setTowerState] = useState<TowerClientState | null>(null);
-  /** Shared wallet: only the server's wallet event sets it, never a game snapshot. */
-  const [balance, setBalance] = useState<number | null>(null);
+  /** Difference to add to the browser clock to compare it with server deadlines. */
+  const [serverTimeOffset, setServerTimeOffset] = useState(0);
   const [minesState, setMinesState] = useState<MinesState | null>(null);
   const [rouletteState, setRouletteState] = useState<RouletteTableState | null>(
     null,
@@ -41,74 +39,69 @@ export function useGame() {
   /** Emotes received and not yet animated. */
   const [emotes, setEmotes] = useState<ReceivedEmote[]>([]);
   const socketRef = useRef<Socket | null>(null);
-  const profileRef = useRef<Profile | null>(null);
+  /** The live club connection, for features that listen to it (friends). */
+  const [socket, setSocket] = useState<Socket | null>(null);
   const idRef = useRef("");
-  const roomRef = useRef("MINUIT");
-  const storageWarned = useRef(false);
+  const roomRef = useRef<string | null>(null);
   const walletSeq = useRef(0);
+  const clockSyncTimer = useRef<number | null>(null);
   /** Whether the Tower view is open, so a reconnection re-enters its room. */
   const towerOpen = useRef(false);
-  /** Whether the Roulette view is open, so a reconnection sits back down. */
+  /** Whether the Roulette view is open, so a reconnection re-enters its room. */
   const rouletteOpen = useRef(false);
-
-  const save = useCallback((p: Profile) => {
-    profileRef.current = p;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
-    } catch {
-      if (!storageWarned.current) {
-        setError(
-          "Le stockage local est indisponible : le profil sera perdu à la fermeture.",
-        );
-        storageWarned.current = true;
-      }
-    }
-  }, []);
-  useEffect(() => {
-    const room = new URLSearchParams(window.location.search)
-      .get("table")
-      ?.toUpperCase();
-    if (room && /^[A-Z0-9]{4,12}$/.test(room)) roomRef.current = room;
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const p = JSON.parse(stored);
-        if (
-          typeof p.token === "string" &&
-          /^[a-f0-9-]{36}$/i.test(p.token) &&
-          typeof p.name === "string" &&
-          p.name.trim() &&
-          typeof p.balance === "number" &&
-          Number.isFinite(p.balance) &&
-          p.balance >= 0
-        ) {
-          profileRef.current = p;
-          setProfile(p);
-        }
-      }
-    } catch {
-      /* A missing or damaged profile opens onboarding. */
-    }
-    setLoaded(true);
-  }, []);
+  /** Roulette table asked for explicitly (invitation or private table). */
+  const rouletteTable = useRef<string | null>(null);
 
   const token = profile?.token;
   useEffect(() => {
     if (!token) return;
+    roomRef.current =
+      new URLSearchParams(window.location.search).get("table")?.toUpperCase() ??
+      null;
     setBalance(null);
+    setServerTimeOffset(0);
     const socket = io({
       transports: ["websocket", "polling"],
       reconnectionDelay: 700,
       reconnectionDelayMax: 4000,
     });
     socketRef.current = socket;
+    setSocket(socket);
     socket.on("connect", () => {
+      window.dispatchEvent(new Event("deployment:check"));
       walletSeq.current = 0;
+      const synchronizeClock = () => {
+        const sentAt = Date.now();
+        socket
+          .timeout(2000)
+          .emit(
+            "clock:sync",
+            (
+              timeout: Error | null,
+              response: { serverTime?: number } | undefined,
+            ) => {
+              const receivedAt = Date.now();
+              if (
+                timeout ||
+                !response ||
+                typeof response.serverTime !== "number" ||
+                !Number.isFinite(response.serverTime)
+              )
+                return;
+              const midpoint = sentAt + (receivedAt - sentAt) / 2;
+              setServerTimeOffset(response.serverTime - midpoint);
+            },
+          );
+      };
+      if (clockSyncTimer.current !== null)
+        window.clearInterval(clockSyncTimer.current);
+      synchronizeClock();
+      clockSyncTimer.current = window.setInterval(synchronizeClock, 30_000);
       socket
         .timeout(8000)
         .emit(
           "join",
-          { profile: profileRef.current, tableId: roomRef.current },
+          { tableId: roomRef.current },
           (timeout: Error | null, ack: Ack) => {
             if (timeout || !ack?.ok) {
               setConnected(false);
@@ -120,26 +113,23 @@ export function useGame() {
               return;
             }
             idRef.current = ack.playerId!;
+            roomRef.current = ack.tableId ?? roomRef.current;
             setPlayerId(ack.playerId!);
             setConnected(true);
             if (towerOpen.current) socket.emit("tower:join");
-            if (rouletteOpen.current) socket.emit("roulette:join");
+            if (rouletteOpen.current)
+              socket.emit("roulette:join", { tableId: rouletteTable.current });
           },
         );
     });
     socket.on("state", (snapshot: TableState) => {
       if (!snapshot) return;
       setState(snapshot);
-      const me = snapshot.players.find((p) => p.id === idRef.current);
-      if (me && profileRef.current && me.name !== profileRef.current.name)
-        save({ ...profileRef.current, name: me.name });
     });
     socket.on("wallet", (wallet: Wallet) => {
       if (!wallet || wallet.seq <= walletSeq.current) return;
       walletSeq.current = wallet.seq;
       setBalance(wallet.balance);
-      if (profileRef.current)
-        save({ ...profileRef.current, balance: wallet.balance });
     });
     socket.on("poker:state", (snapshot: PokerClientState) => {
       if (!snapshot) return;
@@ -165,7 +155,7 @@ export function useGame() {
     socket.on("mines:state", (snapshot: MinesState | null) => {
       setMinesState(snapshot);
     });
-    socket.on("roulette:state", (snapshot: RouletteTableState) => {
+    socket.on("roulette:state", (snapshot: RouletteTableState | null) => {
       if (!snapshot || !rouletteOpen.current) return;
       setRouletteState(snapshot);
     });
@@ -175,16 +165,17 @@ export function useGame() {
     });
     socket.on("connect_error", () => setConnected(false));
     return () => {
+      if (clockSyncTimer.current !== null) {
+        window.clearInterval(clockSyncTimer.current);
+        clockSyncTimer.current = null;
+      }
       socket.disconnect();
       socketRef.current = null;
+      setSocket(null);
     };
-  }, [token, save]);
+  }, [setBalance, token]);
 
-  const register = (name: string) => {
-    const p = { token: newToken(), name: name.trim(), balance: 2000 };
-    save(p);
-    setProfile(p);
-  };
+  const register = (credentials: Credentials) => authenticate(credentials);
   const command = useCallback((action: Command): Promise<boolean> => {
     const socket = socketRef.current;
     if (!socket?.connected) {
@@ -201,6 +192,24 @@ export function useGame() {
             setError(
               "Pas de réponse du serveur. Vérifiez l’état de la table avant de réessayer.",
             );
+          else if (!ack.ok) setError(ack.error);
+          resolve(!timeout && ack?.ok);
+        });
+    });
+  }, []);
+  const refill = useCallback((): Promise<boolean> => {
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      setError("La connexion au club est interrompue.");
+      return Promise.resolve(false);
+    }
+    setPending(true);
+    return new Promise((resolve) => {
+      socket
+        .timeout(6000)
+        .emit("wallet:refill", (timeout: Error | null, ack: Ack) => {
+          setPending(false);
+          if (timeout) setError("Le serveur ne répond pas.");
           else if (!ack.ok) setError(ack.error);
           resolve(!timeout && ack?.ok);
         });
@@ -312,18 +321,6 @@ export function useGame() {
     },
     [],
   );
-  /** Opens the Roulette: sits at the table sharing the Blackjack code. */
-  const enterRoulette = useCallback(() => {
-    rouletteOpen.current = true;
-    const socket = socketRef.current;
-    if (socket?.connected && idRef.current) socket.emit("roulette:join");
-  }, []);
-  /** Closes the Roulette: unplayed chips are dropped, a spin is still paid. */
-  const leaveRoulette = useCallback(() => {
-    rouletteOpen.current = false;
-    setRouletteState(null);
-    socketRef.current?.emit("roulette:leave");
-  }, []);
   /** Opens the Tower: joins a room and restores the climb in progress. */
   const enterTower = useCallback(() => {
     towerOpen.current = true;
@@ -336,34 +333,111 @@ export function useGame() {
     setTowerState(null);
     socketRef.current?.emit("tower:leave");
   }, []);
-  const changeTable = (tableId: string) => {
+  /** Opens a Roulette table assigned independently from the club table. */
+  const enterRoulette = useCallback(() => {
+    rouletteOpen.current = true;
+    const socket = socketRef.current;
+    if (socket?.connected && idRef.current)
+      socket.emit("roulette:join", { tableId: rouletteTable.current });
+  }, []);
+  /** Leaves the Roulette room while keeping the shared club connection alive. */
+  const leaveRoulette = useCallback(() => {
+    rouletteOpen.current = false;
+    rouletteTable.current = null;
+    setRouletteState(null);
+    socketRef.current?.emit("roulette:leave");
+  }, []);
+  /**
+   * Picks the Roulette table to sit at: a friend's table, or a new private
+   * one. When the Roulette is not open yet, it is used as soon as it opens.
+   */
+  const joinRouletteTable = useCallback((tableId: string): Promise<boolean> => {
+    rouletteTable.current = tableId;
+    const socket = socketRef.current;
+    if (!rouletteOpen.current) return Promise.resolve(true);
+    if (!socket?.connected) {
+      setError("La connexion à la roulette est interrompue.");
+      return Promise.resolve(false);
+    }
+    return new Promise((resolve) => {
+      socket
+        .timeout(6000)
+        .emit(
+          "roulette:join",
+          { tableId },
+          (timeout: Error | null, ack: Ack) => {
+            if (timeout) setError("La roulette ne répond pas.");
+            else if (!ack.ok) setError(ack.error);
+            resolve(!timeout && ack?.ok);
+          },
+        );
+    });
+  }, []);
+  const changeTable = useCallback(
+    (tableId: string | null): Promise<boolean> => {
+      const socket = socketRef.current;
+      if (!socket?.connected) {
+        setError("Connectez-vous avant de changer de table.");
+        return Promise.resolve(false);
+      }
+      return new Promise((resolve) => {
+        socket
+          .timeout(6000)
+          .emit("join", { tableId }, (timeout: Error | null, ack: Ack) => {
+            if (timeout || !ack?.ok) {
+              setError(
+                timeout
+                  ? "La table ne répond pas."
+                  : (ack as { error: string }).error,
+              );
+              resolve(false);
+              return;
+            }
+            roomRef.current = ack.tableId ?? tableId;
+            const url = new URL(window.location.href);
+            if (tableId === null) url.searchParams.delete("table");
+            else url.searchParams.set("table", tableId);
+            window.history.replaceState({}, "", url);
+            resolve(true);
+          });
+      });
+    },
+    [],
+  );
+  /** Moves to a new private Blackjack table and returns its code. */
+  const createPrivateTable = useCallback((): Promise<string | null> => {
     const socket = socketRef.current;
     if (!socket?.connected) {
-      setError("Connectez-vous avant de changer de table.");
-      return;
+      setError("Connectez-vous avant de créer une table.");
+      return Promise.resolve(null);
     }
-    socket
-      .timeout(6000)
-      .emit(
-        "join",
-        { profile: profileRef.current, tableId },
-        (timeout: Error | null, ack: Ack) => {
-          if (timeout || !ack?.ok) {
-            setError(
-              timeout
-                ? "La table ne répond pas."
-                : (ack as { error: string }).error,
-            );
-            return;
-          }
-          roomRef.current = tableId;
-          const url = new URL(window.location.href);
-          url.searchParams.set("table", tableId);
-          window.history.replaceState({}, "", url);
-          if (rouletteOpen.current) socket.emit("roulette:join");
-        },
-      );
-  };
+    return new Promise((resolve) => {
+      socket
+        .timeout(6000)
+        .emit(
+          "join",
+          { createPrivate: true },
+          (timeout: Error | null, ack: Ack) => {
+            if (timeout || !ack?.ok || !ack.tableId) {
+              setError(
+                timeout
+                  ? "La table ne répond pas."
+                  : !ack?.ok
+                    ? (ack as { error: string }).error
+                    : "La table privée n’a pas pu être créée.",
+              );
+              resolve(null);
+              return;
+            }
+            roomRef.current = ack.tableId;
+            const url = new URL(window.location.href);
+            url.searchParams.set("table", ack.tableId);
+            window.history.replaceState({}, "", url);
+            resolve(ack.tableId);
+          },
+        );
+    });
+  }, []);
   return {
     profile,
     loaded,
@@ -377,21 +451,27 @@ export function useGame() {
     playerId,
     error,
     pending,
+    serverTimeOffset,
     emotes,
     sendEmote,
     dismissEmote,
     setError,
     register,
+    signOut,
     command,
+    refill,
     joinBlackjack,
     pokerCommand,
     towerCommand,
     enterTower,
     leaveTower,
-    minesCommand,
     rouletteCommand,
     enterRoulette,
     leaveRoulette,
+    joinRouletteTable,
+    minesCommand,
     changeTable,
+    createPrivateTable,
+    socket,
   };
 }

@@ -1,11 +1,15 @@
 import { chromium } from "@playwright/test";
-import { randomUUID } from "node:crypto";
-import { io } from "socket.io-client";
+import { io, type Socket } from "socket.io-client";
+import {
+  authenticateContext,
+  createTestSession,
+  socketAuth,
+} from "./auth-session";
 import type { Ack, PokerClientState } from "../src/lib/types";
 
 const baseUrl = process.env.TEST_URL ?? "http://localhost:3000";
 const browser = await chromium.launch({ headless: true });
-const bot = io(baseUrl, { transports: ["websocket"], autoConnect: false });
+let bot: Socket | undefined;
 
 async function until(check: () => boolean, message: string, timeout = 10_000) {
   const started = Date.now();
@@ -16,16 +20,13 @@ async function until(check: () => boolean, message: string, timeout = 10_000) {
 }
 
 try {
-  const page = await browser.newPage({
+  const context = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
   });
+  await authenticateContext(context, baseUrl, "Victoria", 100_000);
+  const page = await context.newPage();
   page.on("pageerror", (error) =>
     console.error(`[browser:error] ${error.message}`),
-  );
-  await page.addInitScript(
-    (profile) =>
-      localStorage.setItem("minuit.profile.v1", JSON.stringify(profile)),
-    { token: randomUUID(), name: "Victoria", balance: 100_000 },
   );
   await page.goto(baseUrl);
   await page.locator(".game-selection").waitFor();
@@ -43,13 +44,14 @@ try {
   await page.locator(".poker-felt").waitFor();
 
   let botState: PokerClientState | undefined;
+  const botSession = await createTestSession(baseUrl, "Oscar", 100_000);
+  bot = io(baseUrl, { ...socketAuth(botSession, baseUrl), autoConnect: false });
   bot.on("poker:state", (state: PokerClientState) => (botState = state));
   bot.connect();
-  await until(() => bot.connected, "Le bot UI ne se connecte pas");
-  const join: Ack = await bot.timeout(5_000).emitWithAck("join", {
-    tableId: "UITEST",
-    profile: { token: randomUUID(), name: "Oscar", balance: 100_000 },
-  });
+  await until(() => bot!.connected, "Le bot UI ne se connecte pas");
+  const join: Ack = await bot
+    .timeout(5_000)
+    .emitWithAck("join", { tableId: "UITEST" });
   if (!join.ok) throw new Error(join.error);
   const match: Ack = await bot.timeout(5_000).emitWithAck("poker:command", {
     type: "match",
@@ -242,6 +244,6 @@ try {
   });
   console.log(JSON.stringify(result));
 } finally {
-  bot.disconnect();
+  bot?.disconnect();
   await browser.close();
 }

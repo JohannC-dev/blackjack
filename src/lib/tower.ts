@@ -1,4 +1,5 @@
 import type { TowerDifficulty } from "./types";
+import { CASINO_MAX_BET, CASINO_CHIP_DENOMINATIONS } from "./chips";
 
 export const TOWER_FLOORS = 10;
 /**
@@ -6,9 +7,9 @@ export const TOWER_FLOORS = 10;
  * floor multipliers return.
  */
 export const TOWER_LUCKY_SHARE = 0.03;
-export const TOWER_MIN_BET = 5;
-export const TOWER_MAX_BET = 500;
-export const TOWER_BET_STEP = 5;
+export const TOWER_MIN_BET = CASINO_CHIP_DENOMINATIONS[0];
+export const TOWER_MAX_BET = CASINO_MAX_BET;
+export const TOWER_BET_STEP = CASINO_CHIP_DENOMINATIONS[0];
 /** Rows, counted from 1, that may hide the golden card of a climb. */
 export const TOWER_GOLD_FIRST_FLOOR = 3;
 export const TOWER_GOLD_LAST_FLOOR = 6;

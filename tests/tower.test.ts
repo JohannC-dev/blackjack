@@ -16,6 +16,8 @@ import {
 import type { Player } from "../server/engine";
 import type { TowerClientState, TowerPublicState } from "../src/lib/types";
 
+const LEGACY_BET_LIMITS = { min: 5, max: 500, step: 5 };
+
 const player = (id: string, balance = 10_000): Player => ({
   id,
   token: `00000000-0000-0000-0000-00000000000${id}`,
@@ -46,6 +48,8 @@ function setup({ gold = false, trapColumn = 0, noTraps = false } = {}) {
           ? 0
           : trapColumn % max,
     noTraps,
+    undefined,
+    LEGACY_BET_LIMITS,
   );
   /** A player already inside the Tower. */
   const climber = (id: string, balance?: number) => {
@@ -123,6 +127,10 @@ describe("Tower climb", () => {
     const manager = new TowerManager(
       () => {},
       () => {},
+      undefined,
+      false,
+      undefined,
+      LEGACY_BET_LIMITS,
     );
     const me = player("1");
     manager.enter(me);
@@ -246,6 +254,9 @@ describe("Lucky Tower", () => {
         () => {},
         () => {},
         (max) => (max === 10_000 ? 0 : Math.floor(Math.random() * max)),
+        false,
+        undefined,
+        LEGACY_BET_LIMITS,
       );
       const other = player("2");
       manager.enter(other);
@@ -340,6 +351,10 @@ describe("Lucky Tower", () => {
       const manager = new TowerManager(
         () => {},
         () => {},
+        undefined,
+        false,
+        undefined,
+        LEGACY_BET_LIMITS,
       );
       const me = player("1", 1_000_000);
       manager.enter(me);

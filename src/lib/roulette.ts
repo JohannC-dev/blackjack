@@ -1,3 +1,10 @@
+import {
+  CASINO_MAX_BET,
+  CASINO_CHIP_DENOMINATIONS,
+  chipCountTotal,
+} from "./chips";
+import type { ChipCount } from "./types";
+
 /**
  * European roulette, ported from Malori's party roulette: same bet kinds,
  * same table layout and payouts, settled in credits instead of drinks.
@@ -16,11 +23,12 @@ export type RouletteBet = {
   kind: RouletteBetKind;
   selection: string;
   amount: number;
+  chips?: readonly ChipCount[];
 };
 
-export const ROULETTE_MIN_CHIP = 5;
+export const ROULETTE_MIN_CHIP = CASINO_CHIP_DENOMINATIONS[0];
 /** Ceiling of one player's stake on a single spot, not on the whole layout. */
-export const ROULETTE_MAX_PER_SPOT = 500;
+export const ROULETTE_MAX_PER_SPOT = CASINO_MAX_BET;
 export const ROULETTE_MAX_BETS = 60;
 export const ROULETTE_HISTORY_SIZE = 14;
 
@@ -139,6 +147,21 @@ export function isValidRouletteBet(bet: RouletteBet) {
     Number.isSafeInteger(bet.amount) &&
     bet.amount >= ROULETTE_MIN_CHIP &&
     bet.amount % ROULETTE_MIN_CHIP === 0 &&
+    (bet.chips === undefined ||
+      (Array.isArray(bet.chips) &&
+        bet.chips.length <= CASINO_CHIP_DENOMINATIONS.length &&
+        bet.chips.every(
+          (chip) =>
+            chip &&
+            CASINO_CHIP_DENOMINATIONS.some(
+              (amount) => amount === chip.denomination,
+            ) &&
+            Number.isSafeInteger(chip.count) &&
+            chip.count > 0,
+        ) &&
+        new Set(bet.chips.map((chip) => chip.denomination)).size ===
+          bet.chips.length &&
+        chipCountTotal(bet.chips) === bet.amount)) &&
     isValidRouletteSelection(bet.kind, bet.selection)
   );
 }

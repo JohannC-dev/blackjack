@@ -1,15 +1,20 @@
-import { Cause, Clock, Effect, SynchronizedRef } from "effect";
+import { Cause, Clock, Effect, Option, SynchronizedRef } from "effect";
 import {
-  NotAtTable,
-  NotShowingRoulette,
-  TablesExhausted,
-  type RouletteError,
-} from "./errors";
+  deleteEmptyRoom,
+  emptyRoomState,
+  getRoom,
+  joinRoom,
+  leaveRoom,
+  privateRoom,
+  publicRoom,
+  roomOf,
+  type RoomState,
+} from "../rooms";
+import { NotAtTable, NotShowingRoulette, type RouletteError } from "./errors";
 import { decodeCommand } from "./schema";
-import { Players, Transport, Wheel } from "./services";
+import { Players, Transport, Wallet, Wheel } from "./services";
 import * as Table from "./table";
 
-const MAX_TABLES = 200;
 /** An empty table is forgotten after this long without activity. */
 const IDLE_TABLE_MS = 30 * 60_000;
 
@@ -19,11 +24,11 @@ const IDLE_TABLE_MS = 30 * 60_000;
  */
 type Registry = {
   readonly tables: ReadonlyMap<string, Table.Table>;
-  readonly seats: ReadonlyMap<string, string>;
+  readonly rooms: RoomState;
   readonly sockets: ReadonlyMap<string, ReadonlySet<string>>;
 };
 
-type Env = Players | Wheel | Transport;
+type Env = Players | Wallet | Wheel | Transport;
 /** Notifications sent once a new registry is committed. */
 type Outbox = Effect.Effect<void, never, Env>[];
 
@@ -33,7 +38,7 @@ const publish = (table: Table.Table) =>
   );
 
 /**
- * The Roulette of the club. Every operation reads the registry, computes the
+ * The Roulette pool. Every operation reads the registry, computes the
  * next one and commits it in a single step; the notifications only leave
  * once it is committed. A refused command therefore never leaves a table half
  * updated, and a table that crashes on a tick is isolated from the others.
@@ -43,7 +48,7 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
     const env = yield* Effect.context<Env>();
     const registry = yield* SynchronizedRef.make<Registry>({
       tables: new Map(),
-      seats: new Map(),
+      rooms: emptyRoomState(),
       sockets: new Map(),
     });
 
@@ -78,21 +83,41 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
       outbox.push(publish(used));
     };
 
-    /**
-     * Sits the player at `tableId`, leaving the previous table if the table
-     * code changed. The Roulette table follows the Blackjack table code, so
-     * friends invited with ?table=CODE also share the same wheel.
-     */
-    const join = (socketId: string, playerId: string, tableId: string) =>
+    /** Automatically seats the player at an available roulette table. */
+    const join = (
+      socketId: string,
+      playerId: string,
+      requestedTableId?: string,
+    ) =>
       transact((current) =>
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
           const tables = new Map(current.tables);
-          const seats = new Map(current.seats);
+          let rooms = current.rooms;
           const sockets = new Map(current.sockets);
           const outbox: Outbox = [];
           const connections = new Set(sockets.get(playerId));
-          const previous = seats.get(playerId);
+          const previous = roomOf(rooms, playerId);
+          const requested =
+            requestedTableId === undefined
+              ? undefined
+              : getRoom(rooms, requestedTableId);
+          // A friend's invitation may name a public table: it is joined as is.
+          const selected =
+            requested?.visibility === "public"
+              ? { value: requested, state: rooms }
+              : requestedTableId
+                ? yield* privateRoom(rooms, requestedTableId)
+                : previous &&
+                    getRoom(rooms, previous)?.visibility === "public" &&
+                    tables.has(previous)
+                  ? { value: getRoom(rooms, previous)!, state: rooms }
+                  : yield* publicRoom(rooms, (room) => {
+                      const table = tables.get(room.id);
+                      return !table || table.seats.length < Table.MAX_PLAYERS;
+                    });
+          rooms = selected.state;
+          const tableId = selected.value.id;
           if (previous !== undefined && previous !== tableId) {
             const table = tables.get(previous);
             if (table)
@@ -108,12 +133,10 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
             );
           }
           const existing = tables.get(tableId);
-          if (!existing && tables.size >= MAX_TABLES)
-            return yield* new TablesExhausted();
           const table = existing ?? Table.emptyTable(tableId, now);
           const joined = yield* Table.join(table, playerId);
           connections.add(socketId);
-          seats.set(playerId, tableId);
+          rooms = (yield* joinRoom(rooms, playerId, tableId)).state;
           sockets.set(playerId, connections);
           tables.set(tableId, { ...joined, lastUsed: now });
           // The new connections enter the room first so they get the table.
@@ -121,7 +144,7 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
             Effect.flatMap(Transport, (t) => t.enter(connections, tableId)),
             publish(joined),
           );
-          return [undefined, { tables, seats, sockets }, outbox] as const;
+          return [undefined, { tables, rooms, sockets }, outbox] as const;
         }),
       );
 
@@ -137,10 +160,10 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
           if (!connections?.has(socketId))
             return [undefined, current, []] as const;
           const tables = new Map(current.tables);
-          const seats = new Map(current.seats);
+          const rooms = current.rooms;
           const sockets = new Map(current.sockets);
           const outbox: Outbox = [];
-          const tableId = seats.get(playerId);
+          const tableId = roomOf(rooms, playerId);
           if (tableId !== undefined)
             outbox.push(
               Effect.flatMap(Transport, (t) => t.exit([socketId], tableId)),
@@ -149,10 +172,10 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
           remaining.delete(socketId);
           if (remaining.size) {
             sockets.set(playerId, remaining);
-            return [undefined, { tables, seats, sockets }, outbox] as const;
+            return [undefined, { tables, rooms, sockets }, outbox] as const;
           }
           sockets.delete(playerId);
-          seats.delete(playerId);
+          const nextRooms = leaveRoom(rooms, playerId).state;
           const table = tableId === undefined ? undefined : tables.get(tableId);
           if (table)
             commit(
@@ -162,7 +185,11 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
               yield* Table.leave(table, playerId),
               now,
             );
-          return [undefined, { tables, seats, sockets }, outbox] as const;
+          return [
+            undefined,
+            { tables, rooms: nextRooms, sockets },
+            outbox,
+          ] as const;
         }),
       );
 
@@ -193,7 +220,7 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
         Effect.gen(function* () {
           if (!current.sockets.get(playerId)?.has(socketId))
             return yield* new NotShowingRoulette();
-          const tableId = current.seats.get(playerId);
+          const tableId = roomOf(current.rooms, playerId);
           const table =
             tableId === undefined ? undefined : current.tables.get(tableId);
           if (!table) return yield* new NotAtTable();
@@ -216,17 +243,56 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
           const now = yield* Clock.currentTimeMillis;
           const next = yield* Table.tick(table);
           const tables = new Map(current.tables);
+          let rooms = current.rooms;
           // Winnings are paid once the settled table is committed.
           const outbox: Outbox = Table.payouts(table, next).map((result) =>
-            Effect.flatMap(Players, (players) =>
-              players.credit(result.playerId, result.payout),
-            ),
+            Effect.gen(function* () {
+              const players = yield* Players;
+              const wallet = yield* Wallet;
+              const player = yield* players.get(result.playerId);
+              if (Option.isSome(player))
+                wallet.credit(player.value, {
+                  operationId: `roulette:${table.id}:${next.round}:${result.playerId}:settlement`,
+                  game: "roulette",
+                  kind: "payout",
+                  reason: "settlement",
+                  referenceId: `${table.id}:${next.round}`,
+                  amount: result.payout,
+                  metadata: {
+                    number: next.number,
+                    stake: result.total,
+                    net: result.net,
+                  },
+                });
+            }),
           );
+          if (table.phase !== "settled" && next.phase === "settled")
+            outbox.push(
+              Effect.gen(function* () {
+                const wallet = yield* Wallet;
+                for (const result of next.results)
+                  wallet.recordGameResult({
+                    userId: result.playerId,
+                    game: "roulette",
+                    playId: `${table.id}:${next.round}`,
+                    net: result.net,
+                  });
+              }),
+            );
           commit(tables, outbox, table, next, now);
+          for (const seat of table.seats)
+            if (
+              !next.seats.some(
+                (nextSeat) => nextSeat.playerId === seat.playerId,
+              )
+            )
+              rooms = leaveRoom(rooms, seat.playerId).state;
           const after = tables.get(tableId)!;
-          if (!after.seats.length && now - after.lastUsed > IDLE_TABLE_MS)
+          if (!after.seats.length && now - after.lastUsed > IDLE_TABLE_MS) {
             tables.delete(tableId);
-          return [undefined, { ...current, tables }, outbox] as const;
+            rooms = deleteEmptyRoom(rooms, tableId).state;
+          }
+          return [undefined, { ...current, tables, rooms }, outbox] as const;
         }),
       ).pipe(
         // A broken table must not stop the wheels of the others.
@@ -242,15 +308,23 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
     /** Drops what is left of a member forgotten by the club. */
     const forget = (playerId: string) =>
       transact((current) => {
-        const seats = new Map(current.seats);
+        const rooms = leaveRoom(current.rooms, playerId).state;
         const sockets = new Map(current.sockets);
-        seats.delete(playerId);
         sockets.delete(playerId);
         return Effect.succeed([
           undefined,
-          { ...current, seats, sockets },
+          { ...current, rooms, sockets },
           [],
         ] as const);
+      });
+
+    /** Table where a player sits, with its visibility. */
+    const tableOf = (playerId: string) =>
+      Effect.map(SynchronizedRef.get(registry), (current) => {
+        const tableId = roomOf(current.rooms, playerId);
+        return Option.fromNullable(
+          tableId === undefined ? undefined : getRoom(current.rooms, tableId),
+        );
       });
 
     /** Current public view of a table, if it exists. */
@@ -270,6 +344,7 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
       tick,
       forget,
       state,
+      tableOf,
     } as const;
   }),
 }) {}

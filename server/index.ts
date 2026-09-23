@@ -2,18 +2,58 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import next from "next";
 import { Server } from "socket.io";
+import { Effect, Exit, Option, Schema } from "effect";
+import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import { Table, type Player } from "./engine";
+import { auth } from "./auth";
+import { runDatabase } from "./db/client";
+import {
+  currentDeploymentVersion,
+  publishDeploymentVersion,
+} from "./db/version";
+import {
+  applyWalletOperations,
+  getOrCreateWallet,
+  readWallet,
+} from "./db/wallet";
 import { PokerManager } from "./poker";
+import { makeRoomRuntime, roomChannel } from "./rooms";
 import { TowerManager } from "./tower";
 import { MinesGame } from "./mines";
-import { Effect, Option } from "effect";
-import { InsufficientCredits, makeRouletteRuntime } from "./roulette";
+import { makeRouletteRuntime } from "./roulette";
+import { RecordingGameWallet } from "./game-wallet";
+import { refillWallet } from "./refill";
+import { handleSocialRequest } from "./social/http";
+import { areFriends, friendIdsOf } from "./social/repository";
+import { handleReferralRequest } from "./referral/http";
+import { onReferralCompleted } from "./referral/events";
+import {
+  GameError,
+  ServerClock,
+  ServerClockLive,
+  decodeInput,
+  errorMessage,
+  gameEffect,
+  isFailure,
+  runEffect,
+  toGameError,
+} from "./effect";
+import {
+  BlackjackCommandSchema,
+  EmoteRequestSchema,
+  FriendInviteReplySchema,
+  FriendInviteSchema,
+  JoinSchema,
+  MinesCommandSchema,
+  PokerCommandSchema,
+  RouletteJoinSchema,
+  TowerCommandSchema,
+} from "./protocol";
 import type {
   Ack,
   Command,
   MinesCommand,
   PokerCommand,
-  Profile,
   TowerCommand,
   Wallet,
 } from "../src/lib/types";
@@ -22,19 +62,83 @@ import {
   type EmoteEvent,
   type EmoteRequest,
 } from "../src/lib/emotes";
+import type { GameInvite, GameInviteReply } from "../src/lib/social";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number(process.env.PORT ?? 3000);
 const hostname = process.env.HOSTNAME ?? "0.0.0.0";
 const app = next({ dev, hostname, port });
-await app.prepare();
+await Effect.runPromise(
+  Effect.tryPromise({ try: () => app.prepare(), catch: toGameError }),
+);
 const handler = app.getRequestHandler();
-const http = createServer((req, res) => {
+const authHandler = toNodeHandler(auth);
+const http = createServer(async (req, res) => {
+  if (req.url?.startsWith("/api/auth/")) {
+    await authHandler(req, res);
+    return;
+  }
   if (req.url === "/api/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
     return;
   }
+  if (req.url === "/api/version" && req.method === "GET") {
+    try {
+      const version = await currentDeploymentVersion();
+      res.writeHead(200, {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Content-Type": "application/json",
+      });
+      res.end(JSON.stringify(version));
+    } catch {
+      res.writeHead(503, { "Cache-Control": "no-store" });
+      res.end();
+    }
+    return;
+  }
+  if (req.url === "/api/profile" && req.method === "GET") {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+    if (!session) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Non authentifié." }));
+      return;
+    }
+    try {
+      const wallet = await runDatabase(getOrCreateWallet(session.user.id));
+      res.writeHead(200, {
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json",
+      });
+      res.end(
+        JSON.stringify({
+          id: session.user.id,
+          name: session.user.name,
+          email: session.user.email,
+          balance: wallet.balance,
+        }),
+      );
+    } catch {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Profil indisponible." }));
+    }
+    return;
+  }
+  if (
+    await handleSocialRequest(req, res, {
+      isOnline: (userId) => !!playerSockets.get(userId)?.size,
+      notify: notifySocial,
+    })
+  )
+    return;
+  if (
+    await handleReferralRequest(req, res, {
+      isOnline: (userId) => !!playerSockets.get(userId)?.size,
+    })
+  )
+    return;
   handler(req, res);
 });
 const io = new Server(http, {
@@ -51,16 +155,92 @@ const io = new Server(http, {
     }
   },
 });
+io.use(async (socket, next) => {
+  try {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(socket.request.headers),
+    });
+    if (!session) {
+      next(new Error("AUTH_REQUIRED"));
+      return;
+    }
+    socket.data.session = session;
+    next();
+  } catch {
+    next(new Error("AUTH_UNAVAILABLE"));
+  }
+});
+
 const tables = new Map<string, Table>();
+const blackjackRooms = makeRoomRuntime("blackjack", () =>
+  randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase(),
+);
 const profiles = new Map<string, Player>();
 const playersById = new Map<string, Player>();
+const gameWallet = new RecordingGameWallet();
 const playerSockets = new Map<string, Set<string>>();
-/** Connected players by id, for the wallet updates. */
-const online = new Map<string, Player>();
+/** Last invitation sent from one player to another, to stop spamming. */
+const lastInvites = new Map<string, number>();
+
+function emitToPlayer(playerId: string, event: string, payload?: unknown) {
+  for (const socketId of playerSockets.get(playerId) ?? [])
+    io.to(socketId).emit(event, payload);
+}
+
+/** Friends and requests live in the database; clients refetch them. */
+function notifySocial(userIds: readonly string[]) {
+  for (const userId of new Set(userIds))
+    emitToPlayer(userId, "friends:changed");
+}
+
+/**
+ * A filleul just signed up with a parrainage code. A connected parrain sees
+ * their new credits and their filleul straight away.
+ */
+onReferralCompleted((event) => {
+  const parrain = playersById.get(event.parrainId);
+  if (parrain)
+    Effect.runPromise(refreshWalletEffect(parrain)).catch((error: unknown) =>
+      console.error("Parrainage · portefeuille", error),
+    );
+  emitToPlayer(event.parrainId, "referral:filleul", {
+    filleul: event.filleul,
+    tiers: event.tiers,
+  });
+});
+
+/** A player came online or left: their friends refresh their list. */
+function notifyPresence(userId: string) {
+  runDatabase(friendIdsOf(userId)).then(notifySocial, (error: unknown) =>
+    console.error("Amis · présence", error),
+  );
+}
 /** Last wallet pushed to each connected player. */
 const wallets = new Map<string, Wallet>();
 /** Sockets of each player currently showing the Tower. */
 const towerSockets = new Map<string, Set<string>>();
+type TowerSocketIntent = { kind: "join" | "leave"; version: number };
+const towerSocketIntents = new Map<string, TowerSocketIntent>();
+
+function markTowerSocketIntent(
+  socketId: string,
+  kind: TowerSocketIntent["kind"],
+) {
+  const intent = {
+    kind,
+    version: (towerSocketIntents.get(socketId)?.version ?? 0) + 1,
+  } satisfies TowerSocketIntent;
+  towerSocketIntents.set(socketId, intent);
+  return intent;
+}
+
+function isCurrentTowerSocketIntent(
+  socketId: string,
+  intent: TowerSocketIntent,
+) {
+  const current = towerSocketIntents.get(socketId);
+  return current?.version === intent.version && current.kind === intent.kind;
+}
 const mines = new Map<string, MinesGame>();
 function publishMines(playerId: string) {
   const snapshot = mines.get(playerId)?.snapshot() ?? null;
@@ -70,31 +250,24 @@ function publishMines(playerId: string) {
 function getMines(playerId: string) {
   let game = mines.get(playerId);
   if (!game) {
-    game = new MinesGame(() => publishMines(playerId));
+    game = new MinesGame(() => publishMines(playerId), gameWallet);
     mines.set(playerId, game);
   }
   return game;
 }
-const rouletteRoom = (tableId: string) => `roulette:${tableId}`;
-/** The Roulette runs on Effect; the club only lends it its players and sockets. */
+
+function getMinesEffect(playerId: string) {
+  return gameEffect(() => getMines(playerId));
+}
+const rouletteRoom = (tableId: string) => roomChannel("roulette", tableId);
+const blackjackRoom = (tableId: string) => blackjackRooms.channel(tableId);
+/** Roulette owns its table pool and borrows only club players and sockets. */
 const roulette = makeRouletteRuntime({
   players: {
     get: (playerId) =>
       Effect.sync(() => Option.fromNullable(playersById.get(playerId))),
-    debit: (playerId, amount) =>
-      Effect.suspend(() => {
-        const player = playersById.get(playerId);
-        if (!player || player.balance < amount)
-          return Effect.fail(new InsufficientCredits());
-        player.balance -= amount;
-        return Effect.void;
-      }),
-    credit: (playerId, amount) =>
-      Effect.sync(() => {
-        const player = playersById.get(playerId);
-        if (player) player.balance += amount;
-      }),
   },
+  wallet: gameWallet,
   transport: {
     publish: (state) =>
       Effect.sync(() => {
@@ -113,7 +286,7 @@ const roulette = makeRouletteRuntime({
 const poker = new PokerManager((playerId, state) => {
   for (const socketId of playerSockets.get(playerId) ?? [])
     io.to(socketId).emit("poker:state", state);
-});
+}, gameWallet);
 const tower = new TowerManager(
   (playerId, state) => {
     for (const socketId of towerSockets.get(playerId) ?? [])
@@ -124,54 +297,195 @@ const tower = new TowerManager(
   undefined,
   // Development only: TOWER_NO_TRAPS=1 bun run dev reaches the top every time.
   dev && process.env.TOWER_NO_TRAPS === "1",
+  gameWallet,
 );
 if (dev && process.env.TOWER_NO_TRAPS === "1")
   console.log("La Tower · mode test sans pièges activé");
 
+function publicTableFor(playerId?: string) {
+  const currentRoom = playerId ? blackjackRooms.roomOf(playerId) : undefined;
+  if (currentRoom && blackjackRooms.get(currentRoom)?.visibility === "public")
+    return currentRoom;
+  return blackjackRooms.publicRoom((room) => {
+    const table = tables.get(room.id);
+    return (
+      !table ||
+      (table.state.phase === "betting" &&
+        table.state.seats.some((seat) => seat.playerId === null))
+    );
+  }).id;
+}
+
 function getTable(id: string) {
   let table = tables.get(id);
   if (!table) {
-    if (tables.size >= 200)
-      throw new Error("Toutes les tables sont occupées. Réessayez plus tard.");
-    table = new Table(id, () =>
-      io.to(id).emit("state", tables.get(id)!.snapshot()),
+    const room = blackjackRooms.get(id);
+    if (!room) throw new Error("Cette salle n’existe pas.");
+    table = new Table(
+      id,
+      () => io.to(blackjackRoom(id)).emit("state", tables.get(id)!.snapshot()),
+      undefined,
+      gameWallet,
+      false,
+      room.visibility,
     );
     tables.set(id, table);
   }
   return table;
 }
-/**
- * The balance is shared by the three games but only the wallet event carries
- * it to the client. It is pushed after every command and every tick, from the
- * server's current value, so snapshots of different games can no longer
- * overwrite each other with an older balance.
- */
-function syncWallets() {
-  for (const [playerId, player] of online) {
-    const wallet = wallets.get(playerId);
-    if (wallet?.balance === player.balance) continue;
-    const next = { balance: player.balance, seq: (wallet?.seq ?? 0) + 1 };
+/** Financial commands are serialized around one explicit wallet batch. */
+let financialQueue: Promise<unknown> = Promise.resolve();
+
+function serializeFinancial<A>(task: () => Promise<A>): Promise<A> {
+  const result = financialQueue.then(task, task);
+  financialQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+function refreshWalletEffect(player: Player) {
+  return Effect.tryPromise({
+    try: async () => {
+      const wallet = await runDatabase(readWallet(player.token));
+      player.balance = wallet.balance;
+      publishWallet(player.id);
+    },
+    catch: toGameError,
+  });
+}
+
+function publishWallet(playerId: string, socketId?: string) {
+  const player = playersById.get(playerId);
+  if (!player) return;
+  const previous = wallets.get(playerId);
+  if (!previous || previous.balance !== player.balance) {
+    const next = {
+      balance: player.balance,
+      seq: (previous?.seq ?? 0) + 1,
+    } satisfies Wallet;
     wallets.set(playerId, next);
-    for (const socketId of playerSockets.get(playerId) ?? [])
-      io.to(socketId).emit("wallet", next);
+    for (const connectionId of playerSockets.get(playerId) ?? [])
+      io.to(connectionId).emit("wallet", next);
+    return;
   }
+  if (socketId) io.to(socketId).emit("wallet", previous);
 }
-function leaveTower(socketId: string, player: Player, abandon: boolean) {
-  const sockets = towerSockets.get(player.id);
-  if (!sockets?.delete(socketId)) return;
-  const roomId = tower.roomIdOf(player.id);
-  if (roomId) io.in(socketId).socketsLeave(roomId);
-  if (sockets.size) return;
-  towerSockets.delete(player.id);
-  tower.leave(player, Date.now(), { abandon });
+
+function commitWalletOperationsEffect() {
+  const operations = gameWallet.operations();
+  const gameResults = gameWallet.gameResults();
+  if (!operations.length && !gameResults.length) {
+    gameWallet.complete();
+    return Effect.void;
+  }
+  return Effect.tryPromise({
+    try: () => runDatabase(applyWalletOperations(operations, gameResults)),
+    catch: toGameError,
+  }).pipe(
+    Effect.tap((results) =>
+      Effect.sync(() => {
+        for (const result of results) {
+          const player = playersById.get(result.userId);
+          if (player) player.balance = result.balance;
+        }
+        gameWallet.complete();
+        for (const result of results) publishWallet(result.userId);
+      }),
+    ),
+    Effect.asVoid,
+  );
 }
+
+function walletTransactionEffect<A, E>(effect: Effect.Effect<A, E, never>) {
+  return Effect.acquireUseRelease(
+    Effect.try({ try: () => gameWallet.begin(), catch: toGameError }),
+    () => effect.pipe(Effect.tap(() => commitWalletOperationsEffect())),
+    (_, exit) =>
+      Exit.isFailure(exit)
+        ? Effect.sync(() =>
+            gameWallet.rollback((playerId) => playersById.get(playerId)),
+          )
+        : Effect.void,
+  );
+}
+
+function detachTowerSocketEffect(socketId: string, player: Player) {
+  return gameEffect(() => {
+    const sockets = towerSockets.get(player.id);
+    const roomId = tower.roomIdOf(player.id);
+    if (!sockets?.delete(socketId)) {
+      if (!roomId || sockets?.size) return false;
+      io.in(socketId).socketsLeave(roomId);
+      return true;
+    }
+    if (roomId) io.in(socketId).socketsLeave(roomId);
+    if (sockets.size) return false;
+    towerSockets.delete(player.id);
+    return true;
+  });
+}
+
+function leaveTowerEffect(socketId: string, player: Player, abandon: boolean) {
+  return Effect.gen(function* () {
+    const shouldLeave = yield* detachTowerSocketEffect(socketId, player);
+    if (shouldLeave) yield* tower.leaveEffect(player, undefined, { abandon });
+  });
+}
+
 function replyError(ack: unknown, error: unknown) {
   if (typeof ack === "function")
     ack({
       ok: false,
-      error:
-        error instanceof Error ? error.message : "Une erreur est survenue.",
+      error: errorMessage(error),
     } satisfies Ack);
+}
+
+async function executeReply<A, E, R>(
+  ack: unknown,
+  effect: Effect.Effect<A, E, never>,
+  onSuccess: (value: A) => R,
+) {
+  const result = await Effect.runPromise(Effect.either(effect));
+  if (isFailure(result)) replyError(ack, result.left);
+  else if (typeof ack === "function") ack(onSuccess(result.right));
+}
+
+function replyEffect<A, E, R = Ack>(
+  ack: unknown,
+  effect: Effect.Effect<A, E, never>,
+  onSuccess: (value: A) => R = () => ({ ok: true }) as R,
+) {
+  void executeReply(ack, effect, onSuccess);
+}
+
+function replyWalletEffect<A, E, R = Ack>(
+  ack: unknown,
+  effect: Effect.Effect<A, E, never>,
+  onSuccess: (value: A) => R = () => ({ ok: true }) as R,
+) {
+  void serializeFinancial(() =>
+    executeReply(ack, walletTransactionEffect(effect), onSuccess),
+  );
+}
+
+function runOrThrow<A, E>(effect: Effect.Effect<A, E, never>): A {
+  const result = runEffect(effect);
+  if (isFailure(result)) throw result.left;
+  return result.right;
+}
+
+function inputEffect<A, B, E>(
+  schema: Schema.Schema<A>,
+  input: unknown,
+  message: string,
+  action: (value: A) => Effect.Effect<B, E, never>,
+) {
+  return Effect.gen(function* () {
+    const value = yield* decodeInput(schema, input, message);
+    return yield* action(value);
+  });
 }
 
 io.on("connection", (socket) => {
@@ -179,346 +493,599 @@ io.on("connection", (socket) => {
   /** Recent emote times, to keep the table readable. */
   let emoteTimes: number[] = [];
   let events = 0;
-  let windowStart = Date.now();
-  function throttle() {
-    if (Date.now() - windowStart > 1000) {
+  let windowStart = 0;
+  function throttle(now: number) {
+    if (now - windowStart > 1000) {
       events = 0;
-      windowStart = Date.now();
+      windowStart = now;
     }
     if (++events > 30) throw new Error("Un instant… trop d’actions à la fois.");
   }
-  socket.on(
-    "join",
-    (
-      data: { profile: Profile; tableId: string },
-      ack: (value: Ack) => void,
-    ) => {
-      try {
-        throttle();
-        const profile = data?.profile;
-        if (
-          !profile ||
-          typeof profile.token !== "string" ||
-          !/^[a-f0-9-]{36}$/i.test(profile.token) ||
-          typeof profile.name !== "string"
-        )
-          throw new Error("Le profil est invalide.");
-        const name = profile.name
+  socket.on("clock:sync", (ack: (value: { serverTime: number }) => void) => {
+    replyEffect(
+      ack,
+      gameEffect((clock) => ({ serverTime: clock.now() })),
+      (value) => value,
+    );
+  });
+  socket.on("join", (data: unknown, ack: (value: Ack) => void) => {
+    replyWalletEffect(
+      ack,
+      Effect.gen(function* () {
+        const safeData = yield* decodeInput(
+          JoinSchema,
+          data,
+          "La table demandée est invalide.",
+        );
+        const clock = yield* ServerClock;
+        throttle(clock.now());
+        const session = socket.data.session as
+          { user: { id: string; name: string; email: string } } | undefined;
+        if (!session)
+          return yield* Effect.fail(new GameError("Session expirée."));
+
+        const name = session.user.name
           .trim()
           .replace(/[\u0000-\u001f\u007f]/g, "")
           .slice(0, 18);
-        if (!name) throw new Error("Choisissez un pseudo.");
-        if (
-          typeof data.tableId !== "string" ||
-          !/^[A-Z0-9]{4,12}$/.test(data.tableId)
-        )
-          throw new Error("Le code de table est invalide.");
-        if (player && player.token !== profile.token)
-          throw new Error("Reconnectez-vous pour changer de profil.");
-        let known = profiles.get(profile.token);
-        if (known && known.roomId !== data.tableId) {
+        if (!name)
+          return yield* Effect.fail(new GameError("Choisissez un pseudo."));
+        if (player && player.token !== session.user.id)
+          return yield* Effect.fail(
+            new GameError("Reconnectez-vous pour changer de profil."),
+          );
+
+        const wallet = yield* Effect.tryPromise({
+          try: () => runDatabase(getOrCreateWallet(session.user.id)),
+          catch: toGameError,
+        });
+        let known = profiles.get(session.user.id);
+        const tableId = safeData.createPrivate
+          ? blackjackRooms.create("private").id
+          : safeData.tableId
+            ? // A friend's invitation may name a public table.
+              blackjackRooms.get(safeData.tableId)?.visibility === "public"
+              ? safeData.tableId
+              : blackjackRooms.privateRoom(safeData.tableId).id
+            : publicTableFor(known?.id);
+        if (known && known.roomId !== tableId) {
           const connections = playerSockets.get(known.id);
           if (
             connections &&
             (connections.size > 1 ||
               (connections.size === 1 && !connections.has(socket.id)))
           )
-            throw new Error(
-              "Fermez votre autre onglet avant de changer de table.",
+            return yield* Effect.fail(
+              new GameError(
+                "Fermez votre autre onglet avant de changer de table.",
+              ),
             );
-          tables.get(known.roomId)?.remove(known.id);
-          socket.leave(known.roomId);
+          const oldTable = tables.get(known.roomId);
+          if (oldTable) runOrThrow(oldTable.removeEffect(known.id));
+          socket.leave(blackjackRoom(known.roomId));
           known.ready = false;
         }
-        const table = getTable(data.tableId);
+
+        const table = getTable(tableId);
         if (!known) {
-          // Local credits are deliberately user-controlled: this is a play-money game without a database.
-          const balance =
-            typeof profile.balance === "number" &&
-            Number.isFinite(profile.balance) &&
-            profile.balance >= 0
-              ? Math.min(1_000_000, Math.round(profile.balance * 2) / 2)
-              : 2000;
           known = {
-            id: randomUUID(),
-            token: profile.token,
+            id: session.user.id,
+            token: session.user.id,
             name,
-            balance,
+            balance: wallet.balance,
             ready: false,
             connected: true,
-            roomId: data.tableId,
-            lastSeen: Date.now(),
+            roomId: tableId,
+            lastSeen: clock.now(),
           };
-          profiles.set(profile.token, known);
+          profiles.set(session.user.id, known);
           playersById.set(known.id, known);
         }
+        known.name = name;
+        known.balance = wallet.balance;
         player = known;
         player.connected = true;
-        player.lastSeen = Date.now();
-        player.roomId = data.tableId;
+        player.lastSeen = clock.now();
+        player.roomId = tableId;
+        blackjackRooms.join(player.id, tableId);
         const connections = playerSockets.get(player.id) ?? new Set();
+        const cameOnline = !connections.size;
         connections.add(socket.id);
         playerSockets.set(player.id, connections);
-        online.set(player.id, player);
-        socket.join(data.tableId);
-        if (typeof ack === "function")
-          ack({ ok: true, playerId: player.id, tableId: data.tableId });
-        // The shared socket is also used by Poker. Joining the room only adds
-        // a Blackjack spectator; the Blackjack view explicitly reserves a
-        // seat below.
-        table.observe(player);
-        poker.connect(player);
-        // A new or changed wallet reaches every socket of the player; an
-        // unchanged one is only resent to this new connection.
-        const wallet = wallets.get(player.id);
-        syncWallets();
-        if (wallet && wallets.get(player.id) === wallet)
-          socket.emit("wallet", wallet);
+        if (cameOnline) notifyPresence(player.id);
+        socket.join(blackjackRoom(tableId));
+        runOrThrow(table.observeEffect(player));
+        runOrThrow(poker.connectEffect(player));
+        publishWallet(player.id, socket.id);
         publishMines(player.id);
-      } catch (error) {
-        replyError(ack, error);
-      }
-    },
-  );
+        return {
+          ok: true,
+          playerId: player.id,
+          tableId,
+        } satisfies Ack;
+      }).pipe(Effect.provide(ServerClockLive)),
+      (value) => value,
+    );
+  });
   socket.on("blackjack:join", (ack: (value: Ack) => void) => {
-    try {
-      throttle();
-      if (!player) throw new Error("Vous n’êtes pas connecté à la table.");
-      tables.get(player.roomId)!.add(player);
-      if (typeof ack === "function") ack({ ok: true });
-    } catch (error) {
-      replyError(ack, error);
-    }
+    replyEffect(
+      ack,
+      Effect.gen(function* () {
+        const currentPlayer = yield* gameEffect((clock) => {
+          throttle(clock.now());
+          if (!player) throw new Error("Vous n’êtes pas connecté à la table.");
+          return player;
+        });
+        yield* tables.get(currentPlayer.roomId)!.addEffect(currentPlayer);
+      }),
+    );
   });
-  socket.on("command", (command: Command, ack: (value: Ack) => void) => {
-    try {
-      throttle();
-      if (!player) throw new Error("Vous n’êtes pas connecté à la table.");
-      const blackjackTable = tables.get(player.roomId)!;
-      const blackjackPlayerId = player.id;
-      // Keep the command endpoint backwards-compatible for non-browser
-      // clients: an actual Blackjack action is also an explicit table entry.
-      if (
-        !blackjackTable.players.has(blackjackPlayerId) ||
-        !blackjackTable.state.seats.some(
-          (seat) => seat.playerId === blackjackPlayerId,
-        )
-      )
-        blackjackTable.add(player);
-      blackjackTable.command(blackjackPlayerId, command);
-      syncWallets();
-      if (typeof ack === "function") ack({ ok: true });
-    } catch (error) {
-      replyError(ack, error);
-    }
+  socket.on("wallet:refill", (ack: (value: Ack) => void) => {
+    replyWalletEffect(
+      ack,
+      Effect.gen(function* () {
+        const currentPlayer = yield* gameEffect((clock) => {
+          throttle(clock.now());
+          if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+          return player;
+        });
+        yield* refreshWalletEffect(currentPlayer);
+        yield* gameEffect(() => refillWallet(currentPlayer, gameWallet));
+      }),
+    );
   });
-  socket.on(
-    "poker:command",
-    (command: PokerCommand, ack: (value: Ack) => void) => {
-      try {
-        throttle();
-        if (!player) throw new Error("Vous n’êtes pas connecté au club.");
-        poker.command(player, command);
-        const blackjackTable = tables.get(player.roomId);
-        if (blackjackTable)
-          io.to(player.roomId).emit("state", blackjackTable.snapshot());
-        syncWallets();
-        if (typeof ack === "function") ack({ ok: true });
-      } catch (error) {
-        replyError(ack, error);
-      }
-    },
-  );
-  socket.on(
-    "tower:command",
-    (command: TowerCommand, ack: (value: Ack) => void) => {
-      try {
-        throttle();
-        if (!player) throw new Error("Vous n’êtes pas connecté au club.");
-        tower.command(player, command);
-        syncWallets();
-        if (typeof ack === "function") ack({ ok: true });
-      } catch (error) {
-        replyError(ack, error);
-      }
-    },
-  );
-  socket.on(
-    "mines:command",
-    (command: MinesCommand, ack: (value: Ack) => void) => {
-      try {
-        throttle();
-        if (!player) throw new Error("Vous n’êtes pas connecté au club.");
-        getMines(player.id).command(player, command);
-        syncWallets();
-        if (typeof ack === "function") ack({ ok: true });
-      } catch (error) {
-        replyError(ack, error);
-      }
-    },
-  );
+  socket.on("command", (command: unknown, ack: (value: Ack) => void) => {
+    replyWalletEffect(
+      ack,
+      inputEffect(
+        BlackjackCommandSchema,
+        command,
+        "Action invalide.",
+        (parsed) =>
+          Effect.gen(function* () {
+            const context = yield* gameEffect((clock) => {
+              throttle(clock.now());
+              if (!player)
+                throw new Error("Vous n’êtes pas connecté à la table.");
+              const blackjackTable = tables.get(player.roomId)!;
+              const blackjackPlayerId = player.id;
+              if (
+                !blackjackTable.players.has(blackjackPlayerId) ||
+                !blackjackTable.state.seats.some(
+                  (seat) => seat.playerId === blackjackPlayerId,
+                )
+              )
+                runOrThrow(blackjackTable.addEffect(player));
+              return { blackjackTable, blackjackPlayerId };
+            });
+            yield* refreshWalletEffect(
+              playersById.get(context.blackjackPlayerId)!,
+            );
+            yield* context.blackjackTable.commandEffect(
+              context.blackjackPlayerId,
+              parsed as Command,
+            );
+          }),
+      ),
+    );
+  });
+  socket.on("poker:command", (command: unknown, ack: (value: Ack) => void) => {
+    replyWalletEffect(
+      ack,
+      inputEffect(
+        PokerCommandSchema,
+        command,
+        "Action Poker invalide.",
+        (parsed) =>
+          Effect.gen(function* () {
+            const currentPlayer = yield* gameEffect((clock) => {
+              throttle(clock.now());
+              if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+              return player;
+            });
+            yield* refreshWalletEffect(currentPlayer);
+            yield* poker.commandEffect(currentPlayer, parsed as PokerCommand);
+            const blackjackTable = tables.get(currentPlayer.roomId);
+            if (blackjackTable)
+              io.to(blackjackRoom(currentPlayer.roomId)).emit(
+                "state",
+                blackjackTable.snapshot(),
+              );
+          }),
+      ),
+    );
+  });
+  socket.on("tower:command", (command: unknown, ack: (value: Ack) => void) => {
+    replyWalletEffect(
+      ack,
+      inputEffect(
+        TowerCommandSchema,
+        command,
+        "Action Tower invalide.",
+        (parsed) =>
+          Effect.gen(function* () {
+            const currentPlayer = yield* gameEffect((clock) => {
+              throttle(clock.now());
+              if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+              return player;
+            });
+            yield* refreshWalletEffect(currentPlayer);
+            yield* tower.commandEffect(currentPlayer, parsed as TowerCommand);
+          }),
+      ),
+    );
+  });
+  socket.on("mines:command", (command: unknown, ack: (value: Ack) => void) => {
+    replyWalletEffect(
+      ack,
+      inputEffect(
+        MinesCommandSchema,
+        command,
+        "Action Mines invalide.",
+        (parsed) =>
+          Effect.gen(function* () {
+            const currentPlayer = yield* gameEffect((clock) => {
+              throttle(clock.now());
+              if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+              return player;
+            });
+            yield* refreshWalletEffect(currentPlayer);
+            const minesGame = yield* getMinesEffect(currentPlayer.id);
+            yield* minesGame.commandEffect(
+              currentPlayer,
+              parsed as MinesCommand,
+            );
+          }),
+      ),
+    );
+  });
   socket.on(
     "roulette:command",
     (command: unknown, ack: (value: Ack) => void) => {
-      try {
-        throttle();
-        if (!player) throw new Error("Vous n’êtes pas connecté au club.");
-        const playerId = player.id;
-        roulette.run((r) => r.command(socket.id, playerId, command));
-        syncWallets();
-        if (typeof ack === "function") ack({ ok: true });
-      } catch (error) {
-        replyError(ack, error);
-      }
+      replyWalletEffect(
+        ack,
+        Effect.gen(function* () {
+          const currentPlayer = yield* gameEffect((clock) => {
+            throttle(clock.now());
+            if (!player) throw new Error("Connectez-vous au club.");
+            return player;
+          });
+          yield* refreshWalletEffect(currentPlayer);
+          yield* gameEffect(() => {
+            roulette.run((runtime) =>
+              runtime.command(socket.id, currentPlayer.id, command),
+            );
+          });
+        }),
+      );
     },
   );
-  socket.on("roulette:join", (ack: (value: Ack) => void) => {
-    try {
-      throttle();
-      if (!player) throw new Error("Vous n’êtes pas connecté au club.");
-      const { id, roomId } = player;
-      roulette.run((r) => r.join(socket.id, id, roomId));
-      if (typeof ack === "function") ack({ ok: true });
-    } catch (error) {
-      replyError(ack, error);
+  socket.on("roulette:join", (data: unknown, ack?: (value: Ack) => void) => {
+    // The table is optional: `emit("roulette:join", ack)` stays valid.
+    if (typeof data === "function") {
+      ack = data as (value: Ack) => void;
+      data = {};
     }
+    replyEffect(
+      ack,
+      inputEffect(
+        RouletteJoinSchema,
+        data ?? {},
+        "La table demandée est invalide.",
+        (safeData) =>
+          gameEffect((clock) => {
+            throttle(clock.now());
+            const currentPlayer = player;
+            if (!currentPlayer) throw new Error("Connectez-vous au club.");
+            roulette.run((r) =>
+              r.join(
+                socket.id,
+                currentPlayer.id,
+                safeData.tableId ?? undefined,
+              ),
+            );
+          }),
+      ),
+    );
   });
   socket.on("roulette:leave", (ack: (value: Ack) => void) => {
-    try {
-      throttle();
-      if (!player) throw new Error("Vous n’êtes pas connecté au club.");
-      const playerId = player.id;
-      roulette.run((r) => r.leave(socket.id, playerId));
-      if (typeof ack === "function") ack({ ok: true });
-    } catch (error) {
-      replyError(ack, error);
-    }
+    replyEffect(
+      ack,
+      gameEffect((clock) => {
+        throttle(clock.now());
+        const currentPlayer = player;
+        if (!currentPlayer) throw new Error("Connectez-vous au club.");
+        roulette.run((r) => r.leave(socket.id, currentPlayer.id));
+      }),
+    );
   });
   socket.on("tower:join", (ack: (value: Ack) => void) => {
-    try {
-      throttle();
-      if (!player) throw new Error("Vous n’êtes pas connecté au club.");
-      const sockets = towerSockets.get(player.id) ?? new Set();
-      sockets.add(socket.id);
-      towerSockets.set(player.id, sockets);
-      socket.join(tower.enter(player));
-      if (typeof ack === "function") ack({ ok: true });
-    } catch (error) {
-      replyError(ack, error);
-    }
+    const intent = markTowerSocketIntent(socket.id, "join");
+    replyEffect(
+      ack,
+      gameEffect((clock) => {
+        throttle(clock.now());
+        if (!isCurrentTowerSocketIntent(socket.id, intent)) return;
+        if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+        const sockets = towerSockets.get(player.id) ?? new Set();
+        sockets.add(socket.id);
+        towerSockets.set(player.id, sockets);
+        socket.join(runOrThrow(tower.enterEffect(player)));
+      }),
+    );
   });
   // Leaving the Tower view settles the climb: nothing stays at risk while the
   // player is in another game.
   socket.on("tower:leave", (ack: (value: Ack) => void) => {
-    try {
-      throttle();
-      if (!player) throw new Error("Vous n’êtes pas connecté au club.");
-      leaveTower(socket.id, player, true);
-      syncWallets();
-      if (typeof ack === "function") ack({ ok: true });
-    } catch (error) {
-      replyError(ack, error);
-    }
-  });
-  // Emotes are cosmetic: relayed to the table, never stored.
-  socket.on("emote", (request: EmoteRequest) => {
-    try {
-      throttle();
-      if (!player || !request || typeof request !== "object") return;
-      const definition = EMOTE_BY_ID.get(request.emote);
-      if (!definition) return;
-      const now = Date.now();
-      emoteTimes = emoteTimes.filter((time) => now - time < 10_000);
-      if (
-        emoteTimes.length >= 5 ||
-        now - (emoteTimes[emoteTimes.length - 1] ?? 0) < 700
-      )
-        return;
-      let recipients: string[];
-      if (request.game === "blackjack") {
-        const seated = new Set(
-          tables
-            .get(player.roomId)
-            ?.state.seats.map((seat) => seat.playerId)
-            .filter((id): id is string => !!id),
+    const intent = markTowerSocketIntent(socket.id, "leave");
+    replyWalletEffect(
+      ack,
+      Effect.gen(function* () {
+        const isCurrentLeave = yield* gameEffect(() =>
+          isCurrentTowerSocketIntent(socket.id, intent),
         );
-        if (!seated.has(player.id)) return;
-        recipients = [...seated];
-      } else if (request.game === "poker") {
-        recipients = poker.tableMatesOf(player.id);
-        if (!recipients.includes(player.id)) return;
-      } else return;
-      const targetId =
-        definition.kind === "throw" &&
-        typeof request.targetId === "string" &&
-        request.targetId !== player.id &&
-        recipients.includes(request.targetId)
-          ? request.targetId
-          : undefined;
-      if (definition.kind === "throw" && !targetId) return;
-      emoteTimes.push(now);
-      const event: EmoteEvent = {
-        id: randomUUID(),
-        game: request.game,
-        emote: definition.id,
-        fromId: player.id,
-        fromName: player.name,
-        targetId,
-      };
-      if (request.game === "blackjack")
-        io.to(player.roomId).emit("emote", event);
-      else
-        for (const playerId of recipients)
-          for (const socketId of playerSockets.get(playerId) ?? [])
-            io.to(socketId).emit("emote", event);
-    } catch {
-      /* Dropped silently: an emote is never worth an error message. */
-    }
+        if (!isCurrentLeave) return;
+        const currentPlayer = yield* gameEffect((clock) => {
+          throttle(clock.now());
+          if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+          return player;
+        });
+        const shouldLeave = yield* detachTowerSocketEffect(
+          socket.id,
+          currentPlayer,
+        );
+        yield* refreshWalletEffect(currentPlayer);
+        if (shouldLeave) {
+          const stillAbsent = yield* gameEffect(
+            () =>
+              isCurrentTowerSocketIntent(socket.id, intent) &&
+              !towerSockets.get(currentPlayer.id)?.size,
+          );
+          if (stillAbsent)
+            yield* tower.leaveEffect(currentPlayer, undefined, {
+              abandon: true,
+            });
+        }
+      }),
+    );
+  });
+  // Game invitations are relayed live between friends and never stored.
+  socket.on("friends:invite", (data: unknown, ack: (value: Ack) => void) => {
+    replyEffect(
+      ack,
+      inputEffect(FriendInviteSchema, data, "Invitation invalide.", (request) =>
+        Effect.gen(function* () {
+          const { sender, now } = yield* gameEffect((clock) => {
+            throttle(clock.now());
+            if (!player) throw new Error("Connectez-vous au club.");
+            return { sender: player, now: clock.now() };
+          });
+          const tableId = request.tableId ?? null;
+          let isPrivate = false;
+          if (request.game === "blackjack") {
+            if (!tableId || tableId !== sender.roomId)
+              return yield* Effect.fail(
+                new GameError("Rejoignez d’abord cette table de Blackjack."),
+              );
+            isPrivate = blackjackRooms.get(tableId)?.visibility === "private";
+          } else if (request.game === "roulette") {
+            const room = Option.getOrUndefined(
+              roulette.run((r) => r.tableOf(sender.id)),
+            );
+            if (!tableId || room?.id !== tableId)
+              return yield* Effect.fail(
+                new GameError("Rejoignez d’abord cette table de Roulette."),
+              );
+            isPrivate = room.visibility === "private";
+          } else if (tableId)
+            return yield* Effect.fail(
+              new GameError("Ce jeu ne se joue pas à une table."),
+            );
+          const friendly = yield* Effect.tryPromise({
+            try: () => runDatabase(areFriends(sender.id, request.friendId)),
+            catch: toGameError,
+          });
+          if (!friendly)
+            return yield* Effect.fail(
+              new GameError("Vous ne pouvez inviter que vos amis."),
+            );
+          if (!playerSockets.get(request.friendId)?.size)
+            return yield* Effect.fail(
+              new GameError("Votre ami n’est pas connecté."),
+            );
+          const key = sender.id + ":" + request.friendId;
+          if (now - (lastInvites.get(key) ?? 0) < 5000)
+            return yield* Effect.fail(
+              new GameError("Invitation déjà envoyée, patientez un instant."),
+            );
+          lastInvites.set(key, now);
+          emitToPlayer(request.friendId, "friends:invite", {
+            id: randomUUID(),
+            from: { id: sender.id, name: sender.name },
+            game: request.game,
+            tableId,
+            private: isPrivate,
+            sentAt: now,
+          } satisfies GameInvite);
+        }),
+      ),
+    );
+  });
+  socket.on(
+    "friends:invite:reply",
+    (data: unknown, ack?: (value: Ack) => void) => {
+      replyEffect(
+        ack,
+        inputEffect(
+          FriendInviteReplySchema,
+          data,
+          "Réponse invalide.",
+          (reply) =>
+            Effect.gen(function* () {
+              const responder = yield* gameEffect((clock) => {
+                throttle(clock.now());
+                if (!player) throw new Error("Connectez-vous au club.");
+                return player;
+              });
+              const friendly = yield* Effect.tryPromise({
+                try: () => runDatabase(areFriends(responder.id, reply.toId)),
+                catch: toGameError,
+              });
+              if (!friendly) return;
+              emitToPlayer(reply.toId, "friends:invite:reply", {
+                inviteId: reply.inviteId,
+                by: { id: responder.id, name: responder.name },
+                accepted: reply.accepted,
+              } satisfies GameInviteReply);
+            }),
+        ),
+      );
+    },
+  );
+  // Emotes are cosmetic: relayed to the table, never stored.
+  socket.on("emote", (request: unknown) => {
+    runEffect(
+      inputEffect(
+        EmoteRequestSchema,
+        request,
+        "Emote invalide.",
+        (safeRequest) =>
+          gameEffect((clock) => {
+            throttle(clock.now());
+            if (!player) return;
+            const definition = EMOTE_BY_ID.get(safeRequest.emote);
+            if (!definition) return;
+            const now = clock.now();
+            emoteTimes = emoteTimes.filter((time) => now - time < 10_000);
+            if (
+              emoteTimes.length >= 5 ||
+              now - (emoteTimes[emoteTimes.length - 1] ?? 0) < 700
+            )
+              return;
+            let recipients: string[];
+            if (safeRequest.game === "blackjack") {
+              const seated = new Set(
+                tables
+                  .get(player.roomId)
+                  ?.state.seats.map((seat) => seat.playerId)
+                  .filter((id): id is string => !!id),
+              );
+              if (!seated.has(player.id)) return;
+              recipients = [...seated];
+            } else if (safeRequest.game === "poker") {
+              recipients = poker.tableMatesOf(player.id);
+              if (!recipients.includes(player.id)) return;
+            } else return;
+            const targetId =
+              definition.kind === "throw" &&
+              typeof safeRequest.targetId === "string" &&
+              safeRequest.targetId !== player.id &&
+              recipients.includes(safeRequest.targetId)
+                ? safeRequest.targetId
+                : undefined;
+            if (definition.kind === "throw" && !targetId) return;
+            emoteTimes.push(now);
+            const event: EmoteEvent = {
+              id: randomUUID(),
+              game: safeRequest.game,
+              emote: definition.id,
+              fromId: player.id,
+              fromName: player.name,
+              targetId,
+            };
+            if (safeRequest.game === "blackjack")
+              io.to(blackjackRoom(player.roomId)).emit("emote", event);
+            else
+              for (const playerId of recipients)
+                for (const socketId of playerSockets.get(playerId) ?? [])
+                  io.to(socketId).emit("emote", event);
+          }),
+      ),
+    );
   });
   socket.on("disconnect", () => {
     if (!player) return;
     // A dropped connection keeps the climb for a while so a reload resumes it.
-    leaveTower(socket.id, player, false);
-    // The seat stays a minute so a reload finds its chips again.
-    const playerId = player.id;
-    roulette.run((r) => r.disconnect(socket.id, playerId));
-    const connections = playerSockets.get(player.id);
-    connections?.delete(socket.id);
-    if (!connections?.size) {
-      playerSockets.delete(player.id);
-      online.delete(player.id);
-      player.connected = false;
-      player.lastSeen = Date.now();
-      poker.disconnect(player);
-      if (tables.get(player.roomId)?.state.phase === "betting")
-        player.ready = false;
-      io.to(player.roomId).emit("state", tables.get(player.roomId)?.snapshot());
-    }
+    const disconnectedPlayer = player;
+    runOrThrow(
+      Effect.gen(function* () {
+        yield* leaveTowerEffect(socket.id, disconnectedPlayer, false);
+        yield* gameEffect(() => towerSocketIntents.delete(socket.id));
+        yield* gameEffect(() => {
+          roulette.run((r) => r.disconnect(socket.id, disconnectedPlayer.id));
+        });
+        const shouldDisconnect = yield* gameEffect((clock) => {
+          const connections = playerSockets.get(disconnectedPlayer.id);
+          connections?.delete(socket.id);
+          if (connections?.size) return false;
+          playerSockets.delete(disconnectedPlayer.id);
+          disconnectedPlayer.connected = false;
+          disconnectedPlayer.lastSeen = clock.now();
+          return true;
+        });
+        if (!shouldDisconnect) return;
+        yield* gameEffect(() => notifyPresence(disconnectedPlayer.id));
+        yield* poker.disconnectEffect(disconnectedPlayer);
+        yield* gameEffect(() => {
+          if (tables.get(disconnectedPlayer.roomId)?.state.phase === "betting")
+            disconnectedPlayer.ready = false;
+          io.to(blackjackRoom(disconnectedPlayer.roomId)).emit(
+            "state",
+            tables.get(disconnectedPlayer.roomId)?.snapshot(),
+          );
+        });
+      }),
+    );
   });
 });
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, table] of tables) {
-    table.tick(now);
-    if (!table.players.size && now - table.lastUsed > 30 * 60_000)
-      tables.delete(id);
-  }
-  poker.tick(now);
-  roulette.run((r) => r.tick);
-  tower.tick(now);
-  syncWallets();
-  for (const [token, player] of profiles)
-    if (!player.connected && now - player.lastSeen > 24 * 60 * 60_000) {
-      profiles.delete(token);
-      tower.forget(player.id);
-      wallets.delete(player.id);
-      playersById.delete(player.id);
-      mines.delete(player.id);
-      roulette.run((r) => r.forget(player.id));
+const maintenanceEffect = Effect.provide(
+  Effect.gen(function* () {
+    const clock = yield* ServerClock;
+    const now = clock.now();
+    for (const [id, table] of tables) {
+      yield* Effect.either(walletTransactionEffect(table.tickEffect(now)));
+      for (const memberId of blackjackRooms.get(id)?.members ?? [])
+        if (!table.players.has(memberId)) blackjackRooms.leave(memberId);
+      if (!table.players.size && now - table.lastUsed > 30 * 60_000) {
+        tables.delete(id);
+        blackjackRooms.deleteEmpty(id);
+      }
     }
-}, 100).unref();
-http.listen(port, hostname, () =>
-  console.log(
-    `MINUIT · http://localhost:${port} · ${dev ? "development" : "production"}`,
-  ),
+    yield* Effect.either(walletTransactionEffect(poker.tickEffect(now)));
+    yield* Effect.either(
+      walletTransactionEffect(gameEffect(() => roulette.run((r) => r.tick))),
+    );
+    yield* Effect.either(walletTransactionEffect(tower.tickEffect(now)));
+    for (const [token, profile] of profiles)
+      if (!profile.connected && now - profile.lastSeen > 24 * 60 * 60_000) {
+        yield* Effect.either(
+          gameEffect(() => roulette.run((r) => r.forget(profile.id))),
+        );
+        yield* Effect.either(tower.forgetEffect(profile.id));
+        yield* Effect.either(
+          gameEffect(() => {
+            profiles.delete(token);
+            blackjackRooms.leave(profile.id);
+            blackjackRooms.deleteEmpty(profile.roomId);
+            wallets.delete(profile.id);
+            playersById.delete(profile.id);
+            mines.delete(profile.id);
+          }),
+        );
+      }
+  }),
+  ServerClockLive,
 );
+const listenEffect = Effect.async<void, GameError>((resume) => {
+  http.once("error", (error) => resume(Effect.fail(toGameError(error))));
+  http.listen(port, hostname, () => resume(Effect.succeed(undefined)));
+});
+await Effect.runPromise(listenEffect);
+if (!dev) await publishDeploymentVersion();
+console.log(
+  `MINUIT · http://localhost:${port} · ${dev ? "development" : "production"}`,
+);
+const maintenanceTimer = setInterval(() => {
+  void serializeFinancial(() => Effect.runPromise(maintenanceEffect));
+}, 100);
+maintenanceTimer.unref();

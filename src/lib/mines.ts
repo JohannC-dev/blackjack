@@ -1,7 +1,10 @@
+import { CASINO_MAX_BET, CASINO_CHIP_DENOMINATIONS } from "./chips";
+
 export const MINES_GRID_SIDE = 5;
 export const MINES_GRID_SIZE = MINES_GRID_SIDE * MINES_GRID_SIDE;
-export const MINES_MIN_BET = 5;
-export const MINES_MAX_BET = 500;
+export const MINES_MIN_BET = CASINO_CHIP_DENOMINATIONS[0];
+export const MINES_MAX_BET = CASINO_MAX_BET;
+export const MINES_BET_STEP = CASINO_CHIP_DENOMINATIONS[0];
 export const MINES_HOUSE_EDGE = 0.04;
 
 export const MINES_TARGETS = [110, 125, 150, 200, 300, 500, 1000] as const;

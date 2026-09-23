@@ -1,0 +1,233 @@
+import { describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Table, type Player } from "../server/engine";
+import { BetChipPicker } from "../src/components/ui/game-controls";
+import { MinesGame } from "../server/mines";
+import { refillWallet } from "../server/refill";
+import { inMemoryGameWallet } from "../server/game-wallet";
+import { CASH_LIMITS, SPIN_BUY_INS } from "../server/poker";
+import {
+  BLACKJACK_CHIP_DENOMINATIONS,
+  BLACKJACK_MAX_BET,
+  BLACKJACK_CHIP_PRESETS,
+  CASINO_CHIP_DENOMINATIONS,
+  REFILL_BALANCE,
+  REFILL_THRESHOLD,
+  chipLabel,
+  chipColors,
+  chipStackForComposition,
+} from "../src/lib/chips";
+import { isValidRouletteBet, ROULETTE_MAX_PER_SPOT } from "../src/lib/roulette";
+
+const player = (balance = 50_000_000_000): Player => ({
+  id: randomUUID(),
+  token: randomUUID(),
+  name: "Économie",
+  balance,
+  ready: false,
+  connected: true,
+  roomId: "MINUIT",
+  lastSeen: Date.now(),
+});
+
+describe("Nouvelle économie", () => {
+  test("expose les neuf jetons communs sans doublon", () => {
+    expect(CASINO_CHIP_DENOMINATIONS).toEqual([
+      5_000, 20_000, 100_000, 500_000, 2_000_000, 10_000_000, 50_000_000,
+      200_000_000, 1_000_000_000,
+    ]);
+    expect(new Set(CASINO_CHIP_DENOMINATIONS).size).toBe(9);
+    expect(chipLabel(5_000)).toBe("5K");
+    expect(chipLabel(1_600_000)).toBe("1,6M");
+    expect(chipLabel(1_000_000_000)).toBe("1B");
+  });
+
+  test("garde les propositions blackjack indépendantes des tables", () => {
+    expect(BLACKJACK_CHIP_PRESETS).toHaveLength(5);
+    expect(BLACKJACK_CHIP_PRESETS[0]).toEqual([5_000, 10_000]);
+    expect(BLACKJACK_CHIP_PRESETS[1]).toEqual([
+      15_000, 30_000, 60_000, 150_000,
+    ]);
+    expect(BLACKJACK_CHIP_PRESETS[2]).toEqual([
+      200_000, 400_000, 800_000, 1_600_000,
+    ]);
+
+    const member = player();
+    const table = new Table("MINUIT");
+    table.add(member);
+    const seat = table.state.seats.find(
+      (entry) => entry.playerId === member.id,
+    )!;
+    for (const amount of BLACKJACK_CHIP_DENOMINATIONS)
+      expect(() =>
+        table.command(member.id, {
+          type: "bet",
+          seat: seat.index,
+          bet: { main: amount, three: 0, pairs: 0 },
+        }),
+      ).not.toThrow();
+    expect(() =>
+      table.command(member.id, {
+        type: "bet",
+        seat: seat.index,
+        bet: { main: 5_000, three: 0, pairs: 0 },
+      }),
+    ).not.toThrow();
+  });
+
+  test("keeps chip colours fixed between casino denominations", () => {
+    expect(chipColors(15_000)).toEqual(chipColors(5_000));
+    expect(chipColors(30_000)).toEqual(chipColors(20_000));
+    expect(chipColors(60_000)).toEqual(chipColors(20_000));
+    expect(chipColors(100_000)).not.toEqual(chipColors(20_000));
+    expect(chipColors(1_600_000)).toEqual(chipColors(500_000));
+    expect(chipColors(10_000_000)).toEqual(chipColors(16_000_000));
+    expect(chipColors(200_000)).toEqual(chipColors(100_000));
+    expect(chipColors(400_000)).toEqual(chipColors(100_000));
+    expect(chipColors(1_000_000_000)["--chip-base"]).toBe("#17191d");
+    expect(chipColors(1_000_000_000)).not.toEqual(chipColors(500_000));
+    expect(chipColors(200_000_000)["--chip-base"]).toBe("#215fc4");
+  });
+
+  test("shows one selected stake and allows a chip equal to the balance", () => {
+    const markup = renderToStaticMarkup(
+      createElement(BetChipPicker, {
+        bet: 1_000_000_000,
+        maxBet: 1_000_000_000,
+        balance: 1_000_000_000,
+        disabled: false,
+        onSelect: () => {},
+      }),
+    );
+
+    const billionChip = markup.match(
+      /<button(?=[^>]*class="chip chip-1000000000)[^>]*>/,
+    )?.[0];
+    expect(billionChip).toContain('aria-pressed="true"');
+    expect(markup.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(billionChip).toBeDefined();
+    expect(billionChip).not.toContain("disabled");
+    expect(markup).not.toContain("Annuler le dernier jeton");
+    expect(markup).not.toContain("Retirer la mise");
+  });
+  test("keeps selected blackjack chips on the table and for repeat", () => {
+    const member = player();
+    const table = new Table("CHIPS");
+    table.add(member);
+    const seat = table.state.seats.find(
+      (entry) => entry.playerId === member.id,
+    )!;
+    const chips = {
+      main: [
+        { denomination: 15_000, count: 1 },
+        { denomination: 30_000, count: 1 },
+      ],
+      three: [{ denomination: 15_000, count: 1 }],
+      pairs: [],
+    };
+    table.command(member.id, {
+      type: "bet",
+      seat: seat.index,
+      bet: { main: 45_000, three: 15_000, pairs: 0 },
+      chips,
+    });
+    expect(table.snapshot().seats[seat.index].chips).toEqual(chips);
+    expect(
+      chipStackForComposition(seat.chips.main, seat.bet.main, BLACKJACK_MAX_BET)
+        .columns,
+    ).toEqual([
+      { denomination: 15_000, layers: 2 },
+      { denomination: 30_000, layers: 2 },
+    ]);
+    expect(() =>
+      table.command(member.id, {
+        type: "bet",
+        seat: seat.index,
+        bet: { main: 45_000, three: 15_000, pairs: 0 },
+        chips: { ...chips, main: [{ denomination: 15_000, count: 1 }] },
+      }),
+    ).toThrow();
+
+    table.command(member.id, { type: "ready", ready: true });
+    table.startRound();
+    expect(seat.previousChips).toEqual(chips);
+    table.state.phase = "betting";
+    seat.bet = { main: 0, three: 0, pairs: 0 };
+    seat.chips = { main: [], three: [], pairs: [] };
+    table.command(member.id, { type: "repeat" });
+    expect(seat.chips).toEqual(chips);
+  });
+  test("uses the animation lab's disc counts with the current chip colours", () => {
+    const single = [{ denomination: 200_000_000, count: 1 }];
+    const full = [{ denomination: 200_000_000, count: 7 }];
+    expect(chipStackForComposition(single, 200_000_000, 1_000_000_000)).toEqual(
+      {
+        index: 1,
+        columns: [{ denomination: 200_000_000, layers: 2 }],
+      },
+    );
+    expect(
+      chipStackForComposition(full, 1_400_000_000, 20_000_000_000),
+    ).toEqual({
+      index: 4,
+      columns: [{ denomination: 200_000_000, layers: 5 }],
+    });
+    expect(
+      chipStackForComposition(
+        undefined,
+        1_000_000_000,
+        1_000_000_000,
+      ).columns.map((column) => column.denomination),
+    ).toEqual([1_000_000_000, 200_000_000, 50_000_000]);
+  });
+
+  test("recave à 10 000 seulement sous 5 000, puis permet de remiser", () => {
+    const member = player(0);
+    const table = new Table("MINUIT");
+    table.add(member);
+    refillWallet(member, inMemoryGameWallet);
+    expect(member.balance).toBe(REFILL_BALANCE);
+    expect(() => refillWallet(member, inMemoryGameWallet)).toThrow("sous 5000");
+
+    member.balance = REFILL_THRESHOLD - 1;
+    refillWallet(member, inMemoryGameWallet);
+    expect(member.balance).toBe(REFILL_BALANCE);
+    member.balance = REFILL_THRESHOLD;
+    expect(() => refillWallet(member, inMemoryGameWallet)).toThrow("sous 5000");
+
+    member.balance = REFILL_BALANCE;
+    const seat = table.state.seats.find(
+      (entry) => entry.playerId === member.id,
+    )!;
+    table.command(member.id, {
+      type: "bet",
+      seat: seat.index,
+      bet: { main: 5_000, three: 0, pairs: 0 },
+    });
+    expect(() =>
+      table.command(member.id, { type: "ready", ready: true }),
+    ).not.toThrow();
+
+    const mines = new MinesGame();
+    mines.start(member, CASINO_CHIP_DENOMINATIONS[0], 200);
+    expect(member.balance).toBe(REFILL_BALANCE - CASINO_CHIP_DENOMINATIONS[0]);
+  });
+
+  test("aligne roulette et poker sur les nouveaux montants", () => {
+    expect(
+      isValidRouletteBet({
+        kind: "color",
+        selection: "red",
+        amount: CASINO_CHIP_DENOMINATIONS[0],
+      }),
+    ).toBe(true);
+    expect(
+      isValidRouletteBet({ kind: "color", selection: "red", amount: 5 }),
+    ).toBe(false);
+    expect(ROULETTE_MAX_PER_SPOT).toBe(20_000_000_000);
+    expect([...CASH_LIMITS.keys()]).toEqual([5_000, 20_000, 100_000]);
+    expect(SPIN_BUY_INS).toEqual([5_000, 20_000, 100_000, 500_000, 2_000_000]);
+  });
+});

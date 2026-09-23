@@ -1,10 +1,17 @@
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
+import { gameEffect } from "./effect";
+import {
+  inMemoryGameWallet,
+  type GameWallet,
+  type WalletAccount,
+} from "./game-wallet";
 import {
   isMinesTarget,
   minesForTarget,
   minesMultiplier,
   minesPayout,
   MINES_GRID_SIZE,
+  MINES_BET_STEP,
   MINES_MAX_BET,
   MINES_MIN_BET,
   type MinesTarget,
@@ -12,7 +19,7 @@ import {
 import type { MinesCommand, MinesState } from "../src/lib/types";
 
 type MinesCellValue = "diamond" | "mine";
-type MinesPlayer = { balance: number };
+type MinesPlayer = WalletAccount;
 
 function emptyCells() {
   return Array.from({ length: MINES_GRID_SIZE }, (_, index) => ({
@@ -21,12 +28,14 @@ function emptyCells() {
   }));
 }
 
-function validBet(value: number) {
+type MinesBetLimits = { min: number; max: number; step: number };
+
+function validBet(value: number, limits: MinesBetLimits) {
   return (
     Number.isSafeInteger(value) &&
-    value >= MINES_MIN_BET &&
-    value <= MINES_MAX_BET &&
-    value % 5 === 0
+    value >= limits.min &&
+    value <= limits.max &&
+    value % limits.step === 0
   );
 }
 
@@ -46,6 +55,7 @@ function validPattern(value: unknown): value is number[] {
 export class MinesGame {
   private phase: MinesState["phase"] = "idle";
   private round = 0;
+  private roundId = "";
   private bet = 0;
   private target: MinesTarget = 200;
   private mineCount = minesForTarget(this.target);
@@ -56,7 +66,15 @@ export class MinesGame {
   private net: number | null = null;
   private message = "La grille attend votre mise.";
 
-  constructor(private readonly publish: () => void = () => {}) {}
+  constructor(
+    private readonly publish: () => void = () => {},
+    private readonly wallet: GameWallet = inMemoryGameWallet,
+    private readonly betLimits: MinesBetLimits = {
+      min: MINES_MIN_BET,
+      max: MINES_MAX_BET,
+      step: MINES_BET_STEP,
+    },
+  ) {}
 
   snapshot(): MinesState {
     const finished =
@@ -116,20 +134,61 @@ export class MinesGame {
     }
   }
 
+  commandEffect(player: MinesPlayer, command: MinesCommand) {
+    return gameEffect(() => this.command(player, command));
+  }
+
+  startEffect(
+    player: MinesPlayer,
+    bet: number,
+    target: number,
+    publish = true,
+  ) {
+    return gameEffect(() => this.start(player, bet, target, publish));
+  }
+
+  revealEffect(player: MinesPlayer, index: number) {
+    return gameEffect(() => this.reveal(player, index));
+  }
+
+  playPatternEffect(
+    player: MinesPlayer,
+    bet: number,
+    target: number,
+    indexes: unknown,
+  ) {
+    return gameEffect(() => this.playPattern(player, bet, target, indexes));
+  }
+
+  cashoutEffect(player: MinesPlayer) {
+    return gameEffect(() => this.cashout(player));
+  }
+
   start(player: MinesPlayer, bet: number, target: number, publish = true) {
     if (this.phase === "playing")
       throw new Error("Terminez la partie en cours avant de rejouer.");
-    if (!validBet(bet))
+    if (!validBet(bet, this.betLimits))
       throw new Error(
-        `La mise doit être comprise entre ${MINES_MIN_BET} et ${MINES_MAX_BET} crédits.`,
+        `La mise doit être comprise entre ${this.betLimits.min} et ${this.betLimits.max} crédits.`,
       );
     if (!isMinesTarget(target))
       throw new Error("Choisissez un objectif de gain valide.");
-    if (!Number.isFinite(player.balance) || player.balance < bet)
+    const balance = this.wallet.balance(player);
+    if (!Number.isFinite(balance) || balance < bet)
       throw new Error("Votre solde est insuffisant pour cette mise.");
 
-    player.balance -= bet;
+    const roundId = randomUUID();
+    this.wallet.debit(player, {
+      operationId: `mines:${roundId}:wager`,
+      game: "mines",
+      kind: "wager",
+      reason: "start",
+      referenceId: roundId,
+      amount: bet,
+      metadata: { target },
+    });
     this.round += 1;
+    this.roundId = roundId;
     this.bet = bet;
     this.target = target;
     this.mineCount = minesForTarget(target);
@@ -164,6 +223,7 @@ export class MinesGame {
       this.payout = 0;
       this.net = -this.bet;
       this.message = "La mine a explosé. La mise est perdue.";
+      this.recordResult(player);
       this.publish();
       return;
     }
@@ -173,7 +233,8 @@ export class MinesGame {
       this.phase = "won";
       this.payout = minesPayout(this.bet, this.multiplier);
       this.net = this.payout - this.bet;
-      player.balance += this.payout;
+      this.pay(player, "all-safe");
+      this.recordResult(player);
       this.message = "Toutes les cases sûres sont ouvertes. Gain sécurisé.";
       this.publish();
       return;
@@ -210,6 +271,7 @@ export class MinesGame {
         this.payout = 0;
         this.net = -this.bet;
         this.message = "La mine a explosé. La mise est perdue.";
+        this.recordResult(player);
         this.publish();
         return;
       }
@@ -219,7 +281,8 @@ export class MinesGame {
         this.phase = "won";
         this.payout = minesPayout(this.bet, this.multiplier);
         this.net = this.payout - this.bet;
-        player.balance += this.payout;
+        this.pay(player, "pattern-all-safe");
+        this.recordResult(player);
         this.message = "Toutes les cases sûres sont ouvertes. Gain sécurisé.";
         this.publish();
         return;
@@ -228,7 +291,8 @@ export class MinesGame {
 
     this.payout = minesPayout(this.bet, this.multiplier);
     this.net = this.payout - this.bet;
-    player.balance += this.payout;
+    this.pay(player, "pattern-cashout");
+    this.recordResult(player);
     this.phase = "cashed";
     this.message = "Pattern révélé. Gain encaissé.";
     this.publish();
@@ -242,9 +306,31 @@ export class MinesGame {
 
     this.payout = minesPayout(this.bet, this.multiplier);
     this.net = this.payout - this.bet;
-    player.balance += this.payout;
+    this.pay(player, "cashout");
+    this.recordResult(player);
     this.phase = "cashed";
     this.message = "Gain encaissé. La grille est révélée.";
     this.publish();
+  }
+
+  private recordResult(player: MinesPlayer) {
+    this.wallet.recordGameResult({
+      userId: player.id,
+      game: "mines",
+      playId: this.roundId,
+      net: this.net!,
+    });
+  }
+
+  private pay(player: MinesPlayer, reason: string) {
+    this.wallet.credit(player, {
+      operationId: `mines:${this.roundId}:${reason}`,
+      game: "mines",
+      kind: "payout",
+      reason,
+      referenceId: this.roundId,
+      amount: this.payout,
+      metadata: { round: this.round, target: this.target },
+    });
   }
 }

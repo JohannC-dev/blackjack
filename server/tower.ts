@@ -1,5 +1,8 @@
 import { randomInt, randomUUID } from "node:crypto";
+import { gameEffect } from "./effect";
 import type { Player } from "./engine";
+import { inMemoryGameWallet, type GameWallet } from "./game-wallet";
+import { makeRoomRuntime, type Room } from "./rooms";
 import type {
   TowerCell,
   TowerClientState,
@@ -59,21 +62,14 @@ type InternalRun = TowerRun & {
   ghostExpired: boolean;
 };
 
-type TowerRoom = {
-  id: string;
-  members: Set<string>;
-  feed: TowerFeedItem[];
-};
-
 export type TowerRandom = (max: number) => number;
 
 export class TowerManager {
   private runs = new Map<string, InternalRun>();
   /** Each player's own Lucky pot, fed by their wagers only. */
   private pots = new Map<string, number>();
-  private rooms = new Map<string, TowerRoom>();
-  private roomOf = new Map<string, string>();
-  private roomCount = 0;
+  private rooms = makeRoomRuntime("tower");
+  private feeds = new Map<string, TowerFeedItem[]>();
 
   constructor(
     private send: (playerId: string, state: TowerClientState) => void,
@@ -81,48 +77,49 @@ export class TowerManager {
     private random: TowerRandom = randomInt,
     /** Development aid: ordinary climbs without any trap. */
     private noTraps = false,
+    private readonly wallet: GameWallet = inMemoryGameWallet,
+    private readonly betLimits: { min: number; max: number; step: number } = {
+      min: TOWER_MIN_BET,
+      max: TOWER_MAX_BET,
+      step: TOWER_BET_STEP,
+    },
   ) {}
 
   publicState(roomId: string | undefined): TowerPublicState {
     const room = roomId ? this.rooms.get(roomId) : undefined;
     return {
       ghosts: room ? this.ghosts(room) : [],
-      feed: room ? room.feed.map((item) => ({ ...item })) : [],
+      feed:
+        (room ? this.feeds.get(room.id) : undefined)?.map((item) => ({
+          ...item,
+        })) ?? [],
     };
   }
 
   state(player: Player): TowerClientState {
     const run = this.runs.get(player.id);
     return {
-      ...this.publicState(this.roomOf.get(player.id)),
+      ...this.publicState(this.rooms.roomOf(player.id)),
       run: run ? this.publicRun(run) : null,
       luckyPot: towerLuckyPayout(this.pots.get(player.id) ?? 0),
     };
   }
 
-  /** Room of a player currently in the Tower, if any. */
+  /** Socket.IO channel of a player currently in the Tower, if any. */
   roomIdOf(playerId: string) {
-    return this.roomOf.get(playerId);
+    const roomId = this.rooms.roomOf(playerId);
+    return roomId ? this.rooms.channel(roomId) : undefined;
   }
 
   /** The player opens the Tower: seat them in a room and restore their climb. */
   enter(player: Player) {
-    let roomId = this.roomOf.get(player.id);
+    let roomId = this.rooms.roomOf(player.id);
     if (!roomId) {
-      let room = [...this.rooms.values()].find(
+      const room = this.rooms.enterPublic(
+        player.id,
         (candidate) => candidate.members.size < TOWER_ROOM_SIZE,
       );
-      if (!room) {
-        room = {
-          id: `tower:${++this.roomCount}`,
-          members: new Set(),
-          feed: [],
-        };
-        this.rooms.set(room.id, room);
-      }
-      room.members.add(player.id);
       roomId = room.id;
-      this.roomOf.set(player.id, roomId);
     }
     const run = this.runs.get(player.id);
     if (run) {
@@ -130,8 +127,12 @@ export class TowerManager {
       run.absentSince = null;
     }
     this.send(player.id, this.state(player));
-    this.broadcast(roomId, this.publicState(roomId));
-    return roomId;
+    this.broadcast(this.rooms.channel(roomId), this.publicState(roomId));
+    return this.rooms.channel(roomId);
+  }
+
+  enterEffect(player: Player) {
+    return gameEffect(() => this.enter(player));
   }
 
   /**
@@ -144,18 +145,22 @@ export class TowerManager {
       if (abandon) this.settleAbandoned(run, now);
       else run.absentSince = now;
     }
-    const roomId = this.roomOf.get(player.id);
+    const roomId = this.rooms.roomOf(player.id);
     if (!roomId) return;
-    this.roomOf.delete(player.id);
-    const room = this.rooms.get(roomId)!;
-    room.members.delete(player.id);
-    if (!room.members.size) this.rooms.delete(roomId);
-    else this.broadcast(roomId, this.publicState(roomId));
+    this.rooms.leave(player.id);
+    if (this.rooms.deleteEmpty(roomId)) this.feeds.delete(roomId);
+    else this.broadcast(this.rooms.channel(roomId), this.publicState(roomId));
     if (run && run.status !== "playing") this.runs.delete(player.id);
   }
 
+  leaveEffect(player: Player, now?: number, options?: { abandon?: boolean }) {
+    return gameEffect((clock) =>
+      this.leave(player, now ?? clock.now(), options),
+    );
+  }
+
   command(player: Player, command: TowerCommand, now = Date.now()) {
-    const roomId = this.roomOf.get(player.id);
+    const roomId = this.rooms.roomOf(player.id);
     if (!roomId) throw new Error("Ouvrez la Tower pour jouer.");
     if (command?.type === "start")
       this.start(player, command.difficulty, command.bet, now);
@@ -163,13 +168,22 @@ export class TowerManager {
     else if (command?.type === "cashout") this.cashout(player, now);
     else throw new Error("Action inconnue.");
     this.send(player.id, this.state(player));
-    this.broadcast(roomId, this.publicState(roomId));
+    this.broadcast(this.rooms.channel(roomId), this.publicState(roomId));
   }
 
+  commandEffect(player: Player, command: TowerCommand, now?: number) {
+    return gameEffect((clock) =>
+      this.command(player, command, now ?? clock.now()),
+    );
+  }
+
+  tickEffect(now?: number) {
+    return gameEffect((clock) => this.tick(now ?? clock.now()));
+  }
   tick(now: number) {
     const changed = new Set<string>();
     for (const [playerId, run] of this.runs) {
-      const roomId = this.roomOf.get(playerId);
+      const roomId = this.rooms.roomOf(playerId);
       if (
         run.status === "playing" &&
         run.absentSince !== null &&
@@ -187,7 +201,7 @@ export class TowerManager {
       }
     }
     for (const roomId of changed)
-      this.broadcast(roomId, this.publicState(roomId));
+      this.broadcast(this.rooms.channel(roomId), this.publicState(roomId));
   }
 
   /** Test and debug helper: the hidden trap columns of a player's climb. */
@@ -199,6 +213,10 @@ export class TowerManager {
   forget(playerId: string) {
     this.pots.delete(playerId);
     this.runs.delete(playerId);
+  }
+
+  forgetEffect(playerId: string) {
+    return gameEffect(() => this.forget(playerId));
   }
 
   /** Test and debug helper: the hidden golden card of a player's climb. */
@@ -218,18 +236,28 @@ export class TowerManager {
     if (
       typeof bet !== "number" ||
       !Number.isInteger(bet) ||
-      bet < TOWER_MIN_BET ||
-      bet > TOWER_MAX_BET ||
-      bet % TOWER_BET_STEP
+      bet < this.betLimits.min ||
+      bet > this.betLimits.max ||
+      bet % this.betLimits.step
     )
       throw new Error(
-        `La mise doit être comprise entre ${TOWER_MIN_BET} et ${TOWER_MAX_BET} crédits, par pas de ${TOWER_BET_STEP}.`,
+        `La mise doit être comprise entre ${this.betLimits.min} et ${this.betLimits.max} crédits, par pas de ${this.betLimits.step}.`,
       );
     if (this.runs.get(player.id)?.status === "playing")
       throw new Error("Terminez d’abord votre ascension en cours.");
-    if (player.balance < bet) throw new Error("Votre solde est insuffisant.");
+    if (this.wallet.balance(player) < bet)
+      throw new Error("Votre solde est insuffisant.");
 
-    player.balance -= bet;
+    const runId = randomUUID();
+    this.wallet.debit(player, {
+      operationId: `tower:${runId}:wager`,
+      game: "tower",
+      kind: "wager",
+      reason: "start",
+      referenceId: runId,
+      amount: bet,
+      metadata: { difficulty },
+    });
     this.pots.set(
       player.id,
       Math.round(
@@ -255,7 +283,7 @@ export class TowerManager {
       };
     }
     this.runs.set(player.id, {
-      id: randomUUID(),
+      id: runId,
       difficulty,
       cols,
       bet,
@@ -374,13 +402,40 @@ export class TowerManager {
     run.status = status;
     run.payout = payout;
     run.endedAt = now;
-    run.player.balance += payout;
+    if (run.floor > 0 || status === "lost")
+      this.wallet.recordGameResult({
+        userId: run.player.id,
+        game: "tower",
+        playId: run.id,
+        net: payout - run.bet,
+      });
+    if (payout > 0) {
+      const refund = run.floor === 0 && payout === run.bet;
+      let reason = "cashout";
+      if (refund) reason = "abandoned-before-first-floor";
+      else if (run.lucky) reason = "lucky-payout";
+      else if (status === "topped") reason = "top";
+      this.wallet.credit(run.player, {
+        operationId: `tower:${run.id}:settlement`,
+        game: "tower",
+        kind: refund ? "refund" : "payout",
+        reason,
+        referenceId: run.id,
+        amount: payout,
+        metadata: {
+          difficulty: run.difficulty,
+          floor: run.floor,
+          lucky: run.lucky,
+        },
+      });
+    }
     for (let floor = 0; floor < TOWER_FLOORS; floor++)
       run.rows[floor].cells ??= this.cells(run, floor);
 
-    const room = this.rooms.get(this.roomOf.get(run.player.id) ?? "");
+    const room = this.rooms.get(this.rooms.roomOf(run.player.id) ?? "");
     if (!room) return;
-    room.feed.unshift({
+    const feed = this.feeds.get(room.id) ?? [];
+    feed.unshift({
       id: run.id,
       name: run.player.name,
       status,
@@ -390,7 +445,7 @@ export class TowerManager {
       amount: payout,
       timestamp: now,
     });
-    room.feed = room.feed.slice(0, FEED_SIZE);
+    this.feeds.set(room.id, feed.slice(0, FEED_SIZE));
   }
 
   private publicRun(run: InternalRun): TowerRun {
@@ -413,7 +468,7 @@ export class TowerManager {
     };
   }
 
-  private ghosts(room: TowerRoom): TowerGhost[] {
+  private ghosts(room: Room): TowerGhost[] {
     const ghosts: TowerGhost[] = [];
     for (const playerId of room.members) {
       const run = this.runs.get(playerId);

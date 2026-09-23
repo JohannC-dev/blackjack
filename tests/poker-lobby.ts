@@ -1,5 +1,5 @@
 import { chromium, expect, type Page } from "@playwright/test";
-import { randomUUID } from "node:crypto";
+import { authenticateContext } from "./auth-session";
 
 const baseUrl = process.env.TEST_URL ?? "http://localhost:3000";
 const browser = await chromium.launch({ headless: true });
@@ -10,11 +10,7 @@ async function lobby(balance: number) {
     viewport: { width: 1440, height: 900 },
     reducedMotion: "reduce",
   });
-  await context.addInitScript(
-    (profile) =>
-      localStorage.setItem("minuit.profile.v1", JSON.stringify(profile)),
-    { token: randomUUID(), name: "Lobby test", balance },
-  );
+  await authenticateContext(context, baseUrl, "Lobby test", balance);
   const page = await context.newPage();
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(baseUrl);

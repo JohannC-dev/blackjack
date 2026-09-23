@@ -1,4 +1,15 @@
 import { randomInt, randomUUID } from "node:crypto";
+import { gameEffect } from "./effect";
+import { inMemoryGameWallet, type GameWallet } from "./game-wallet";
+import {
+  BLACKJACK_CHIP_DENOMINATIONS,
+  BLACKJACK_MAX_BET,
+  BLACKJACK_MAX_SIDE_BET,
+  BLACKJACK_MIN_BET,
+  chipCountTotal,
+  copyBetChips,
+  emptyBetChips,
+} from "../src/lib/chips";
 import {
   betTotal,
   canSplitCards,
@@ -9,6 +20,8 @@ import {
   score,
 } from "../src/lib/rules";
 import type {
+  Bet,
+  BetChips,
   Card,
   Command,
   Hand,
@@ -17,6 +30,7 @@ import type {
   PublicPlayer,
   Seat,
   Suit,
+  TableVisibility,
   TableState,
 } from "../src/lib/types";
 
@@ -27,10 +41,51 @@ export type Player = PublicPlayer & {
 };
 const emptyBet = () => ({ main: 0, three: 0, pairs: 0 });
 const emptySides = () => ({ three: null, pairs: null });
+function chipsForBet(bet: Bet): BetChips {
+  return {
+    main: bet.main ? [{ denomination: bet.main, count: 1 }] : [],
+    three: bet.three ? [{ denomination: bet.three, count: 1 }] : [],
+    pairs: bet.pairs ? [{ denomination: bet.pairs, count: 1 }] : [],
+  };
+}
+function validBetChips(chips: BetChips, bet: Bet) {
+  if (!chips || typeof chips !== "object") return false;
+  return (["main", "three", "pairs"] as const).every((type) => {
+    const stack = chips[type];
+    return (
+      Array.isArray(stack) &&
+      stack.length <= BLACKJACK_CHIP_DENOMINATIONS.length &&
+      stack.every(
+        (chip) =>
+          chip &&
+          BLACKJACK_CHIP_DENOMINATIONS.includes(chip.denomination) &&
+          Number.isSafeInteger(chip.count) &&
+          chip.count > 0,
+      ) &&
+      new Set(stack.map((chip) => chip.denomination)).size === stack.length &&
+      chipCountTotal(stack) === bet[type]
+    );
+  });
+}
 const BETTING_COUNTDOWN_MS = 12_000;
 const ALL_READY_COUNTDOWN_MS = 3_000;
 const SETTLED_COUNTDOWN_MS = 7_000;
+const INSURANCE_COUNTDOWN_MS = 12_000;
 const IDLE_SEAT_ROUNDS = 2;
+const BLACKJACK_STAKE_UNIT = 5_000;
+
+function isBlackjackStake(value: number, maximum: number) {
+  if (
+    !Number.isSafeInteger(value) ||
+    value < 0 ||
+    value > maximum ||
+    value % BLACKJACK_STAKE_UNIT
+  )
+    return false;
+  if (value === 0) return true;
+
+  return true;
+}
 export const BLACKJACK_SHUFFLE_MS = 2_200;
 export function makeShoe(): Card[] {
   const cards: Card[] = [];
@@ -60,20 +115,28 @@ export class Table {
     id: string,
     private publish: () => void = () => {},
     shoe?: Card[],
+    private readonly wallet: GameWallet = inMemoryGameWallet,
+    private readonly legacyEconomy = false,
+    visibility: TableVisibility = "private",
   ) {
     this.shoe = shoe ?? makeShoe();
     this.state = {
       id,
+      visibility,
       phase: "betting",
       round: 0,
       seats: Array.from({ length: 5 }, (_, index) => ({
         index,
         playerId: null,
         bet: emptyBet(),
+        chips: emptyBetChips(),
+        previousChips: null,
         previousBet: null,
         hands: [],
         sides: emptySides(),
         committed: 0,
+        insurance: 0,
+        insuranceDecision: false,
       })),
       dealer: [],
       activeHandId: null,
@@ -88,6 +151,10 @@ export class Table {
     const seats = this.state.seats.map((seat) => ({
       ...seat,
       bet: { ...seat.bet },
+      chips: copyBetChips(seat.chips),
+      previousChips: seat.previousChips
+        ? copyBetChips(seat.previousChips)
+        : null,
       previousBet: seat.previousBet ? { ...seat.previousBet } : null,
       sides: { ...seat.sides },
       hands: seat.hands.map((hand) => {
@@ -186,6 +253,8 @@ export class Table {
       if (seat) {
         seat.playerId = player.id;
         seat.bet = emptyBet();
+        seat.chips = emptyBetChips();
+        seat.previousChips = null;
         seat.previousBet = null;
         this.idleSeatRounds.set(seat.index, 0);
       }
@@ -195,10 +264,14 @@ export class Table {
   private clearSeat(seat: Seat) {
     seat.playerId = null;
     seat.bet = emptyBet();
+    seat.chips = emptyBetChips();
+    seat.previousChips = null;
     seat.previousBet = null;
     seat.hands = [];
     seat.sides = emptySides();
     seat.committed = 0;
+    seat.insurance = 0;
+    seat.insuranceDecision = false;
     this.idleSeatRounds.delete(seat.index);
   }
   remove(playerId: string) {
@@ -228,15 +301,23 @@ export class Table {
       throw new Error("Le sabot est en cours de mélange.");
     if (command.type === "gamble" || command.type === "cashout") {
       const gamble = this.state.gambles.find(
-        (entry) => entry.playerId === playerId && entry.status === "available",
+        (entry) =>
+          entry.playerId === playerId &&
+          entry.status === "available" &&
+          entry.round === this.state.round,
       );
       if (!gamble) throw new Error("Aucun gain disponible à tenter.");
+      if (
+        gamble.round !== this.state.round ||
+        (this.state.phase !== "settled" && this.state.phase !== "betting")
+      )
+        throw new Error("Ces gains ne sont plus disponibles à tenter.");
       if (command.type === "cashout") {
         gamble.status = "cashed";
       } else {
         if (command.color !== "red" && command.color !== "black")
           throw new Error("Choisissez rouge ou noir.");
-        if (player.balance < gamble.stake)
+        if (this.wallet.balance(player) < gamble.stake)
           throw new Error(
             "Ces gains ont déjà été engagés dans la partie. Encaissez cette option.",
           );
@@ -260,34 +341,69 @@ export class Table {
         gamble.choice = command.color;
         gamble.card = card;
         gamble.result = won ? "win" : "lose";
+        const gambleNumber = gamble.streak + 1;
+        const change = {
+          operationId: `blackjack:${this.state.id}:${gamble.round}:${playerId}:gamble:${gambleNumber}`,
+          game: "blackjack" as const,
+          kind: won ? ("payout" as const) : ("additional-wager" as const),
+          reason: won ? "gamble-win" : "gamble-loss",
+          referenceId: `${this.state.id}:${gamble.round}`,
+          amount: stake,
+          metadata: { color: command.color, gambleNumber },
+        };
         if (won) {
-          player.balance += stake;
+          this.wallet.credit(player, change);
           gamble.stake *= 2;
           gamble.streak += 1;
         } else {
-          player.balance -= stake;
+          this.wallet.debit(player, change);
           gamble.status = "lost";
         }
       }
+    } else if (command.type === "insurance") {
+      if (this.state.phase !== "insurance")
+        throw new Error("L’assurance n’est plus disponible.");
+      const seat = this.state.seats[command.seat];
+      if (!seat || seat.playerId !== playerId || !seat.hands.length)
+        throw new Error("Cette place ne vous appartient pas.");
+      if (seat.insuranceDecision)
+        throw new Error("L’assurance a déjà été choisie pour cette place.");
+      if (typeof command.take !== "boolean") throw new Error("Choix invalide.");
+      if (command.take) {
+        const amount = seat.bet.main / 2;
+        if (this.wallet.balance(player) < amount)
+          throw new Error("Solde insuffisant pour l’assurance.");
+        this.wallet.debit(player, {
+          operationId: `blackjack:${this.state.id}:${this.state.round}:${seat.index}:insurance`,
+          game: "blackjack",
+          kind: "additional-wager",
+          reason: "insurance",
+          referenceId: `${this.state.id}:${this.state.round}`,
+          amount,
+          metadata: { seat: seat.index },
+        });
+        seat.insurance = amount;
+        seat.committed += amount;
+      }
+      seat.insuranceDecision = true;
+      if (this.state.seats.every((s) => !s.hands.length || s.insuranceDecision))
+        this.advance();
     } else if (
-      ["claim", "release", "bet", "repeat", "ready", "refill"].includes(
-        command.type,
-      )
+      ["claim", "release", "bet", "repeat", "ready"].includes(command.type)
     ) {
       if (this.state.phase !== "betting")
         throw new Error("Attendez la prochaine manche.");
-      if (command.type === "refill") {
-        if (player.balance >= 5)
-          throw new Error("La recharge est disponible sous 5 crédits.");
-        player.balance = 2000;
-      } else if (command.type === "ready") {
+      if (command.type === "ready") {
         if (typeof command.ready !== "boolean")
           throw new Error("Action invalide.");
         const own = this.state.seats.filter((s) => s.playerId === playerId);
         const total = own.reduce((sum, s) => sum + betTotal(s.bet), 0);
         if (
           command.ready &&
-          (!own.some((s) => s.bet.main >= 5) || total > player.balance)
+          (!own.some(
+            (s) => s.bet.main >= (this.legacyEconomy ? 5 : BLACKJACK_MIN_BET),
+          ) ||
+            total > this.wallet.balance(player))
         )
           throw new Error("Vérifiez vos mises et votre solde.");
         player.ready = command.ready;
@@ -300,9 +416,14 @@ export class Table {
           0,
         );
         if (!total) throw new Error("Aucune mise précédente à répéter.");
-        if (total > player.balance)
+        if (total > this.wallet.balance(player))
           throw new Error("Vous n’avez pas assez de crédits.");
-        for (const seat of own) seat.bet = { ...seat.previousBet! };
+        for (const seat of own) {
+          seat.bet = { ...seat.previousBet! };
+          seat.chips = seat.previousChips
+            ? copyBetChips(seat.previousChips)
+            : chipsForBet(seat.bet);
+        }
         player.ready = false;
       } else if (
         command.type === "claim" ||
@@ -317,6 +438,8 @@ export class Table {
           if (seat.playerId) throw new Error("Cette place est déjà occupée.");
           seat.playerId = playerId;
           seat.bet = emptyBet();
+          seat.chips = emptyBetChips();
+          seat.previousChips = null;
           seat.previousBet = null;
           this.idleSeatRounds.set(seat.index, 0);
         } else {
@@ -330,25 +453,41 @@ export class Table {
             this.clearSeat(seat);
           } else {
             const b = command.bet;
+            const validMain = this.legacyEconomy
+              ? Number.isInteger(b?.main) &&
+                b.main >= 0 &&
+                b.main <= 500 &&
+                b.main % 5 === 0
+              : !!b && isBlackjackStake(b.main, BLACKJACK_MAX_BET);
+            const validSide = (value: number | undefined) =>
+              this.legacyEconomy
+                ? Number.isInteger(value) &&
+                  value! >= 0 &&
+                  value! <= 100 &&
+                  value! % 5 === 0
+                : value !== undefined &&
+                  isBlackjackStake(value, BLACKJACK_MAX_SIDE_BET);
             if (
               !b ||
-              ![b.main, b.three, b.pairs].every(
-                (v) => Number.isInteger(v) && v >= 0 && v % 5 === 0,
-              ) ||
-              b.main > 500 ||
-              b.three > 100 ||
-              b.pairs > 100 ||
+              !validMain ||
+              !validSide(b.three) ||
+              !validSide(b.pairs) ||
               (b.main === 0 && (b.three > 0 || b.pairs > 0))
             )
               throw new Error(
-                "Mises par pas de 5 : blackjack 5–500, bonus 0–100.",
+                "Cette combinaison de jetons dépasse les limites de la table.",
               );
             const reserved = this.state.seats
               .filter((s) => s.playerId === playerId && s !== seat)
               .reduce((sum, s) => sum + betTotal(s.bet), 0);
-            if (reserved + betTotal(b) > player.balance)
+            if (reserved + betTotal(b) > this.wallet.balance(player))
               throw new Error("Vous n’avez pas assez de crédits.");
+            if (command.chips && !validBetChips(command.chips, b))
+              throw new Error("La pile de jetons ne correspond pas à la mise.");
             seat.bet = { main: b.main, three: b.three, pairs: b.pairs };
+            seat.chips = command.chips
+              ? copyBetChips(command.chips)
+              : chipsForBet(seat.bet);
           }
         }
         player.ready = false;
@@ -381,10 +520,18 @@ export class Table {
         if (
           hand.cards.length !== 2 ||
           hand.splitAces ||
-          player.balance < hand.bet
+          this.wallet.balance(player) < hand.bet
         )
           throw new Error("Impossible de doubler cette main.");
-        player.balance -= hand.bet;
+        this.wallet.debit(player, {
+          operationId: `blackjack:${this.state.id}:${this.state.round}:${hand.id}:double`,
+          game: "blackjack",
+          kind: "additional-wager",
+          reason: "double",
+          referenceId: `${this.state.id}:${this.state.round}`,
+          amount: hand.bet,
+          metadata: { handId: hand.id, seat: seat.index },
+        });
         seat.committed += hand.bet;
         hand.bet *= 2;
         hand.cards.push(this.draw());
@@ -397,10 +544,18 @@ export class Table {
           !canSplitCards(hand.cards) ||
           hand.splitAces ||
           seat.hands.length >= 4 ||
-          player.balance < hand.bet
+          this.wallet.balance(player) < hand.bet
         )
           throw new Error("Impossible de séparer cette main.");
-        player.balance -= hand.bet;
+        this.wallet.debit(player, {
+          operationId: `blackjack:${this.state.id}:${this.state.round}:${hand.id}:split:${seat.hands.length}`,
+          game: "blackjack",
+          kind: "additional-wager",
+          reason: "split",
+          referenceId: `${this.state.id}:${this.state.round}`,
+          amount: hand.bet,
+          metadata: { handId: hand.id, seat: seat.index },
+        });
         seat.committed += hand.bet;
         const card = hand.cards.pop()!;
         hand.split = true;
@@ -494,7 +649,8 @@ export class Table {
         );
     for (const [playerId, total] of reserved) {
       const player = this.players.get(playerId);
-      if (player?.ready && total > player.balance) player.ready = false;
+      if (player?.ready && total > this.wallet.balance(player))
+        player.ready = false;
     }
     const seats = this.state.seats.filter(
       (s) =>
@@ -509,19 +665,44 @@ export class Table {
       return;
     }
     if (this.shoe.length < 160) {
+      // A win can only be gambled until the next round actually starts.
+      this.state.gambles = [];
       this.startShuffle(Date.now(), true);
       return;
     }
+    const nextRound = this.state.round + 1;
+    const committedByPlayer = new Map<string, number>();
+    for (const seat of seats)
+      committedByPlayer.set(
+        seat.playerId!,
+        (committedByPlayer.get(seat.playerId!) ?? 0) + betTotal(seat.bet),
+      );
+    for (const [playerId, amount] of committedByPlayer)
+      this.wallet.debit(this.players.get(playerId)!, {
+        operationId: `blackjack:${this.state.id}:${nextRound}:${playerId}:wager`,
+        game: "blackjack",
+        kind: "wager",
+        reason: "round-start",
+        referenceId: `${this.state.id}:${nextRound}`,
+        amount,
+        metadata: {
+          seats: seats
+            .filter((seat) => seat.playerId === playerId)
+            .map((seat) => seat.index),
+        },
+      });
+    // Bets have now been reserved, so the previous round's offer expires.
+    this.state.gambles = [];
     this.expireIdleSeats(new Set(seats.map((seat) => seat.index)));
-    this.state.gambles = this.state.gambles.filter(
-      (entry) => entry.status === "available",
-    );
     // Bets are only reserved when a round starts. Clear the bets belonging to
     // players who did not confirm in time so their unplayed chips do not
     // remain displayed on the table while the round is in progress.
     const dealtSeatIndexes = new Set(seats.map((seat) => seat.index));
     for (const seat of this.state.seats)
-      if (!dealtSeatIndexes.has(seat.index)) seat.bet = emptyBet();
+      if (!dealtSeatIndexes.has(seat.index)) {
+        seat.bet = emptyBet();
+        seat.chips = emptyBetChips();
+      }
     this.state.round++;
     this.state.phase = "dealing";
     this.state.deadline = null;
@@ -530,8 +711,10 @@ export class Table {
     for (const seat of seats) {
       const player = this.players.get(seat.playerId!)!;
       seat.previousBet = { ...seat.bet };
+      seat.previousChips = copyBetChips(seat.chips);
       seat.committed = betTotal(seat.bet);
-      player.balance -= seat.committed;
+      seat.insurance = 0;
+      seat.insuranceDecision = false;
       seat.hands = [
         {
           id: randomUUID(),
@@ -554,6 +737,7 @@ export class Table {
   private finishDeal() {
     this.turnOrder = [];
     let hasSideBets = false;
+    const payouts = new Map<string, number>();
     for (const seat of this.state.seats) {
       if (!seat.hands.length) continue;
       const hand = seat.hands[0];
@@ -562,18 +746,43 @@ export class Table {
         three: evaluate21Plus3(cards, seat.bet.three),
         pairs: evaluateSuperPairs(cards, seat.bet.pairs),
       };
-      this.players.get(seat.playerId!)!.balance +=
+      const payout =
         (seat.sides.three?.payout ?? 0) + (seat.sides.pairs?.payout ?? 0);
+      if (payout > 0)
+        payouts.set(
+          seat.playerId!,
+          (payouts.get(seat.playerId!) ?? 0) + payout,
+        );
       hasSideBets ||= seat.bet.three > 0 || seat.bet.pairs > 0;
       this.updateHand(hand);
       this.turnOrder.push(hand.id);
     }
+    for (const [playerId, amount] of payouts)
+      this.wallet.credit(this.players.get(playerId)!, {
+        operationId: `blackjack:${this.state.id}:${this.state.round}:${playerId}:side-payout`,
+        game: "blackjack",
+        kind: "payout",
+        reason: "side-bets",
+        referenceId: `${this.state.id}:${this.state.round}`,
+        amount,
+      });
     if (hasSideBets) {
       this.state.phase = "bonuses";
       this.state.message =
         "Les paris annexes sont réglés. Les gains sont versés.";
       this.nextStep = Date.now() + 3200;
-    } else this.advance();
+    } else this.startInsuranceOrAdvance();
+  }
+  private startInsuranceOrAdvance() {
+    if (this.state.dealer[0]?.rank !== 1) {
+      this.advance();
+      return;
+    }
+    this.state.phase = "insurance";
+    this.state.activeHandId = null;
+    this.state.deadline = Date.now() + INSURANCE_COUNTDOWN_MS;
+    this.state.message =
+      "As visible : choisissez votre assurance avant de jouer.";
   }
   private advance() {
     const hands = this.state.seats.flatMap((s) => s.hands);
@@ -597,6 +806,7 @@ export class Table {
     const dealerTotal = score(this.state.dealer).total;
     const dealerBJ = isBlackjack(this.state.dealer);
     const nets = new Map<string, number>();
+    const payouts = new Map<string, number>();
     const historyBets = new Map<string, HistoryBet[]>();
     for (const seat of this.state.seats) {
       if (!seat.hands.length) continue;
@@ -651,14 +861,45 @@ export class Table {
           ...(side?.label ? { label: side.label } : {}),
         });
       }
+      if (seat.insurance > 0) {
+        const payout = dealerBJ ? seat.insurance * 3 : 0;
+        bets.push({
+          type: "insurance",
+          seat: seat.index,
+          bet: seat.insurance,
+          payout,
+          net: payout - seat.insurance,
+          result: dealerBJ ? "win" : "lose",
+        });
+        mainPayout += payout;
+      }
       historyBets.set(seat.playerId!, bets);
-      this.players.get(seat.playerId!)!.balance += mainPayout;
+      if (mainPayout > 0)
+        payouts.set(
+          seat.playerId!,
+          (payouts.get(seat.playerId!) ?? 0) + mainPayout,
+        );
       nets.set(
         seat.playerId!,
         (nets.get(seat.playerId!) ?? 0) +
           bets.slice(seatBetsStart).reduce((sum, bet) => sum + bet.net, 0),
       );
+      this.wallet.recordGameResult({
+        userId: seat.playerId!,
+        game: "blackjack",
+        playId: `${this.state.id}:${this.state.round}:${seat.index}`,
+        net: bets.slice(seatBetsStart).reduce((sum, bet) => sum + bet.net, 0),
+      });
     }
+    for (const [playerId, amount] of payouts)
+      this.wallet.credit(this.players.get(playerId)!, {
+        operationId: `blackjack:${this.state.id}:${this.state.round}:${playerId}:settlement`,
+        game: "blackjack",
+        kind: "payout",
+        reason: "round-settlement",
+        referenceId: `${this.state.id}:${this.state.round}`,
+        amount,
+      });
     for (const [playerId, net] of nets)
       this.state.history.unshift({
         round: this.state.round,
@@ -669,18 +910,25 @@ export class Table {
       });
     this.state.gambles = [
       ...this.state.gambles.filter((entry) => entry.status === "available"),
-      ...[...nets.entries()]
-        .filter(([, net]) => net > 0)
-        .map(([playerId, net]) => ({
+      ...[...historyBets.entries()]
+        .map(([playerId, bets]) => ({
           playerId,
           round: this.state.round,
-          stake: net,
+          stake: bets.reduce(
+            (sum, bet) =>
+              sum +
+              (bet.result === "win" || bet.result === "blackjack"
+                ? bet.payout
+                : 0),
+            0,
+          ),
           choice: null,
           card: null,
           result: null,
           status: "available" as const,
           streak: 0,
-        })),
+        }))
+        .filter((entry) => entry.stake > 0),
     ];
     const pendingHistory = new Set(
       this.state.gambles.map((entry) => `${entry.round}:${entry.playerId}`),
@@ -696,6 +944,26 @@ export class Table {
       : dealerTotal > 21
         ? "Le croupier dépasse 21."
         : `Le croupier reste à ${dealerTotal}.`;
+  }
+
+  observeEffect(player: Player) {
+    return gameEffect(() => this.observe(player));
+  }
+
+  addEffect(player: Player) {
+    return gameEffect(() => this.add(player));
+  }
+
+  removeEffect(playerId: string) {
+    return gameEffect(() => this.remove(playerId));
+  }
+
+  commandEffect(playerId: string, command: Command) {
+    return gameEffect(() => this.command(playerId, command));
+  }
+
+  tickEffect(now?: number) {
+    return gameEffect((clock) => this.tick(now ?? clock.now()));
   }
   tick(now = Date.now()) {
     let changed = false;
@@ -730,6 +998,13 @@ export class Table {
       else this.nextStep = now + 320;
       changed = true;
     } else if (this.state.phase === "bonuses" && now >= this.nextStep) {
+      this.startInsuranceOrAdvance();
+      changed = true;
+    } else if (
+      this.state.phase === "insurance" &&
+      this.state.deadline &&
+      now >= this.state.deadline
+    ) {
       this.advance();
       changed = true;
     } else if (
@@ -759,9 +1034,12 @@ export class Table {
       for (const player of this.players.values()) player.ready = false;
       for (const seat of this.state.seats) {
         seat.bet = emptyBet();
+        seat.chips = emptyBetChips();
         seat.hands = [];
         seat.sides = emptySides();
         seat.committed = 0;
+        seat.insurance = 0;
+        seat.insuranceDecision = false;
       }
       if (this.shoe.length < 160) {
         this.startShuffle(now);

@@ -1,4 +1,5 @@
 import type { RouletteBet } from "./roulette";
+
 export type Suit = "hearts" | "diamonds" | "clubs" | "spades";
 export type Card = {
   id: string;
@@ -8,12 +9,14 @@ export type Card = {
   hidden?: boolean;
 };
 export type Bet = { main: number; three: number; pairs: number };
+export type ChipCount = { denomination: number; count: number };
+export type BetChips = Record<keyof Bet, ChipCount[]>;
 export type SideResult = { label: string; odds: number; payout: number };
 export type GambleColor = "red" | "black";
 export type GambleResult = "win" | "lose";
 export type GambleState = {
   playerId: string;
-  /** Round whose positive result created this gamble opportunity. */
+  /** Round whose positive result created this offer; it expires at the next deal. */
   round: number;
   /** The current winnings amount at risk in the next draw. */
   stake: number;
@@ -45,11 +48,15 @@ export type Seat = {
   index: number;
   playerId: string | null;
   bet: Bet;
+  chips: BetChips;
+  previousChips: BetChips | null;
   /** Last wager that actually entered a round, used by the rebet action. */
   previousBet: Bet | null;
   hands: Hand[];
   sides: { three: SideResult | null; pairs: SideResult | null };
   committed: number;
+  insurance: number;
+  insuranceDecision: boolean;
 };
 export type PublicPlayer = {
   id: string;
@@ -58,7 +65,7 @@ export type PublicPlayer = {
   connected: boolean;
   ready: boolean;
 };
-export type HistoryBetType = keyof Bet;
+export type HistoryBetType = keyof Bet | "insurance";
 export type HistoryBetResult = "win" | "lose" | "push" | "blackjack" | "none";
 export type HistoryBet = {
   /** Which of the three betting areas produced this line. */
@@ -85,13 +92,18 @@ export type HistoryItem = {
   /** Each red/black draw made with the winnings after this round. */
   gambles?: HistoryGamble[];
 };
+export type RoomVisibility = "public" | "private";
+export type TableVisibility = RoomVisibility;
+
 export type TableState = {
   id: string;
+  visibility: TableVisibility;
   phase:
     | "shuffling"
     | "betting"
     | "dealing"
     | "bonuses"
+    | "insurance"
     | "playing"
     | "dealer"
     | "settled";
@@ -110,14 +122,14 @@ export type Profile = { token: string; name: string; balance: number };
 export type Command =
   | { type: "claim"; seat: number }
   | { type: "release"; seat: number }
-  | { type: "bet"; seat: number; bet: Bet }
+  | { type: "bet"; seat: number; bet: Bet; chips?: BetChips }
   | { type: "repeat" }
   | { type: "ready"; ready: boolean }
   | { type: "hit" | "stand" | "split"; handId: string }
   | { type: "double"; handId: string; reveal?: "now" | "dealer" }
+  | { type: "insurance"; seat: number; take: boolean }
   | { type: "gamble"; color: GambleColor }
-  | { type: "cashout" }
-  | { type: "refill" };
+  | { type: "cashout" };
 export type Ack =
   | { ok: true; playerId?: string; tableId?: string }
   | { ok: false; error: string };
@@ -241,6 +253,7 @@ export type RouletteResult = {
   payout: number;
   net: number;
 };
+
 export type RoulettePublicPlayer = {
   id: string;
   name: string;
@@ -249,6 +262,7 @@ export type RoulettePublicPlayer = {
   bets: RouletteBet[];
   previousTotal: number;
 };
+
 export type RouletteTableState = {
   id: string;
   phase: "betting" | "spinning" | "settled";
@@ -261,6 +275,7 @@ export type RouletteTableState = {
   results: RouletteResult[];
   players: RoulettePublicPlayer[];
 };
+
 export type RouletteCommand =
   | { type: "bets"; bets: RouletteBet[] }
   | { type: "repeat" }

@@ -1,4 +1,5 @@
 import { Data } from "effect";
+import type { RoomError } from "../rooms";
 
 /**
  * Every refusal of the Roulette is a typed error: the compiler lists what each
@@ -24,10 +25,6 @@ export class NotSeated extends Data.TaggedError("NotSeated") {
 }
 export class TableFull extends Data.TaggedError("TableFull") {
   override readonly message = "La table de roulette est complète.";
-}
-export class TablesExhausted extends Data.TaggedError("TablesExhausted") {
-  override readonly message =
-    "Toutes les tables sont occupées. Réessayez plus tard.";
 }
 export class BettingClosed extends Data.TaggedError("BettingClosed") {
   override readonly message = "Rien ne va plus : attendez la prochaine manche.";
@@ -62,4 +59,4 @@ export type RouletteError =
   | NotShowingRoulette
   | NotAtTable
   | TableFull
-  | TablesExhausted;
+  | RoomError;

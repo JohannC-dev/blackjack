@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
-import { randomUUID } from "node:crypto";
 import { io, type Socket } from "socket.io-client";
+import { createTestSession, socketAuth } from "./auth-session";
 import type {
   Ack,
   TowerClientState,
@@ -29,7 +29,8 @@ async function until(check: () => boolean, message: string, timeout = 10_000) {
 }
 
 async function connect(name: string) {
-  const socket = io(url, { transports: ["websocket"], reconnection: false });
+  const session = await createTestSession(url, name);
+  const socket = io(url, socketAuth(session, url));
   const client: Client = { socket, id: "", wallets: [], feeds: [] };
   clients.push(client);
   socket.on("wallet", (wallet: Wallet) => client.wallets.push(wallet));
@@ -38,10 +39,9 @@ async function connect(name: string) {
     client.feeds.push(state),
   );
   await until(() => socket.connected, `${name} ne se connecte pas`);
-  const ack: Ack = await socket.timeout(5_000).emitWithAck("join", {
-    tableId: "TOWERTEST",
-    profile: { token: randomUUID(), name, balance: 10_000 },
-  });
+  const ack: Ack = await socket
+    .timeout(5_000)
+    .emitWithAck("join", { tableId: "TOWERTEST" });
   assert(ack.ok);
   client.id = ack.playerId!;
   return client;
@@ -60,7 +60,7 @@ try {
   const alice = await connect("Alice");
   const bob = await connect("Bob");
   const carol = await connect("Carol");
-  await until(() => balanceOf(alice) === 10_000, "Wallet initial absent");
+  await until(() => balanceOf(alice) === 2_000, "Wallet initial absent");
 
   const refused = await emit(alice, "tower:command", {
     type: "start",
@@ -69,7 +69,12 @@ try {
   });
   assert(!refused.ok && refused.error.includes("Ouvrez la Tower"));
 
-  assert((await emit(alice, "tower:join")).ok);
+  // React StrictMode can emit this sequence during a remount without waiting
+  // for any of the socket acknowledgements.
+  alice.socket.emit("tower:join");
+  alice.socket.emit("tower:leave");
+  alice.socket.emit("tower:join");
+  await until(() => !!alice.tower, "Tower state absent after a rapid remount");
   assert((await emit(bob, "tower:join")).ok);
   const started = await emit(alice, "tower:command", {
     type: "start",
@@ -77,7 +82,7 @@ try {
     bet: 100,
   });
   assert(started.ok, JSON.stringify(started));
-  await until(() => balanceOf(alice) === 9_900, "Mise non débitée du wallet");
+  await until(() => balanceOf(alice) === 1_900, "Mise non débitée du wallet");
   await until(
     () =>
       bob.feeds.some((feed) =>
@@ -89,9 +94,9 @@ try {
   assert((await emit(alice, "tower:command", { type: "pick", column: 0 })).ok);
   await until(() => alice.tower?.run?.floor === 1, "Étage non franchi");
 
-  // Leaving the Tower settles the climb: 100 × 1.24.
+  // Leaving the Tower settles the climb: 100 × 1.2.
   assert((await emit(alice, "tower:leave")).ok);
-  await until(() => balanceOf(alice) === 10_024, "Sortie non encaissée");
+  await until(() => balanceOf(alice) === 2_020, "Sortie non encaissée");
   await until(
     () =>
       bob.feeds.at(-1)!.feed.some((item) => item.status === "cashed") &&

@@ -1,34 +1,37 @@
 # MINUIT · Casino multijoueur
 
-Blackjack européen, Texas Hold’em et La Tower, multijoueurs en crédits fictifs. Next.js **16.3.5**, React, TypeScript, **Bun**, Socket.IO. Aucune base de données.
+Blackjack européen, Texas Hold’em, La Tower, Mines et Roulette, multijoueurs en crédits fictifs. Next.js **16.3.5**, React, TypeScript, **Bun**, Socket.IO, Effect TS, Drizzle et PostgreSQL 18.
 
 ## Lancer le jeu
 
 ```sh
 bun install
+cp .env.example .env
+# Renseigner DATABASE_URL et un BETTER_AUTH_SECRET aléatoire d’au moins 32 caractères.
+bun run db:migrate
 bun run dev
 ```
 
-Ouvrir `http://localhost:3000`. Pour changer de port : `PORT=3001 bun run dev`.
+`DATABASE_SSL=disable` convient à PostgreSQL local. Supprimer cette surcharge et utiliser le mode SSL fourni dans `DATABASE_URL` lorsque le serveur accepte TLS. Ouvrir `http://localhost:3000`. Pour changer de port : `PORT=3001 bun run dev`.
 
 Next.js recharge automatiquement les composants et le CSS. Après une modification de `server/`, redémarrer le serveur : ses tables sont conservées en mémoire. Le mode `bun --watch` est volontairement absent, car il redémarre le serveur lorsque Next charge ses fichiers générés.
 
 ## Jouer à plusieurs
 
-1. Choisir un pseudo à la première visite : le profil reçoit 2 000 crédits.
-2. Choisir un jeton dans le porte-jetons, puis cliquer sur une zone **Blackjack**, **21+3** ou **Super Pairs directement sur le tapis**. Le jeton sélectionné reste actif pour les mises suivantes. Une mise Blackjack est nécessaire pour ajouter les paris annexes.
+1. Créer un compte avec un pseudo, une adresse e-mail et un mot de passe. Le portefeuille reçoit 500 000 crédits à sa création.
+2. Choisir un jeton dans le porte-jetons, puis cliquer sur une zone **Blackjack**, **21+3** ou **Super Pairs directement sur le tapis**. Les flèches du porte-jetons affichent d’autres valeurs sans changer de table. Le jeton sélectionné reste actif pour les mises suivantes. Une mise Blackjack est nécessaire pour ajouter les paris annexes.
 3. Prendre plusieurs places libres pour jouer plusieurs mains. La table offre 5 places partagées. Le bouton d’annulation retire le dernier jeton posé ; la croix retire toutes vos mises.
 4. Cliquer sur **Je suis prêt** pour valider l’ensemble des mises. Si tous les joueurs ayant misé sont prêts, la manche démarre en 3 secondes. Sinon, les joueurs prêts démarrent après 12 secondes, les autres attendent la prochaine manche.
-5. Inviter des amis avec le bouton du haut. Le menu de table propose plusieurs tables publiques (`MINUIT`, `LUNA`, `NOVA` et `OPALE`) et permet aussi de créer une table avec un code ou d’en rejoindre une. Une table « privée » est accessible à toute personne qui connaît son code ; elle n’a pas de mot de passe.
+5. Inviter des amis avec le bouton du haut. Les tables publiques sont attribuées automatiquement selon les places disponibles. Vous pouvez aussi créer une table privée avec un code unique ou rejoindre une table privée dont vous connaissez le code. Une table « privée » n’a pas de mot de passe.
 
-Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table=CODE`. Remplacer `localhost` dans le lien partagé par l’adresse IP du serveur. Le serveur écoute sur `0.0.0.0` par défaut. Pour simuler deux joueurs sur un ordinateur, utiliser deux profils de navigateur ou une fenêtre privée : deux onglets ordinaires partagent la même identité locale.
+Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table=CODE`. Remplacer `localhost` dans le lien partagé par l’adresse IP du serveur. Le serveur écoute sur `0.0.0.0` par défaut. Pour simuler deux joueurs sur un ordinateur, utiliser deux profils de navigateur ou une fenêtre privée : deux onglets ordinaires partagent la même session Better Auth.
 
 ## Règles implémentées
 
 ### Poker Texas Hold’em
 
-- **Cash Game public** à 2–5 joueurs avec matchmaking et placement automatiques. Limites 10/20, 50/100 et 250/500 ; buy-in réglable de 40 à 100 grosses blinds. Aucun rake.
-- **Spin & Play public** à 3 joueurs, buy-ins de 200 à 25 000 crédits, tapis de tournoi de 500 et blinds croissantes toutes les deux minutes. La roue serveur attribue un multiplicateur de ×2 à ×1 000 ; le dernier joueur remporte tout.
+- **Cash Game public** à 2–5 joueurs avec matchmaking et placement automatiques. Limites 2 500/5 000, 10 000/20 000 et 50 000/100 000 ; buy-in réglable de 40 à 100 grosses blinds. Aucun rake.
+- **Spin & Play public** à 3 joueurs, buy-ins de 5 000 à 2 000 000 crédits, tapis de tournoi de 500 et blinds croissantes toutes les deux minutes. La roue serveur attribue un multiplicateur de ×2 à ×1 000 ; le dernier joueur remporte tout.
 - Règles No-Limit complètes : bouton et heads-up, relance minimale, all-in incomplet, pots secondaires, kickers, partages et jetons indivisibles.
 - Paquet neuf de 52 cartes mélangé cryptographiquement à chaque main. Burn cards, flop, turn et river standards. Toutes les mains encore actives sont révélées au showdown.
 - 25 secondes par décision en Cash Game et 15 secondes en Spin. Un joueur absent paie ses blinds puis check automatiquement si possible, sinon fold.
@@ -49,13 +52,13 @@ Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table
 ### La Tower
 
 - Choisir une difficulté : **Facile** (5 cartes par étage), **Normal** (4), **Difficile** (3) ou **Impossible** (2). Chaque étage cache toujours **un seul piège**, placé par le serveur au lancement.
-- Mise de **5 à 500** crédits avec les jetons du casino, débitée au lancement. Dix étages : une bonne carte fait monter, le piège fait s’effondrer la tour et perdre la mise.
+- Mise de **5 000 à 20 milliards** de crédits avec les jetons du casino, débitée au lancement. Dix étages : une bonne carte fait monter, le piège fait s’effondrer la tour et perdre la mise.
 - Après chaque étage réussi, encaisser `mise × multiplicateur` ou continuer. Le 10ᵉ étage est encaissé automatiquement. Les multiplicateurs reprennent ceux de la Tower of Chance de MONOPOLY Poker (Normal, Difficile et Impossible correspondent à ses niveaux Easy, Medium et Hard), soit ×7,86 (Facile), ×15,5 (Normal), ×50,9 (Difficile) et ×919 (Impossible) au sommet. La part rendue baisse doucement à mesure qu'on monte, d’environ 92 % au premier étage à 87-90 % au sommet (88 % à 84 % en Facile, qui n’existe pas dans le jeu), plus 3 % versés dans la cagnotte Lucky.
 - Seule la carte choisie est révélée, sauf en Impossible où l’autre carte est forcément le piège.
 - **Lucky Tower** : chaque joueur a sa propre **cagnotte Lucky**, alimentée par 3 % de chacune de ses mises et conservée en mémoire serveur (remise à zéro au redémarrage). Certaines ascensions cachent une **carte dorée** sur une ligne de 3 à 6, jamais à la place du piège, tirée uniquement par le serveur avec une chance réglée par difficulté (≈ 1 ascension sur 500 la retourne en jouant au hasard). La retourner encaisse l’étage atteint et verse la cagnotte ; la tour s’illumine ensuite jusqu’au sommet, en animation seulement. Une carte dorée manquée est révélée avec sa ligne.
 - Sons synthétisés en direct (Web Audio) : note montante à chaque étage, roulements de tambour près du sommet, effondrement, sonnerie de jackpot. Les voix « Lucky! » et « JACKPOT! » (`public/audio/tower/`) ont été générées avec la synthèse vocale de Windows ; les remplacer par de vrais enregistrements si besoin.
 - Les joueurs sont répartis en **salles de 10** (rooms Socket.IO) : on ne voit, et on ne reçoit les mises à jour, que des grimpeurs de sa salle. Quitter la Tower règle l’ascension immédiatement : gains acquis encaissés, mise rendue avant le premier étage. Après une coupure réseau, l’ascension reste reprenable 10 minutes puis est réglée de la même façon.
-- Le solde partagé entre les trois jeux n’est transmis que par l’événement serveur `wallet` (numéroté), jamais par les snapshots de jeu. Une mise Blackjack confirmée mais dépensée ailleurs avant la donne fait sortir le joueur de la manche au lieu de rendre son solde négatif.
+- Le solde partagé entre les jeux n’est transmis que par l’événement serveur `wallet` (numéroté), jamais par les snapshots de jeu. Une mise Blackjack confirmée mais dépensée ailleurs avant la donne fait sortir le joueur de la manche au lieu de rendre son solde négatif.
 
 ### Blackjack européen
 
@@ -64,7 +67,7 @@ Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table
 - Blackjack naturel payé **3:2**, victoire **1:1**, égalité remboursée. Un blackjack du croupier fait perdre les mises de double et de séparation ; seul un blackjack naturel est remboursé à égalité.
 - Double autorisé sur deux cartes, également après séparation. Au moment de doubler, le joueur choisit de voir immédiatement sa dernière carte ou de la garder face cachée jusqu’à la fin du jeu du croupier. Dans ce second mode, sa valeur reste uniquement sur le serveur jusqu’à la révélation. Séparation de cartes de même valeur, donc 10/valet/dame/roi peuvent être séparés ensemble, jusqu’à 4 mains par place. Les as séparés reçoivent une seule carte ; pas de nouvelle séparation des as. Le 21 après séparation paie 1:1.
 - Pas d’assurance ni d’abandon. 25 secondes par décision, puis la main reste automatiquement, y compris après une déconnexion.
-- Mises par pas de 5 : **5–500** au blackjack et **0–100** sur chaque pari annexe. Recharge à 2 000 crédits disponible lorsque le solde est inférieur à 5.
+- Le porte-jetons propose des mises de 5 000 à 160 millions sur toutes les tables. La mise principale est plafonnée à 20 milliards et chaque pari annexe à 160 millions. Sous 5 000 crédits, une recave commune aux jeux remet le solde à 10 000 crédits.
 - Après une manche positive, tentez vos gains sur une carte **rouge ou noire**. L’option reste disponible jusqu’à votre décision sans bloquer les manches suivantes. Une bonne couleur double le montant à risque et permet de recommencer sans limite ; une mauvaise couleur perd la séquence. Vous pouvez encaisser à tout moment.
 
 ### 21+3
@@ -80,33 +83,51 @@ Deux cartes initiales du joueur + carte visible du croupier. Straight Flush, Thr
 | Prime Pair   | Même rang, même couleur rouge/noir, enseignes différentes                           | 10:1     |
 | Any Pair     | Même rang, couleurs différentes                                                     | 8:1      |
 
-Seule la meilleure combinaison est payée. « Pour 1 » désigne le gain net, avec remboursement de la mise en plus : 5 à 9:1 crédite 50.
+Seule la meilleure combinaison est payée. « Pour 1 » désigne le gain net, avec remboursement de la mise en plus : 5 000 à 9:1 crédite 50 000.
 
 **Les deux paris annexes sont réglés à la fin de la distribution, avant toute action de blackjack.** Le solde est immédiatement crédité, puis une animation de 2,2 secondes précède le premier tour. Ces gains peuvent financer un double ou une séparation. Ils ne sont pas recrédités à la fin de la manche et restent acquis même si le blackjack est perdu.
 
 ## État, sauvegarde et limites
 
-- `localStorage["minuit.profile.v1"]` conserve le pseudo, un jeton de session aléatoire et le dernier solde reçu. La première arrivée sans profil donne 2 000 crédits.
-- Le serveur fait autorité sur les cartes, les mises, les tours, les gains et les soldes de la session. Il ne transmet ni le sabot ni les jetons privés dans les états publics.
-- Une reconnexion retrouve les mains et le solde du serveur. Modifier le localStorage pendant une session connue ne modifie pas le solde serveur.
-- Les profils inconnus sont restaurés depuis le stockage local : les crédits restent modifiables par le propriétaire du navigateur, conformément au choix d’un jeu fictif sans base de données.
-- Les tables, manches et historiques sont en mémoire : un redémarrage les réinitialise. Les mises déjà débitées d’une manche interrompue ne sont pas récupérables automatiquement après un crash. Le solde restauré est le dernier reçu par le navigateur.
-- Une place déconnectée est libérée après 60 secondes lors de la phase de mise. Une table vide expire après 30 minutes ; les sessions déconnectées expirent après 24 heures.
-- Une seule instance serveur doit héberger les tables. Plusieurs réplicas nécessiteraient un stockage et une coordination partagés.
+- Better Auth 1.7.5 gère les comptes e-mail/mot de passe et les sessions dans PostgreSQL. Le navigateur ne conserve plus de profil ni de solde dans `localStorage`.
+- PostgreSQL est la source de vérité du portefeuille. Chaque variation est atomique, refuse un débit qui rendrait le solde négatif et crée une ligne de journal avec un identifiant d’opération.
+- Le serveur recharge le portefeuille avant toute commande financière. Chaque moteur déclare ses débits et crédits via le même port `GameWallet`, avec un identifiant stable et leur cause métier. Les opérations d’une commande sont écrites ensemble dans une seule transaction ; une commande sans variation de solde ne touche pas PostgreSQL.
+- Le client reçoit le solde par `GET /api/profile` et par l’événement Socket.IO `wallet`. Ces valeurs servent à l’affichage et à désactiver des actions impossibles ; elles ne sont jamais acceptées comme autorité par le serveur.
+- Les cartes, tables, manches et historiques restent en mémoire dans cette version. Un seul processus serveur doit donc héberger les parties. Les comptes, sessions, soldes et écritures du portefeuille survivent aux redémarrages.
+- `server/rooms.ts` définit les transitions immuables des salles et un service Effect fondé sur `SynchronizedRef`. Blackjack, Tower et Poker utilisent chacun une instance du service ; Roulette applique les mêmes transitions dans sa transaction Effect qui contient aussi les tables. Chaque jeu décide si une salle peut accueillir un joueur. Les files Poker et l’état des parties restent dans leurs moteurs.
+- Une place déconnectée est libérée après 60 secondes lors de la phase de mise. Une table vide expire après 30 minutes ; un profil de jeu inactif est retiré de la mémoire après 24 heures, sans supprimer son compte ni son portefeuille.
 
 ## Production
 
 ```sh
 bun install --frozen-lockfile
+bun run db:migrate
 bun run build
 PORT=3000 bun run start
 ```
 
-Héberger ce processus Bun persistant sur un serveur ou un service supportant les WebSockets. Le point de contrôle `GET /api/health` renvoie `{ "ok": true }`. Un proxy doit transmettre les en-têtes `Host`, `Upgrade` et `Connection`, et permettre les connexions persistantes. Utiliser HTTPS pour une adresse publique. Le serveur personnalisé ne peut pas être remplacé par un simple export statique ni par des fonctions serverless éphémères.
+Définir `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` et `BETTER_AUTH_TRUSTED_ORIGINS` dans l’environnement de production. Exécuter les migrations une seule fois avant de démarrer la nouvelle version.
+
+Héberger ce processus Node.js persistant sur un serveur ou un service supportant les WebSockets. Le point de contrôle `GET /api/health` renvoie `{ "ok": true }`. Un proxy doit transmettre les en-têtes `Host`, `Upgrade` et `Connection`, et permettre les connexions persistantes. Utiliser HTTPS pour une adresse publique. Le serveur personnalisé ne peut pas être remplacé par un simple export statique ni par des fonctions serverless éphémères.
 
 Les dépendances, scripts, tests et le développement sont gérés avec Bun. En production, `bun run start` lance toutefois le serveur TypeScript avec Node via `tsx` : Next.js 16.3.5 déclenche actuellement une erreur de chargement CommonJS lorsque son rendu de production est exécuté directement par Bun 1.3.9. Socket.IO et le reste de l’application restent inchangés.
 
-Les polices sont servies localement. Aucun service externe n’est nécessaire pour jouer.
+### Déploiement Docker
+
+```sh
+docker build --build-arg SOURCE_COMMIT="$(git rev-parse HEAD)" -t minuit-blackjack .
+docker run --env-file .env -p 3000:3000 minuit-blackjack
+```
+
+Le conteneur applique les migrations SQL présentes dans `server/db/migrations` avant de démarrer le serveur. Il quitte avec une erreur si la base est inaccessible ou si une migration échoue ; le serveur ne reçoit alors aucun trafic. Les démarrages simultanés sérialisent cette étape avec un verrou PostgreSQL. `DATABASE_URL` doit désigner une base accessible depuis le conteneur, et les variables `BETTER_AUTH_*` doivent être définies comme ci-dessus. Le fichier `.env` et les secrets ne sont pas incorporés à l’image.
+
+L’image utilise `next build --webpack` pour construire le serveur Next.js personnalisé ; Vite+ ne sait pas construire cette application Next.js. L’image finale exécute Node.js et inclut seulement les dépendances de production. Dans Coolify, activer **Advanced → Include Source Commit in Build** pour fournir `SOURCE_COMMIT` au Dockerfile ; le build échoue si le hash manque. Coolify peut configurer son propre contrôle de santé sur `GET /api/health`.
+
+Après les migrations et le démarrage du serveur, la version publiée en base est mise à jour avec le hash Git et la dernière migration Drizzle. Le navigateur appelle `GET /api/version` au chargement, toutes les 30 secondes, au retour sur l’onglet et après reconnexion du socket. La réponse HTTP interdit le cache ; chaque processus limite ses lectures PostgreSQL à une requête toutes les cinq secondes, même avec plusieurs visiteurs simultanés. En cas de différence, un bandeau propose d’actualiser la page.
+
+Déployer une seule instance de jeu à la fois : l’état des parties réside en mémoire. Un redémarrage coupe les sockets et efface les parties en cours ; le bandeau permet surtout d’éviter qu’un ancien client continue à utiliser le nouveau serveur. Pour préserver les parties pendant un déploiement, il faudra persister leur état et ajouter une procédure de drainage des connexions avant d’arrêter l’ancien conteneur.
+
+Les polices sont servies localement. Le serveur PostgreSQL doit rester joignable pendant le jeu.
 
 ## Vérifier
 
@@ -114,6 +135,7 @@ Les polices sont servies localement. Aucun service externe n’est nécessaire p
 bun run typecheck
 bun run test
 bun run build
+bun run db:migrate
 # Serveur lancé dans un autre terminal :
 bun run test:multiplayer
 bun run test:poker-multiplayer
@@ -133,9 +155,15 @@ Les tests couvrent les deux moteurs, toutes les catégories de mains Poker, la c
 - `server/engine.ts` : moteur et phases du Blackjack.
 - `server/poker.ts` : moteur Hold’em, matchmaking, files et tables Poker.
 - `server/roulette/` : Roulette écrite avec [Effect](https://effect.website) — erreurs typées (`errors.ts`), validation des commandes par `Schema` (`schema.ts`), table immuable (`table.ts`), registre transactionnel des tables (`service.ts`) et runtime synchrone branché sur Socket.IO (`index.ts`). Joueurs, roue, horloge et transport sont des services injectés, remplacés par des doubles dans les tests.
-- `server/index.ts` : serveur Bun/Next.js et protocole Socket.IO.
+- `server/rooms.ts` : service Effect et transitions de création, visibilité, appartenance et suppression des salles.
+- `server/index.ts` : serveur Bun/Next.js, sessions HTTP et protocole Socket.IO.
+- `server/auth.ts` : configuration Better Auth.
+- `server/db/schema.ts` : tables Better Auth, portefeuille et journal comptable.
+- `server/game-wallet.ts` : contrat commun utilisé par les moteurs pour lire, débiter et créditer un portefeuille.
+- `server/db/wallet.ts` : application atomique avec Effect TS/Drizzle des lots d’opérations dans PostgreSQL.
 - `src/lib/rules.ts` : valeurs des cartes et évaluation des paris annexes.
-- `src/lib/use-game.ts` : connexion, reconnexion et sauvegarde du profil.
+- `src/lib/profile-context.tsx` : session Better Auth et solde d’affichage.
+- `src/lib/use-game.ts` : connexion Socket.IO et commandes de jeu.
 - `src/components/casino.tsx` : shell du casino et table Blackjack.
 - `src/components/poker-casino.tsx` : accueil, lobby, table, chat et commandes Poker.
 - `src/components/poker-lobby.tsx` : cartes d’entrée Cash Game et Spin & Play, choix du plafond et du tapis.

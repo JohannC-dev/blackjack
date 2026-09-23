@@ -20,7 +20,7 @@ import {
   ReadyLocked,
   TableFull,
 } from "./errors";
-import { Players, Wheel } from "./services";
+import { Players, Wallet, Wheel } from "./services";
 
 export const BETTING_COUNTDOWN_MS = 10_000;
 export const ALL_READY_COUNTDOWN_MS = 3_000;
@@ -100,11 +100,15 @@ const isConnected = (playerId: string) =>
   );
 
 const balanceOf = (playerId: string) =>
-  Effect.flatMap(Players, (players) => players.get(playerId)).pipe(
-    Effect.map(
-      Option.match({ onNone: () => 0, onSome: (player) => player.balance }),
-    ),
-  );
+  Effect.gen(function* () {
+    const players = yield* Players;
+    const wallet = yield* Wallet;
+    const player = yield* players.get(playerId);
+    return Option.match(player, {
+      onNone: () => 0,
+      onSome: (account) => wallet.balance(account),
+    });
+  });
 
 /** Recomputes the betting countdown from who is seated and ready. */
 const updateCountdown = (table: Table, reset = false) =>
@@ -217,7 +221,9 @@ export const command = (
 const startSpin = (table: Table, now: number) =>
   Effect.gen(function* () {
     const players = yield* Players;
+    const wallet = yield* Wallet;
     const number = yield* Effect.flatMap(Wheel, (wheel) => wheel.spin);
+    const round = table.round + 1;
     let playing = 0;
     const seats = yield* Effect.forEach(table.seats, (seat) =>
       Effect.gen(function* () {
@@ -226,9 +232,28 @@ const startSpin = (table: Table, now: number) =>
           seat.ready &&
           total >= ROULETTE_MIN_CHIP &&
           (yield* isConnected(seat.playerId));
-        const debit = eligible
-          ? yield* Effect.either(players.debit(seat.playerId, total))
-          : Either.left(new InsufficientCredits());
+        let debit: Either.Either<void, InsufficientCredits> = Either.left(
+          new InsufficientCredits(),
+        );
+        if (eligible) {
+          const player = yield* players.get(seat.playerId);
+          if (Option.isSome(player))
+            debit = yield* Effect.either(
+              Effect.try({
+                try: () =>
+                  wallet.debit(player.value, {
+                    operationId: `roulette:${table.id}:${round}:${seat.playerId}:wager`,
+                    game: "roulette",
+                    kind: "wager",
+                    reason: "spin",
+                    referenceId: `${table.id}:${round}`,
+                    amount: total,
+                    metadata: { number, bets: seat.bets.length },
+                  }),
+                catch: () => new InsufficientCredits(),
+              }),
+            );
+        }
         if (Either.isLeft(debit))
           return { ...seat, ready: false, bets: [] } satisfies Seat;
         playing += 1;
@@ -244,7 +269,7 @@ const startSpin = (table: Table, now: number) =>
     return {
       ...table,
       seats,
-      round: table.round + 1,
+      round,
       number,
       phase: "spinning",
       deadline: now + ROULETTE_SPIN_MS,

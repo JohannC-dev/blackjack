@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
-import { randomUUID } from "node:crypto";
 import { io, type Socket } from "socket.io-client";
+import { createTestSession, socketAuth } from "./auth-session";
 import type { Ack, PokerClientState, PokerCommand } from "../src/lib/types";
 
 const url = process.env.TEST_URL ?? "http://localhost:3000";
@@ -16,15 +16,15 @@ async function until(check: () => boolean, message: string, timeout = 20_000) {
 }
 
 async function connect(name: string) {
-  const socket = io(url, { transports: ["websocket"], reconnection: false });
+  const session = await createTestSession(url, name);
+  const socket = io(url, socketAuth(session, url));
   const client: Client = { socket, id: "" };
   clients.push(client);
   socket.on("poker:state", (state: PokerClientState) => (client.poker = state));
   await until(() => socket.connected, `${name} ne se connecte pas`);
-  const ack: Ack = await socket.timeout(5_000).emitWithAck("join", {
-    tableId: "SPINTEST",
-    profile: { token: randomUUID(), name, balance: 10_000 },
-  });
+  const ack: Ack = await socket
+    .timeout(5_000)
+    .emitWithAck("join", { tableId: "SPINTEST" });
   assert(ack.ok);
   client.id = ack.playerId!;
   return client;
@@ -51,7 +51,7 @@ try {
   );
   const multiplier = players[0].poker!.table!.wheelMultiplier!;
   assert([2, 3, 5, 10, 25, 100, 1_000].includes(multiplier));
-  assert(players.every((player) => player.poker!.balance === 9_800));
+  assert(players.every((player) => player.poker!.balance === 1_800));
   await until(
     () => players.every((player) => player.poker?.table?.phase === "preflop"),
     "La première main Spin ne démarre pas après la roue",
@@ -86,7 +86,7 @@ try {
     20_000,
   );
   const winner = players.find(
-    (player) => player.poker!.balance === 9_800 + 200 * multiplier,
+    (player) => player.poker!.balance === 1_800 + 200 * multiplier,
   );
   assert(winner, "Le prix de la roue n’a pas été versé au vainqueur");
   assert(players[0].poker!.table!.history.length >= 1);

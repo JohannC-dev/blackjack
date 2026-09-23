@@ -13,13 +13,22 @@ import {
   UnknownCommand,
   ROULETTE_SPIN_MS,
 } from "../server/roulette";
-import { targetAt, zeroTargetAt } from "../src/components/roulette-casino";
+import {
+  targetAt,
+  zeroTargetAt,
+} from "../src/components/games/roulette/roulette-casino";
 import {
   isValidRouletteBet,
   rouletteBetWins,
   rouletteReturn,
+  ROULETTE_MAX_PER_SPOT,
+  ROULETTE_MIN_CHIP,
 } from "../src/lib/roulette";
 import type { RouletteTableState } from "../src/lib/types";
+import { inMemoryGameWallet } from "../server/game-wallet";
+
+const CHIP = ROULETTE_MIN_CHIP;
+const MAX_PER_SPOT = ROULETTE_MAX_PER_SPOT;
 
 type Member = {
   id: string;
@@ -50,26 +59,15 @@ function club(draw: () => number = () => 17, tableId = "MINUIT") {
     wheel: { spin: Effect.sync(draw) },
     players: {
       get: (id) => Effect.sync(() => Option.fromNullable(members.get(id))),
-      debit: (id, amount) =>
-        Effect.suspend(() => {
-          const member = members.get(id);
-          if (!member || member.balance < amount)
-            return Effect.fail(new InsufficientCredits());
-          member.balance -= amount;
-          return Effect.void;
-        }),
-      credit: (id, amount) =>
-        Effect.sync(() => {
-          members.get(id)!.balance += amount;
-        }),
     },
+    wallet: inMemoryGameWallet,
     transport: {
       publish: (state) => Effect.sync(() => void published.push(state)),
       enter: () => Effect.void,
       exit: () => Effect.void,
     },
   });
-  const sit = (id: string, balance = 1_000, socket = `${id}#1`) => {
+  const sit = (id: string, balance = 1_000_000, socket = `${id}#1`) => {
     const member = members.get(id) ?? {
       id,
       name: id,
@@ -95,7 +93,7 @@ function club(draw: () => number = () => 17, tableId = "MINUIT") {
 describe("Roulette européenne", () => {
   test("les chevaux et carrés ne relient que des cases voisines", () => {
     const bet = (kind: "split" | "corner", selection: string) =>
-      isValidRouletteBet({ kind, selection, amount: 5 });
+      isValidRouletteBet({ kind, selection, amount: CHIP });
     expect(bet("split", "1-2")).toBe(true);
     expect(bet("split", "2-3")).toBe(true);
     expect(bet("split", "3-4")).toBe(false);
@@ -126,13 +124,13 @@ describe("Roulette européenne", () => {
       for (const x of [0.05, 0.5, 0.95])
         for (const y of [0.05, 0.5, 0.95])
           expect(
-            isValidRouletteBet({ ...targetAt(number, x, y), amount: 5 }),
+            isValidRouletteBet({ ...targetAt(number, x, y), amount: CHIP }),
           ).toBe(true);
   });
 
   test("une case n’a qu’une seule écriture", () => {
     const valid = (kind: "straight" | "split" | "corner", selection: string) =>
-      isValidRouletteBet({ kind, selection, amount: 5 });
+      isValidRouletteBet({ kind, selection, amount: CHIP });
     expect(valid("straight", "1")).toBe(true);
     expect(valid("straight", "0")).toBe(true);
     for (const selection of ["01", "00", "1.0", " 1", "+1", "", "1e1", "37"])
@@ -143,15 +141,15 @@ describe("Roulette européenne", () => {
 
   test("le zéro se joue à cheval avec 1, 2 et 3", () => {
     for (const selection of ["0-1", "0-2", "0-3"]) {
-      expect(isValidRouletteBet({ kind: "split", selection, amount: 5 })).toBe(
-        true,
-      );
+      expect(
+        isValidRouletteBet({ kind: "split", selection, amount: CHIP }),
+      ).toBe(true);
       expect(rouletteBetWins({ kind: "split", selection }, 0)).toBe(true);
     }
     for (const selection of ["0-4", "1-0", "0-0"])
-      expect(isValidRouletteBet({ kind: "split", selection, amount: 5 })).toBe(
-        false,
-      );
+      expect(
+        isValidRouletteBet({ kind: "split", selection, amount: CHIP }),
+      ).toBe(false);
     expect(
       rouletteReturn([{ kind: "split", selection: "0-2", amount: 10 }], 2),
     ).toBe(180);
@@ -199,18 +197,18 @@ describe("Roulette européenne", () => {
     table.send("alice", {
       type: "bets",
       bets: [
-        { kind: "straight", selection: "17", amount: 10 },
-        { kind: "straight", selection: "17", amount: 5 },
+        { kind: "straight", selection: "17", amount: CHIP * 2 },
+        { kind: "straight", selection: "17", amount: CHIP },
       ],
     });
     table.send("bob", {
       type: "bets",
       // 17 is black.
-      bets: [{ kind: "color", selection: "red", amount: 50 }],
+      bets: [{ kind: "color", selection: "red", amount: CHIP * 10 }],
     });
     // Bob sees Alice's chips before the spin.
     expect(table.state().players[0].bets).toEqual([
-      { kind: "straight", selection: "17", amount: 15 },
+      { kind: "straight", selection: "17", amount: CHIP * 3 },
     ]);
     table.send("alice", { type: "ready", ready: true });
     expect(table.state().deadline).not.toBeNull();
@@ -220,8 +218,8 @@ describe("Roulette européenne", () => {
     expect(table.state().phase).toBe("spinning");
     expect(table.state().number).toBe(17);
     // Stakes leave the wallets when the ball is launched…
-    expect(alice.balance).toBe(985);
-    expect(bob.balance).toBe(950);
+    expect(alice.balance).toBe(1_000_000 - CHIP * 3);
+    expect(bob.balance).toBe(1_000_000 - CHIP * 10);
     expect(() => table.send("alice", { type: "bets", bets: [] })).toThrow(
       BettingClosed,
     );
@@ -230,15 +228,18 @@ describe("Roulette européenne", () => {
     table.wait(ROULETTE_SPIN_MS + 10);
     const state = table.state();
     expect(state.phase).toBe("settled");
-    expect(alice.balance).toBe(985 + 15 * 36);
-    expect(bob.balance).toBe(950);
-    expect(state.results.map((entry) => entry.net)).toEqual([525, -50]);
+    expect(alice.balance).toBe(1_000_000 - CHIP * 3 + CHIP * 3 * 36);
+    expect(bob.balance).toBe(1_000_000 - CHIP * 10);
+    expect(state.results.map((entry) => entry.net)).toEqual([
+      CHIP * 3 * 35,
+      -CHIP * 10,
+    ]);
     expect(state.history).toEqual([17]);
 
     // A single payout, however many ticks follow.
     table.wait(100);
     table.wait(100);
-    expect(alice.balance).toBe(985 + 15 * 36);
+    expect(alice.balance).toBe(1_000_000 - CHIP * 3 + CHIP * 3 * 36);
     table.wait(6_000);
     expect(table.state().phase).toBe("betting");
     expect(table.state().players.every((p) => !p.ready)).toBe(true);
@@ -250,11 +251,11 @@ describe("Roulette européenne", () => {
     const bob = table.sit("bob");
     table.send("alice", {
       type: "bets",
-      bets: [{ kind: "color", selection: "red", amount: 25 }],
+      bets: [{ kind: "color", selection: "red", amount: CHIP * 5 }],
     });
     table.send("bob", {
       type: "bets",
-      bets: [{ kind: "color", selection: "red", amount: 25 }],
+      bets: [{ kind: "color", selection: "red", amount: CHIP * 5 }],
     });
     table.send("alice", { type: "ready", ready: true });
     // Bob still gets ten seconds to finish his layout.
@@ -262,35 +263,35 @@ describe("Roulette européenne", () => {
     expect(table.state().phase).toBe("betting");
     table.wait(1_100);
     expect(table.state().phase).toBe("spinning");
-    expect(alice.balance).toBe(975);
-    expect(bob.balance).toBe(1_000);
+    expect(alice.balance).toBe(1_000_000 - CHIP * 5);
+    expect(bob.balance).toBe(1_000_000);
     expect(table.state().players[1].bets).toEqual([]);
   });
 
   test("les mises invalides ou trop élevées sont refusées", () => {
     const table = club();
-    table.sit("alice", 100);
+    table.sit("alice", 100_000);
     const bets = (value: unknown) =>
       table.send("alice", { type: "bets", bets: value });
     expect(() =>
-      bets([{ kind: "straight", selection: "37", amount: 5 }]),
+      bets([{ kind: "straight", selection: "37", amount: CHIP }]),
     ).toThrow(InvalidBets);
     expect(() =>
       bets([{ kind: "color", selection: "red", amount: 7 }]),
     ).toThrow(InvalidBets);
     expect(() =>
-      bets([{ kind: "color", selection: "red", amount: 200 }]),
+      bets([{ kind: "color", selection: "red", amount: CHIP * 40 }]),
     ).toThrow("crédits");
     expect(() => bets("rouge")).toThrow("Les mises sont invalides.");
     expect(() =>
-      bets(
-        Array.from({ length: 101 }, () => ({
+      bets([
+        {
           kind: "color",
           selection: "red",
-          amount: 5,
-        })),
-      ),
-    ).toThrow("limitée à 500");
+          amount: MAX_PER_SPOT + CHIP,
+        },
+      ]),
+    ).toThrow(`limitée à ${MAX_PER_SPOT}`);
     expect(() => table.send("alice", { type: "ready", ready: true })).toThrow(
       CannotBeReady,
     );
@@ -305,22 +306,50 @@ describe("Roulette européenne", () => {
     expect(table.state().players[0].bets).toEqual([]);
   });
 
-  test("la limite de 500 crédits s’applique par case, pas au total", () => {
+  test("preserves the chips placed on a spot and repeats them", () => {
+    const table = club(() => 1);
+    table.sit("alice");
+    const bet = {
+      kind: "dozen" as const,
+      selection: "3",
+      amount: CHIP * 5,
+      chips: [
+        { denomination: CHIP, count: 1 },
+        { denomination: CHIP * 4, count: 1 },
+      ],
+    };
+    table.send("alice", { type: "bets", bets: [bet] });
+    expect(table.state().players[0].bets).toEqual([bet]);
+    expect(() =>
+      table.send("alice", {
+        type: "bets",
+        bets: [{ ...bet, chips: [{ denomination: CHIP, count: 1 }] }],
+      }),
+    ).toThrow(InvalidBets);
+    table.send("alice", { type: "ready", ready: true });
+    table.wait(3_100);
+    table.wait(ROULETTE_SPIN_MS);
+    table.wait(6_000);
+    table.send("alice", { type: "repeat" });
+    expect(table.state().players[0].bets).toEqual([bet]);
+  });
+
+  test("le plafond s’applique par case, pas au total", () => {
     const table = club();
-    table.sit("alice", 2_000);
+    table.sit("alice", MAX_PER_SPOT * 3);
     const layout = [
-      { kind: "straight" as const, selection: "17", amount: 500 },
-      { kind: "color" as const, selection: "red", amount: 500 },
-      { kind: "dozen" as const, selection: "2", amount: 500 },
+      { kind: "straight" as const, selection: "17", amount: MAX_PER_SPOT },
+      { kind: "color" as const, selection: "red", amount: MAX_PER_SPOT },
+      { kind: "dozen" as const, selection: "2", amount: MAX_PER_SPOT },
     ];
     table.send("alice", { type: "bets", bets: layout });
     expect(table.state().players[0].bets).toEqual(layout);
     expect(() =>
       table.send("alice", {
         type: "bets",
-        bets: [...layout, { kind: "straight", selection: "17", amount: 5 }],
+        bets: [...layout, { kind: "straight", selection: "17", amount: CHIP }],
       }),
-    ).toThrow("500 crédits par case");
+    ).toThrow(`${MAX_PER_SPOT} crédits par case`);
     expect(table.state().players[0].bets).toEqual(layout);
   });
 
@@ -330,19 +359,21 @@ describe("Roulette européenne", () => {
     table.send("alice", {
       type: "bets",
       bets: [
-        { kind: "split", selection: "0-2", amount: 5, payout: 1_000 },
-        { kind: "split", selection: "0-2", amount: 10 },
+        { kind: "split", selection: "0-2", amount: CHIP, payout: 1_000 },
+        { kind: "split", selection: "0-2", amount: CHIP * 2 },
       ],
     });
     expect(table.state().players[0].bets).toEqual([
-      { kind: "split", selection: "0-2", amount: 15 },
+      { kind: "split", selection: "0-2", amount: CHIP * 3 },
     ]);
   });
 
   test("être prêt fige les mises jusqu’à l’annulation", () => {
     const table = club();
     table.sit("alice");
-    const bets = [{ kind: "color" as const, selection: "red", amount: 10 }];
+    const bets = [
+      { kind: "color" as const, selection: "red", amount: CHIP * 2 },
+    ];
     table.send("alice", { type: "bets", bets });
     table.send("alice", { type: "ready", ready: true });
     expect(() => table.send("alice", { type: "bets", bets })).toThrow(
@@ -356,18 +387,18 @@ describe("Roulette européenne", () => {
 
   test("un portefeuille dépensé ailleurs fait sauter le tour", () => {
     const table = club();
-    const alice = table.sit("alice", 100);
+    const alice = table.sit("alice", 100_000);
     table.send("alice", {
       type: "bets",
-      bets: [{ kind: "color", selection: "red", amount: 80 }],
+      bets: [{ kind: "color", selection: "red", amount: CHIP * 16 }],
     });
     table.send("alice", { type: "ready", ready: true });
     // Another game spends the credits before the ball leaves.
-    alice.balance = 30;
+    alice.balance = 30_000;
     table.wait(3_100);
     expect(table.state().phase).toBe("betting");
     expect(table.state().deadline).toBeNull();
-    expect(alice.balance).toBe(30);
+    expect(alice.balance).toBe(30_000);
     expect(table.state().players[0]).toMatchObject({ ready: false, bets: [] });
   });
 
@@ -377,14 +408,14 @@ describe("Roulette européenne", () => {
     expect(() => table.send("alice", { type: "repeat" })).toThrow(
       "Aucune mise précédente",
     );
-    const bets = [{ kind: "dozen" as const, selection: "3", amount: 20 }];
+    const bets = [{ kind: "dozen" as const, selection: "3", amount: CHIP * 4 }];
     table.send("alice", { type: "bets", bets });
     table.send("alice", { type: "ready", ready: true });
     table.wait(3_100);
     table.wait(ROULETTE_SPIN_MS);
     table.wait(6_000);
-    expect(alice.balance).toBe(980);
-    expect(table.state().players[0].previousTotal).toBe(20);
+    expect(alice.balance).toBe(1_000_000 - CHIP * 4);
+    expect(table.state().players[0].previousTotal).toBe(CHIP * 4);
     table.send("alice", { type: "repeat" });
     expect(table.state().players[0].bets).toEqual(bets);
   });
@@ -394,14 +425,14 @@ describe("Roulette européenne", () => {
     const alice = table.sit("alice");
     table.send("alice", {
       type: "bets",
-      bets: [{ kind: "straight", selection: "17", amount: 5 }],
+      bets: [{ kind: "straight", selection: "17", amount: CHIP }],
     });
     table.send("alice", { type: "ready", ready: true });
     table.wait(3_100);
     table.roulette.run((r) => r.leave("alice#1", "alice"));
     expect(table.state().players).toHaveLength(1);
     table.wait(ROULETTE_SPIN_MS);
-    expect(alice.balance).toBe(995 + 180);
+    expect(alice.balance).toBe(1_000_000 - CHIP + CHIP * 36);
     table.wait(6_000);
     expect(table.state().players).toHaveLength(0);
   });
@@ -409,8 +440,10 @@ describe("Roulette européenne", () => {
   test("seule une connexion assise à la roulette peut miser", () => {
     const table = club();
     table.sit("alice");
-    table.sit("alice", 1_000, "alice#2");
-    const bets = [{ kind: "color" as const, selection: "red", amount: 10 }];
+    table.sit("alice", 1_000_000, "alice#2");
+    const bets = [
+      { kind: "color" as const, selection: "red", amount: CHIP * 2 },
+    ];
     expect(() =>
       table.send("alice", { type: "bets", bets }, "alice#3"),
     ).toThrow(NotShowingRoulette);
@@ -450,16 +483,16 @@ describe("Roulette européenne", () => {
     const alice = table.sit("alice");
     table.send("alice", {
       type: "bets",
-      bets: [{ kind: "color", selection: "red", amount: 10 }],
+      bets: [{ kind: "color", selection: "red", amount: CHIP * 2 }],
     });
     table.send("alice", { type: "ready", ready: true });
     expect(() => table.wait(3_100)).not.toThrow();
     // Nothing was debited for a spin that never started.
     expect(table.state().phase).toBe("betting");
-    expect(alice.balance).toBe(1_000);
+    expect(alice.balance).toBe(1_000_000);
     broken = false;
     table.wait(100);
     expect(table.state().phase).toBe("spinning");
-    expect(alice.balance).toBe(990);
+    expect(alice.balance).toBe(1_000_000 - CHIP * 2);
   });
 });

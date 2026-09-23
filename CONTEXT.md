@@ -1,0 +1,30 @@
+# Vocabulaire du domaine
+
+- **Club** : l’espace commun de Minuit qui regroupe les jeux et le portefeuille de crédits.
+- **Jeux de cartes** : Blackjack et Poker, deux jeux distincts du Club avec leurs propres parties.
+- **Jeux de risque** : Mines et Tower. Ils partagent une mise, une progression visible et une sortie volontaire de la partie.
+- **Table** : partie multijoueur propre à un jeu. Son état et ses places ne s’étendent pas aux tables des autres jeux.
+- **Registre des salles** : ensemble des salles d’un jeu, avec leur visibilité et les joueurs présents. Les places disponibles et les mises relèvent des règles du jeu.
+- **Table publique** : table ouverte, attribuée automatiquement parmi celles qui ont des places disponibles.
+- **Table privée** : table créée à la demande et accessible aux personnes qui ont son lien ou son code.
+- **Salle** : espace de jeu identifié au sein d’un seul jeu. Blackjack, Roulette, Tower et Poker utilisent chacun leur propre registre.
+- **File Poker** : attente par mise avant une partie Spin & Play. Un joueur en file n’occupe pas encore de salle Poker.
+- **Joueur** : personne connectée avec un profil, un portefeuille et des actions disponibles.
+- **Place** : position occupée ou libre autour d’une table ou dans une salle.
+- **Spectateur** : joueur connecté qui regarde une partie sans occuper de place active.
+- **Manche** : unité de jeu complète, du début de la mise au règlement.
+- **Run** : tentative en cours dans un jeu de risque, de la mise initiale à l’encaissement ou à la perte.
+- **Portefeuille** : compte de crédits partagé entre tous les jeux d’un joueur.
+- **Solde** : crédits disponibles dans le portefeuille. Le solde enregistré est la référence commune à tous les jeux.
+- **Opération de portefeuille** : débit ou crédit indivisible produit par un événement de jeu identifié, par exemple une mise, un double, un split, un gain ou un remboursement.
+- **Mise** : opération qui engage des crédits pour une manche ou un run.
+- **Règlement** : ensemble des opérations qui clôt une manche ou un run et verse les gains ou remboursements dus.
+- **Action** : décision envoyée par un joueur pendant une manche ou un run.
+- **État public** : informations de jeu que tous les participants autorisés peuvent voir.
+- **État privé** : informations propres à un joueur, comme ses cartes cachées ou ses choix en cours.
+- **Emote** : réaction visuelle envoyée dans le contexte d’une partie.
+- **Ami** : joueur avec qui une demande d’ami a été acceptée. Les amis voient leur présence et peuvent s’inviter à jouer.
+- **Code ami** : code unique de huit caractères (ABCD-EFGH) qui permet de retrouver un joueur et de lui envoyer une demande d’ami.
+- **Demande d’ami** : proposition d’amitié en attente, envoyée par un joueur à un autre, que le destinataire accepte ou refuse.
+- **Invitation de jeu** : proposition éphémère faite à un ami connecté de rejoindre un jeu, et la table de l’expéditeur quand le jeu en a une. Elle n’est jamais enregistrée.
+- **Profil de joueur** : identité publique d’un joueur (pseudo, code ami, ancienneté, statistiques de jeu).
