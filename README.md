@@ -114,7 +114,7 @@ bun run build
 PORT=3000 bun run start
 ```
 
-Définir `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` et `BETTER_AUTH_TRUSTED_ORIGINS` dans l’environnement de production. Exécuter les migrations une seule fois avant de démarrer la nouvelle version.
+Définir `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` et `BETTER_AUTH_TRUSTED_ORIGINS` dans l’environnement de production. Pour protéger la connexion avec Turnstile, définir aussi `TURNSTILE_SECRET_KEY` dans l’environnement d’exécution et fournir `NEXT_PUBLIC_TURNSTILE_SITE_KEY` au build. Exécuter les migrations une seule fois avant de démarrer la nouvelle version.
 
 Héberger ce processus Node.js persistant sur un serveur ou un service supportant les WebSockets. Le point de contrôle `GET /api/health` renvoie `{ "ok": true }`. Un proxy doit transmettre les en-têtes `Host`, `Upgrade` et `Connection`, et permettre les connexions persistantes. Utiliser HTTPS pour une adresse publique. Le serveur personnalisé ne peut pas être remplacé par un simple export statique ni par des fonctions serverless éphémères.
 
@@ -123,11 +123,11 @@ Les dépendances, scripts, tests et le développement sont gérés avec Bun. En 
 ### Déploiement Docker
 
 ```sh
-docker build --build-arg SOURCE_COMMIT="$(git rev-parse HEAD)" -t minuit-blackjack .
+docker build --build-arg SOURCE_COMMIT="$(git rev-parse HEAD)" --build-arg NEXT_PUBLIC_TURNSTILE_SITE_KEY="$NEXT_PUBLIC_TURNSTILE_SITE_KEY" -t minuit-blackjack .
 docker run --env-file .env -p 3000:3000 minuit-blackjack
 ```
 
-Le conteneur applique les migrations SQL présentes dans `server/db/migrations` avant de démarrer le serveur. Il quitte avec une erreur si la base est inaccessible ou si une migration échoue ; le serveur ne reçoit alors aucun trafic. Les démarrages simultanés sérialisent cette étape avec un verrou PostgreSQL. `DATABASE_URL` doit désigner une base accessible depuis le conteneur, et les variables `BETTER_AUTH_*` doivent être définies comme ci-dessus. Le fichier `.env` et les secrets ne sont pas incorporés à l’image.
+Le conteneur applique les migrations SQL présentes dans `server/db/migrations` avant de démarrer le serveur. Il quitte avec une erreur si la base est inaccessible ou si une migration échoue ; le serveur ne reçoit alors aucun trafic. Les démarrages simultanés sérialisent cette étape avec un verrou PostgreSQL. `DATABASE_URL` doit désigner une base accessible depuis le conteneur, et les variables `BETTER_AUTH_*` doivent être définies comme ci-dessus. La clé publique Turnstile est intégrée au bundle navigateur au build ; la clé secrète reste dans l’environnement d’exécution et n’est pas incorporée à l’image. Le fichier `.env` et les secrets ne sont pas incorporés à l’image.
 
 L’image utilise `next build --webpack` pour construire le serveur Next.js personnalisé ; Vite+ ne sait pas construire cette application Next.js. L’image finale exécute Node.js et inclut seulement les dépendances de production. Dans Coolify, activer **Advanced → Include Source Commit in Build** pour fournir `SOURCE_COMMIT` au Dockerfile ; le build échoue si le hash manque. Coolify peut configurer son propre contrôle de santé sur `GET /api/health`.
 

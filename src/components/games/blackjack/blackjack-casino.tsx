@@ -12,6 +12,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import {
   ArrowDownLeft,
   ArrowRight,
@@ -1097,12 +1098,25 @@ export function WelcomeAuthModal({
 }: {
   game: ReturnType<typeof useGame>;
 }) {
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authMode, setAuthMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [referralCode, setReferralCode] = useState("");
   const [authPending, setAuthPending] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaError, setCaptchaError] = useState(false);
+  const turnstileRef = useRef<TurnstileInstance | undefined>(undefined);
+  const handleCaptchaError = useCallback(() => {
+    setCaptchaToken(null);
+    setCaptchaError(true);
+  }, []);
+  const turnstileScriptOptions = useMemo(
+    () => ({ onError: handleCaptchaError }),
+    [handleCaptchaError],
+  );
+  const captchaRequired = authMode === "sign-in" && !!turnstileSiteKey;
 
   return (
     <Modal
@@ -1166,17 +1180,31 @@ export function WelcomeAuthModal({
         <form
           onSubmit={async (event) => {
             event.preventDefault();
+            if (captchaRequired && !captchaToken) return;
             setAuthPending(true);
-            const message = await game.register({
-              mode: authMode,
-              name: authMode === "sign-up" ? name : undefined,
-              email,
-              password,
-              referralCode:
-                authMode === "sign-up" ? referralCode : undefined,
-            });
-            setAuthPending(false);
-            if (message) game.setError(message);
+            try {
+              const message = await game.register({
+                mode: authMode,
+                name: authMode === "sign-up" ? name : undefined,
+                email,
+                password,
+                captchaToken:
+                  captchaRequired ? (captchaToken ?? undefined) : undefined,
+                referralCode:
+                  authMode === "sign-up" ? referralCode : undefined,
+              });
+              if (message) game.setError(message);
+            } catch {
+              game.setError(
+                "La connexion est momentanément impossible. Réessayez.",
+              );
+            } finally {
+              setAuthPending(false);
+              if (captchaRequired) {
+                setCaptchaToken(null);
+                turnstileRef.current?.reset();
+              }
+            }
           }}
         >
           {authMode === "sign-up" && (
@@ -1243,6 +1271,35 @@ export function WelcomeAuthModal({
               </p>
             </>
           )}
+          {captchaRequired && (
+            <>
+              <Turnstile
+                ref={turnstileRef}
+                siteKey={turnstileSiteKey ?? ""}
+                options={{
+                  action: "login",
+                  language: "fr",
+                  size: "flexible",
+                  theme: "dark",
+                }}
+                onSuccess={(token) => {
+                  setCaptchaToken(token);
+                  setCaptchaError(false);
+                }}
+                onExpire={() => setCaptchaToken(null)}
+                onError={handleCaptchaError}
+                scriptOptions={turnstileScriptOptions}
+                role="group"
+                aria-label="Vérification anti-robot"
+                className="welcome-turnstile"
+              />
+              <p className="welcome-captcha-hint" role="status">
+                {captchaError
+                  ? "La vérification ne se charge pas. Rechargez la page pour réessayer."
+                  : "Validez la vérification pour vous connecter."}
+              </p>
+            </>
+          )}
           <button
             className="button primary"
             type="submit"
@@ -1250,6 +1307,7 @@ export function WelcomeAuthModal({
               authPending ||
               !email.trim() ||
               password.length < 8 ||
+              (captchaRequired && !captchaToken) ||
               (authMode === "sign-up" && !name.trim())
             }
           >
@@ -1273,6 +1331,8 @@ export function WelcomeAuthModal({
           className="welcome-auth-switch"
           onClick={() => {
             game.setError("");
+            setCaptchaToken(null);
+            setCaptchaError(false);
             setAuthMode((mode) =>
               mode === "sign-up" ? "sign-in" : "sign-up",
             );

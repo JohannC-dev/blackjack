@@ -35,6 +35,7 @@
     "@effect/sql-pg": "0.53.0",
     "@fontsource/dm-sans": "^5.2.8",
     "@fontsource/manrope": "^5.2.8",
+    "@marsidev/react-turnstile": "^1.6.1",
     "@tailwindcss/postcss": "^4.3.3",
     "better-auth": "1.7.5",
     "class-variance-authority": "^0.7.1",

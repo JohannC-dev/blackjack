@@ -18,6 +18,8 @@ export type Credentials = {
   readonly mode: "sign-in" | "sign-up";
   readonly email: string;
   readonly password: string;
+  /** Cloudflare Turnstile token, only sent with sign-in requests. */
+  readonly captchaToken?: string;
   readonly name?: string;
   /** Parrainage code, only ever accepted while signing up. */
   readonly referralCode?: string;
@@ -76,6 +78,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     const result = await authClient.signIn.email({
       email: credentials.email.trim(),
       password: credentials.password,
+      ...(credentials.captchaToken
+        ? {
+            fetchOptions: {
+              headers: { "x-captcha-response": credentials.captchaToken },
+            },
+          }
+        : {}),
     });
     return result.error?.message ?? null;
   }, []);
