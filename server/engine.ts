@@ -301,9 +301,17 @@ export class Table {
       throw new Error("Le sabot est en cours de mélange.");
     if (command.type === "gamble" || command.type === "cashout") {
       const gamble = this.state.gambles.find(
-        (entry) => entry.playerId === playerId && entry.status === "available",
+        (entry) =>
+          entry.playerId === playerId &&
+          entry.status === "available" &&
+          entry.round === this.state.round,
       );
       if (!gamble) throw new Error("Aucun gain disponible à tenter.");
+      if (
+        gamble.round !== this.state.round ||
+        (this.state.phase !== "settled" && this.state.phase !== "betting")
+      )
+        throw new Error("Ces gains ne sont plus disponibles à tenter.");
       if (command.type === "cashout") {
         gamble.status = "cashed";
       } else {
@@ -657,6 +665,8 @@ export class Table {
       return;
     }
     if (this.shoe.length < 160) {
+      // A win can only be gambled until the next round actually starts.
+      this.state.gambles = [];
       this.startShuffle(Date.now(), true);
       return;
     }
@@ -681,10 +691,9 @@ export class Table {
             .map((seat) => seat.index),
         },
       });
+    // Bets have now been reserved, so the previous round's offer expires.
+    this.state.gambles = [];
     this.expireIdleSeats(new Set(seats.map((seat) => seat.index)));
-    this.state.gambles = this.state.gambles.filter(
-      (entry) => entry.status === "available",
-    );
     // Bets are only reserved when a round starts. Clear the bets belonging to
     // players who did not confirm in time so their unplayed chips do not
     // remain displayed on the table while the round is in progress.

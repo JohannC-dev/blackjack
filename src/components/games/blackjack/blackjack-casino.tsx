@@ -898,7 +898,7 @@ function GamblePanel({
               Encaisser {credits(gamble.stake)} cr.
             </button>
             <small className="gamble-countdown">
-              Disponible jusqu’à votre décision.
+              Valable jusqu’au lancement de la prochaine manche.
             </small>
           </>
         ) : (
@@ -1014,6 +1014,8 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
   tableId,
   isFullscreen,
   seatCount,
+  round,
+  bettingDeadline,
   playerId,
   emotePlayers,
   onToggleFullscreen,
@@ -1024,6 +1026,8 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
   tableId: string;
   isFullscreen: boolean;
   seatCount: number;
+  round: number;
+  bettingDeadline: number | null;
   playerId: string;
   emotePlayers: EmotePlayer[];
   onSendEmote: (request: EmoteRequest) => void;
@@ -1036,7 +1040,15 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
         <span className={`connection-dot ${connected ? "online" : ""}`} />
         <b>TABLE {tableId}</b>
         <span className="table-separator">/</span>
-        <span>Mises sur mesure</span>
+        <span className="table-description">Mises sur mesure</span>
+        <div className="table-round-meta" aria-label="Informations de manche">
+          <span>MANCHE {String(round).padStart(3, "0")}</span>
+          {bettingDeadline !== null && (
+            <span className="table-round-countdown">
+              <CountdownText deadline={bettingDeadline} suffix="" />
+            </span>
+          )}
+        </div>
       </div>
       <div className="table-toolbar-actions">
         <EmoteButton
@@ -1195,9 +1207,9 @@ export function BlackjackCasino({
       : 0;
   const ownGambles =
     state?.gambles.filter((entry) => entry.playerId === playerId) ?? [];
-  const ownGamble =
-    ownGambles.find((entry) => entry.status === "available") ??
-    ownGambles.at(-1);
+  const ownGamble = ownGambles
+    .filter((entry) => entry.round === state?.round)
+    .at(-1);
   const ownWinEvent =
     (state?.phase === "bonuses" && myBonus > 0) ||
     (state?.phase === "settled" &&
@@ -1626,6 +1638,10 @@ export function BlackjackCasino({
                   seatCount={
                     state?.seats.filter((seat) => seat.playerId).length ?? 0
                   }
+                  round={state?.round ?? 0}
+                  bettingDeadline={
+                    state?.phase === "betting" ? state.deadline : null
+                  }
                   playerId={playerId}
                   emotePlayers={emotePlayers}
                   onSendEmote={game.sendEmote}
@@ -1737,9 +1753,6 @@ export function BlackjackCasino({
                       disabled={s.playerId === playerId && disabled}
                     />
                   ))}
-                  <div className="felt-bottom-caption">
-                    LE CROUPIER RESTE SUR TOUS LES 17
-                  </div>
                   {((roundResult && roundResult.net > 0) ||
                     (state?.phase === "bonuses" && myBonus > 0)) && (
                     <div
@@ -1752,7 +1765,8 @@ export function BlackjackCasino({
                       ))}
                     </div>
                   )}
-                  {state?.phase !== "shuffling" &&
+                  {(state?.phase === "settled" ||
+                    state?.phase === "betting") &&
                     ownGamble &&
                     (gambleOpen ? (
                       <div className="table-gamble-overlay">
@@ -1780,21 +1794,16 @@ export function BlackjackCasino({
                       </div>
                     ) : null)}
                 </div>
-                <div className="table-status" aria-live="polite">
-                  <span className={`status-orb ${myTurn ? "your-turn" : ""}`} />
+                <div
+                  className="table-status-announcer"
+                  role="status"
+                  aria-live="polite"
+                >
                   {!profile
                     ? "Votre place vous attend."
                     : !connected
                       ? "Connexion à la table…"
                       : (state?.message ?? "Bienvenue à la table.")}
-                  {state?.deadline != null && !showCenterSettlement && (
-                    <span className="countdown">
-                      <CountdownText deadline={state.deadline} />
-                    </span>
-                  )}
-                  <span className="round-number">
-                    MANCHE {String(state?.round ?? 0).padStart(3, "0")}
-                  </span>
                 </div>
                 <div
                   className={`controls-panel ${myTurn || insuranceSeat ? "controls-active" : ""}`}
