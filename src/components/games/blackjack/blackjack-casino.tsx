@@ -1016,6 +1016,7 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
   emotePlayers,
   onToggleFullscreen,
   onOpenTables,
+  onOpenHistory,
   onSendEmote,
 }: {
   connected: boolean;
@@ -1028,6 +1029,7 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
   onSendEmote: (request: EmoteRequest) => void;
   onToggleFullscreen: () => void;
   onOpenTables: () => void;
+  onOpenHistory: () => void;
 }) {
   return (
     <div className="table-toolbar">
@@ -1052,6 +1054,15 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
           seated={emotePlayers.some((player) => player.id === playerId)}
           onSend={onSendEmote}
         />
+        <button
+          type="button"
+          className="poker-sound"
+          aria-label="Historique"
+          title="Historique"
+          onClick={onOpenHistory}
+        >
+          <History size={16} />
+        </button>
         <button
           type="button"
           className={`poker-sound table-fullscreen-button ${isFullscreen ? "active" : ""}`}
@@ -1754,6 +1765,7 @@ export function BlackjackCasino({
   const goChicken = useCallback(() => onNavigate("chicken"), [onNavigate]);
   const goRoulette = useCallback(() => onNavigate("roulette"), [onNavigate]);
   const openTables = useCallback(() => setModal("tables"), []);
+  const openHistory = useCallback(() => setModal("history"), []);
   const openRules = useCallback(() => setModal("rules"), []);
   const subtitle = myTurn
     ? "C’est à vous de jouer"
@@ -1832,6 +1844,7 @@ export function BlackjackCasino({
                   onSendEmote={game.sendEmote}
                   onToggleFullscreen={toggleFullscreen}
                   onOpenTables={openTables}
+                  onOpenHistory={openHistory}
                 />
                 <div className="table-stage">
                   <div className="ambient-glow" />
