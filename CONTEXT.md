@@ -23,3 +23,8 @@
 - **État public** : informations de jeu que tous les participants autorisés peuvent voir.
 - **État privé** : informations propres à un joueur, comme ses cartes cachées ou ses choix en cours.
 - **Emote** : réaction visuelle envoyée dans le contexte d’une partie.
+- **Ami** : joueur avec qui une demande d’ami a été acceptée. Les amis voient leur présence et peuvent s’inviter à jouer.
+- **Code ami** : code unique de huit caractères (ABCD-EFGH) qui permet de retrouver un joueur et de lui envoyer une demande d’ami.
+- **Demande d’ami** : proposition d’amitié en attente, envoyée par un joueur à un autre, que le destinataire accepte ou refuse.
+- **Invitation de jeu** : proposition éphémère faite à un ami connecté de rejoindre un jeu, et la table de l’expéditeur quand le jeu en a une. Elle n’est jamais enregistrée.
+- **Profil de joueur** : identité publique d’un joueur (pseudo, code ami, ancienneté, statistiques de jeu).

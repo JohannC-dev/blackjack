@@ -98,16 +98,24 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
           const outbox: Outbox = [];
           const connections = new Set(sockets.get(playerId));
           const previous = roomOf(rooms, playerId);
-          const selected = requestedTableId
-            ? yield* privateRoom(rooms, requestedTableId)
-            : previous &&
-                getRoom(rooms, previous)?.visibility === "public" &&
-                tables.has(previous)
-              ? { value: getRoom(rooms, previous)!, state: rooms }
-              : yield* publicRoom(rooms, (room) => {
-                  const table = tables.get(room.id);
-                  return !table || table.seats.length < Table.MAX_PLAYERS;
-                });
+          const requested =
+            requestedTableId === undefined
+              ? undefined
+              : getRoom(rooms, requestedTableId);
+          // A friend's invitation may name a public table: it is joined as is.
+          const selected =
+            requested?.visibility === "public"
+              ? { value: requested, state: rooms }
+              : requestedTableId
+                ? yield* privateRoom(rooms, requestedTableId)
+                : previous &&
+                    getRoom(rooms, previous)?.visibility === "public" &&
+                    tables.has(previous)
+                  ? { value: getRoom(rooms, previous)!, state: rooms }
+                  : yield* publicRoom(rooms, (room) => {
+                      const table = tables.get(room.id);
+                      return !table || table.seats.length < Table.MAX_PLAYERS;
+                    });
           rooms = selected.state;
           const tableId = selected.value.id;
           if (previous !== undefined && previous !== tableId) {
@@ -297,6 +305,15 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
         ] as const);
       });
 
+    /** Table where a player sits, with its visibility. */
+    const tableOf = (playerId: string) =>
+      Effect.map(SynchronizedRef.get(registry), (current) => {
+        const tableId = roomOf(current.rooms, playerId);
+        return Option.fromNullable(
+          tableId === undefined ? undefined : getRoom(current.rooms, tableId),
+        );
+      });
+
     /** Current public view of a table, if it exists. */
     const state = (tableId: string) =>
       Effect.flatMap(SynchronizedRef.get(registry), (current) => {
@@ -314,6 +331,7 @@ export class Roulette extends Effect.Service<Roulette>()("Roulette", {
       tick,
       forget,
       state,
+      tableOf,
     } as const;
   }),
 }) {}

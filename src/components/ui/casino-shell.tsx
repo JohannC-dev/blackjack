@@ -18,6 +18,7 @@ import { credits } from "@/lib/rules";
 import type { CasinoView } from "@/lib/navigation";
 import { BlackjackIcon } from "./blackjack-icon";
 import { MineBomb } from "../games/mines/mine-art";
+import { ProfileMenu } from "../social/profile-menu";
 
 type Navigate = (view: CasinoView) => void;
 
@@ -212,16 +213,7 @@ export const ClubHeader = memo(function ClubHeader({
           <span>cr&#233;dits</span>
           <Coins size={16} className="wallet-coin" />
         </div>
-        <button
-          type="button"
-          className="profile-avatar"
-          title={onSignOut ? "Se déconnecter" : name || "Votre profil"}
-          aria-label={onSignOut ? "Se déconnecter" : name || "Votre profil"}
-          onClick={onSignOut}
-          disabled={!onSignOut}
-        >
-          {(name || "M").slice(0, 1).toUpperCase()}
-        </button>
+        <ProfileMenu name={name} onSignOut={onSignOut} />
       </div>
     </header>
   );

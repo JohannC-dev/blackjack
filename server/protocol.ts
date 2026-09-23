@@ -17,6 +17,24 @@ export const JoinSchema = Schema.Struct({
   createPrivate: Schema.optional(Schema.Literal(true)),
 });
 
+export const RouletteJoinSchema = Schema.Struct({
+  tableId: Schema.optional(Schema.Union(TableId, Schema.Null)),
+});
+
+const UserId = Schema.String.pipe(Schema.minLength(1), Schema.maxLength(64));
+
+export const FriendInviteSchema = Schema.Struct({
+  friendId: UserId,
+  game: Schema.Literal("blackjack", "roulette", "poker", "tower", "mines"),
+  tableId: Schema.optional(Schema.Union(TableId, Schema.Null)),
+});
+
+export const FriendInviteReplySchema = Schema.Struct({
+  inviteId: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(64)),
+  toId: UserId,
+  accepted: Schema.Boolean,
+});
+
 const BetSchema = Schema.Struct({
   main: NonNegativeNumber,
   three: NonNegativeNumber,

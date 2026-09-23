@@ -150,9 +150,76 @@ export const walletEntry = pgTable(
   ],
 );
 
+/**
+ * Public identity of a player, shared by every social feature (friends today,
+ * clubs later). Kept apart from the Better Auth user table.
+ */
+export const playerProfile = pgTable(
+  "player_profile",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => user.id, { onDelete: "cascade" }),
+    friendCode: text("friend_code").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("player_profile_friend_code_idx").on(table.friendCode),
+    check(
+      "player_profile_friend_code_format",
+      sql`${table.friendCode} ~ '^[A-Z0-9]{8}$'`,
+    ),
+  ],
+);
+
+/**
+ * One row per pair of players: a pending request from requester to addressee,
+ * or an accepted friendship. Declining or removing deletes the row.
+ */
+export const friendship = pgTable(
+  "friendship",
+  {
+    id: text("id").primaryKey(),
+    requesterId: text("requester_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    addresseeId: text("addressee_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    status: text("status").$type<"pending" | "accepted">().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("friendship_pair_idx").on(
+      sql`least(${table.requesterId}, ${table.addresseeId})`,
+      sql`greatest(${table.requesterId}, ${table.addresseeId})`,
+    ),
+    index("friendship_requester_idx").on(table.requesterId, table.status),
+    index("friendship_addressee_idx").on(table.addresseeId, table.status),
+    check(
+      "friendship_distinct_players",
+      sql`${table.requesterId} <> ${table.addresseeId}`,
+    ),
+    check(
+      "friendship_status_valid",
+      sql`${table.status} in ('pending', 'accepted')`,
+    ),
+  ],
+);
+
 export const authSchema = { user, session, account, verification };
 export const schema = {
   ...authSchema,
   walletAccount,
   walletEntry,
+  playerProfile,
+  friendship,
 };

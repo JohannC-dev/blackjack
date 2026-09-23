@@ -19,6 +19,8 @@ import { MinesGame } from "./mines";
 import { makeRouletteRuntime } from "./roulette";
 import { RecordingGameWallet } from "./game-wallet";
 import { refillWallet } from "./refill";
+import { handleSocialRequest } from "./social/http";
+import { areFriends, friendIdsOf } from "./social/repository";
 import {
   GameError,
   ServerClock,
@@ -33,9 +35,12 @@ import {
 import {
   BlackjackCommandSchema,
   EmoteRequestSchema,
+  FriendInviteReplySchema,
+  FriendInviteSchema,
   JoinSchema,
   MinesCommandSchema,
   PokerCommandSchema,
+  RouletteJoinSchema,
   TowerCommandSchema,
 } from "./protocol";
 import type {
@@ -51,6 +56,7 @@ import {
   type EmoteEvent,
   type EmoteRequest,
 } from "../src/lib/emotes";
+import type { GameInvite, GameInviteReply } from "../src/lib/social";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number(process.env.PORT ?? 3000);
@@ -100,6 +106,13 @@ const http = createServer(async (req, res) => {
     }
     return;
   }
+  if (
+    await handleSocialRequest(req, res, {
+      isOnline: (userId) => !!playerSockets.get(userId)?.size,
+      notify: notifySocial,
+    })
+  )
+    return;
   handler(req, res);
 });
 const io = new Server(http, {
@@ -140,6 +153,26 @@ const profiles = new Map<string, Player>();
 const playersById = new Map<string, Player>();
 const gameWallet = new RecordingGameWallet();
 const playerSockets = new Map<string, Set<string>>();
+/** Last invitation sent from one player to another, to stop spamming. */
+const lastInvites = new Map<string, number>();
+
+function emitToPlayer(playerId: string, event: string, payload?: unknown) {
+  for (const socketId of playerSockets.get(playerId) ?? [])
+    io.to(socketId).emit(event, payload);
+}
+
+/** Friends and requests live in the database; clients refetch them. */
+function notifySocial(userIds: readonly string[]) {
+  for (const userId of new Set(userIds))
+    emitToPlayer(userId, "friends:changed");
+}
+
+/** A player came online or left: their friends refresh their list. */
+function notifyPresence(userId: string) {
+  runDatabase(friendIdsOf(userId)).then(notifySocial, (error: unknown) =>
+    console.error("Amis · présence", error),
+  );
+}
 /** Last wallet pushed to each connected player. */
 const wallets = new Map<string, Wallet>();
 /** Sockets of each player currently showing the Tower. */
@@ -467,7 +500,10 @@ io.on("connection", (socket) => {
         const tableId = safeData.createPrivate
           ? blackjackRooms.create("private").id
           : safeData.tableId
-            ? blackjackRooms.privateRoom(safeData.tableId).id
+            ? // A friend's invitation may name a public table.
+              blackjackRooms.get(safeData.tableId)?.visibility === "public"
+              ? safeData.tableId
+              : blackjackRooms.privateRoom(safeData.tableId).id
             : publicTableFor(known?.id);
         if (known && known.roomId !== tableId) {
           const connections = playerSockets.get(known.id);
@@ -510,8 +546,10 @@ io.on("connection", (socket) => {
         player.roomId = tableId;
         blackjackRooms.join(player.id, tableId);
         const connections = playerSockets.get(player.id) ?? new Set();
+        const cameOnline = !connections.size;
         connections.add(socket.id);
         playerSockets.set(player.id, connections);
+        if (cameOnline) notifyPresence(player.id);
         socket.join(blackjackRoom(tableId));
         runOrThrow(table.observeEffect(player));
         runOrThrow(poker.connectEffect(player));
@@ -679,15 +717,32 @@ io.on("connection", (socket) => {
       );
     },
   );
-  socket.on("roulette:join", (ack: (value: Ack) => void) => {
+  socket.on("roulette:join", (data: unknown, ack?: (value: Ack) => void) => {
+    // The table is optional: `emit("roulette:join", ack)` stays valid.
+    if (typeof data === "function") {
+      ack = data as (value: Ack) => void;
+      data = {};
+    }
     replyEffect(
       ack,
-      gameEffect((clock) => {
-        throttle(clock.now());
-        const currentPlayer = player;
-        if (!currentPlayer) throw new Error("Connectez-vous au club.");
-        roulette.run((r) => r.join(socket.id, currentPlayer.id));
-      }),
+      inputEffect(
+        RouletteJoinSchema,
+        data ?? {},
+        "La table demandée est invalide.",
+        (safeData) =>
+          gameEffect((clock) => {
+            throttle(clock.now());
+            const currentPlayer = player;
+            if (!currentPlayer) throw new Error("Connectez-vous au club.");
+            roulette.run((r) =>
+              r.join(
+                socket.id,
+                currentPlayer.id,
+                safeData.tableId ?? undefined,
+              ),
+            );
+          }),
+      ),
     );
   });
   socket.on("roulette:leave", (ack: (value: Ack) => void) => {
@@ -751,6 +806,99 @@ io.on("connection", (socket) => {
       }),
     );
   });
+  // Game invitations are relayed live between friends and never stored.
+  socket.on("friends:invite", (data: unknown, ack: (value: Ack) => void) => {
+    replyEffect(
+      ack,
+      inputEffect(FriendInviteSchema, data, "Invitation invalide.", (request) =>
+        Effect.gen(function* () {
+          const { sender, now } = yield* gameEffect((clock) => {
+            throttle(clock.now());
+            if (!player) throw new Error("Connectez-vous au club.");
+            return { sender: player, now: clock.now() };
+          });
+          const tableId = request.tableId ?? null;
+          let isPrivate = false;
+          if (request.game === "blackjack") {
+            if (!tableId || tableId !== sender.roomId)
+              return yield* Effect.fail(
+                new GameError("Rejoignez d’abord cette table de Blackjack."),
+              );
+            isPrivate = blackjackRooms.get(tableId)?.visibility === "private";
+          } else if (request.game === "roulette") {
+            const room = Option.getOrUndefined(
+              roulette.run((r) => r.tableOf(sender.id)),
+            );
+            if (!tableId || room?.id !== tableId)
+              return yield* Effect.fail(
+                new GameError("Rejoignez d’abord cette table de Roulette."),
+              );
+            isPrivate = room.visibility === "private";
+          } else if (tableId)
+            return yield* Effect.fail(
+              new GameError("Ce jeu ne se joue pas à une table."),
+            );
+          const friendly = yield* Effect.tryPromise({
+            try: () => runDatabase(areFriends(sender.id, request.friendId)),
+            catch: toGameError,
+          });
+          if (!friendly)
+            return yield* Effect.fail(
+              new GameError("Vous ne pouvez inviter que vos amis."),
+            );
+          if (!playerSockets.get(request.friendId)?.size)
+            return yield* Effect.fail(
+              new GameError("Votre ami n’est pas connecté."),
+            );
+          const key = sender.id + ":" + request.friendId;
+          if (now - (lastInvites.get(key) ?? 0) < 5000)
+            return yield* Effect.fail(
+              new GameError("Invitation déjà envoyée, patientez un instant."),
+            );
+          lastInvites.set(key, now);
+          emitToPlayer(request.friendId, "friends:invite", {
+            id: randomUUID(),
+            from: { id: sender.id, name: sender.name },
+            game: request.game,
+            tableId,
+            private: isPrivate,
+            sentAt: now,
+          } satisfies GameInvite);
+        }),
+      ),
+    );
+  });
+  socket.on(
+    "friends:invite:reply",
+    (data: unknown, ack?: (value: Ack) => void) => {
+      replyEffect(
+        ack,
+        inputEffect(
+          FriendInviteReplySchema,
+          data,
+          "Réponse invalide.",
+          (reply) =>
+            Effect.gen(function* () {
+              const responder = yield* gameEffect((clock) => {
+                throttle(clock.now());
+                if (!player) throw new Error("Connectez-vous au club.");
+                return player;
+              });
+              const friendly = yield* Effect.tryPromise({
+                try: () => runDatabase(areFriends(responder.id, reply.toId)),
+                catch: toGameError,
+              });
+              if (!friendly) return;
+              emitToPlayer(reply.toId, "friends:invite:reply", {
+                inviteId: reply.inviteId,
+                by: { id: responder.id, name: responder.name },
+                accepted: reply.accepted,
+              } satisfies GameInviteReply);
+            }),
+        ),
+      );
+    },
+  );
   // Emotes are cosmetic: relayed to the table, never stored.
   socket.on("emote", (request: unknown) => {
     runEffect(
@@ -833,6 +981,7 @@ io.on("connection", (socket) => {
           return true;
         });
         if (!shouldDisconnect) return;
+        yield* gameEffect(() => notifyPresence(disconnectedPlayer.id));
         yield* poker.disconnectEffect(disconnectedPlayer);
         yield* gameEffect(() => {
           if (tables.get(disconnectedPlayer.roomId)?.state.phase === "betting")

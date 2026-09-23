@@ -1,5 +1,6 @@
 @import "tailwindcss/theme.css";
 @import "tailwindcss/utilities.css";
+@import "tw-animate-css";
 
 @source "../components";
 @source "../app";
@@ -15,11 +16,58 @@
   --color-minuit-purple: #b79afa;
   --color-minuit-purple-bright: #a880f3;
   --color-minuit-mint: #83e9bc;
+
+  /* shadcn/ui tokens, mapped onto the Minuit palette. */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 }
+
+/* The app is dark only: shadcn dark: variants always apply. */
+@custom-variant dark (&:where(html, html *));
 
 :root {
   color-scheme: dark;
   font-family: "Manrope", sans-serif;
+
+  --radius: 0.75rem;
+  --background: #100e18;
+  --foreground: #f4f1fb;
+  --card: #191622;
+  --card-foreground: #f4f1fb;
+  --popover: #17141f;
+  --popover-foreground: #f4f1fb;
+  --primary: #b79afa;
+  --primary-foreground: #1a1426;
+  --secondary: #26212f;
+  --secondary-foreground: #e8e2f5;
+  --muted: #1d1929;
+  --muted-foreground: #8c879e;
+  --accent: #2a2438;
+  --accent-foreground: #f4f1fb;
+  --destructive: #f0617a;
+  --border: #ffffff14;
+  --input: #ffffff1a;
+  --ring: #b79afa;
 }
 
 @layer base {
@@ -55,4 +103,36 @@
   button:disabled {
     cursor: default;
   }
+
+  /*
+   * shadcn/ui primitives all carry a data-slot attribute. The app does not
+   * load Tailwind preflight, so they get a minimal reset of their own.
+   */
+  [data-slot],
+  [data-slot] *,
+  [data-slot]::before,
+  [data-slot]::after {
+    border: 0 solid var(--border);
+  }
+
+  button[data-slot],
+  [data-slot] button,
+  input[data-slot] {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+  }
+}
+
+/*
+ * Utilities are unlayered here, so they already beat the bare element rules of
+ * legacy.css. Only these two legacy rules outrank them on shadcn primitives.
+ */
+button[data-slot]:focus-visible {
+  outline: none;
+}
+
+label[data-slot] {
+  margin-bottom: 0;
 }

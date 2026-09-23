@@ -39,6 +39,8 @@ export function useGame() {
   /** Emotes received and not yet animated. */
   const [emotes, setEmotes] = useState<ReceivedEmote[]>([]);
   const socketRef = useRef<Socket | null>(null);
+  /** The live club connection, for features that listen to it (friends). */
+  const [socket, setSocket] = useState<Socket | null>(null);
   const idRef = useRef("");
   const roomRef = useRef<string | null>(null);
   const walletSeq = useRef(0);
@@ -47,6 +49,8 @@ export function useGame() {
   const towerOpen = useRef(false);
   /** Whether the Roulette view is open, so a reconnection re-enters its room. */
   const rouletteOpen = useRef(false);
+  /** Roulette table asked for explicitly (invitation or private table). */
+  const rouletteTable = useRef<string | null>(null);
 
   const token = profile?.token;
   useEffect(() => {
@@ -62,6 +66,7 @@ export function useGame() {
       reconnectionDelayMax: 4000,
     });
     socketRef.current = socket;
+    setSocket(socket);
     socket.on("connect", () => {
       walletSeq.current = 0;
       const synchronizeClock = () => {
@@ -111,7 +116,8 @@ export function useGame() {
             setPlayerId(ack.playerId!);
             setConnected(true);
             if (towerOpen.current) socket.emit("tower:join");
-            if (rouletteOpen.current) socket.emit("roulette:join");
+            if (rouletteOpen.current)
+              socket.emit("roulette:join", { tableId: rouletteTable.current });
           },
         );
     });
@@ -164,6 +170,7 @@ export function useGame() {
       }
       socket.disconnect();
       socketRef.current = null;
+      setSocket(null);
     };
   }, [setBalance, token]);
 
@@ -329,67 +336,107 @@ export function useGame() {
   const enterRoulette = useCallback(() => {
     rouletteOpen.current = true;
     const socket = socketRef.current;
-    if (socket?.connected && idRef.current) socket.emit("roulette:join");
+    if (socket?.connected && idRef.current)
+      socket.emit("roulette:join", { tableId: rouletteTable.current });
   }, []);
   /** Leaves the Roulette room while keeping the shared club connection alive. */
   const leaveRoulette = useCallback(() => {
     rouletteOpen.current = false;
+    rouletteTable.current = null;
     setRouletteState(null);
     socketRef.current?.emit("roulette:leave");
   }, []);
-  const changeTable = (tableId: string | null) => {
+  /**
+   * Picks the Roulette table to sit at: a friend's table, or a new private
+   * one. When the Roulette is not open yet, it is used as soon as it opens.
+   */
+  const joinRouletteTable = useCallback((tableId: string): Promise<boolean> => {
+    rouletteTable.current = tableId;
     const socket = socketRef.current;
+    if (!rouletteOpen.current) return Promise.resolve(true);
     if (!socket?.connected) {
-      setError("Connectez-vous avant de changer de table.");
-      return;
+      setError("La connexion à la roulette est interrompue.");
+      return Promise.resolve(false);
     }
-    socket
-      .timeout(6000)
-      .emit("join", { tableId }, (timeout: Error | null, ack: Ack) => {
-        if (timeout || !ack?.ok) {
-          setError(
-            timeout
-              ? "La table ne répond pas."
-              : (ack as { error: string }).error,
-          );
-          return;
-        }
-        roomRef.current = ack.tableId ?? tableId;
-        const url = new URL(window.location.href);
-        if (tableId === null) url.searchParams.delete("table");
-        else url.searchParams.set("table", tableId);
-        window.history.replaceState({}, "", url);
+    return new Promise((resolve) => {
+      socket
+        .timeout(6000)
+        .emit(
+          "roulette:join",
+          { tableId },
+          (timeout: Error | null, ack: Ack) => {
+            if (timeout) setError("La roulette ne répond pas.");
+            else if (!ack.ok) setError(ack.error);
+            resolve(!timeout && ack?.ok);
+          },
+        );
+    });
+  }, []);
+  const changeTable = useCallback(
+    (tableId: string | null): Promise<boolean> => {
+      const socket = socketRef.current;
+      if (!socket?.connected) {
+        setError("Connectez-vous avant de changer de table.");
+        return Promise.resolve(false);
+      }
+      return new Promise((resolve) => {
+        socket
+          .timeout(6000)
+          .emit("join", { tableId }, (timeout: Error | null, ack: Ack) => {
+            if (timeout || !ack?.ok) {
+              setError(
+                timeout
+                  ? "La table ne répond pas."
+                  : (ack as { error: string }).error,
+              );
+              resolve(false);
+              return;
+            }
+            roomRef.current = ack.tableId ?? tableId;
+            const url = new URL(window.location.href);
+            if (tableId === null) url.searchParams.delete("table");
+            else url.searchParams.set("table", tableId);
+            window.history.replaceState({}, "", url);
+            resolve(true);
+          });
       });
-  };
-  const createPrivateTable = () => {
+    },
+    [],
+  );
+  /** Moves to a new private Blackjack table and returns its code. */
+  const createPrivateTable = useCallback((): Promise<string | null> => {
     const socket = socketRef.current;
     if (!socket?.connected) {
       setError("Connectez-vous avant de créer une table.");
-      return;
+      return Promise.resolve(null);
     }
-    socket
-      .timeout(6000)
-      .emit(
-        "join",
-        { createPrivate: true },
-        (timeout: Error | null, ack: Ack) => {
-          if (timeout || !ack?.ok || !ack.tableId) {
-            setError(
-              timeout
-                ? "La table ne répond pas."
-                : !ack?.ok
-                  ? (ack as { error: string }).error
-                  : "La table privée n’a pas pu être créée.",
-            );
-            return;
-          }
-          roomRef.current = ack.tableId;
-          const url = new URL(window.location.href);
-          url.searchParams.set("table", ack.tableId);
-          window.history.replaceState({}, "", url);
-        },
-      );
-  };
+    return new Promise((resolve) => {
+      socket
+        .timeout(6000)
+        .emit(
+          "join",
+          { createPrivate: true },
+          (timeout: Error | null, ack: Ack) => {
+            if (timeout || !ack?.ok || !ack.tableId) {
+              setError(
+                timeout
+                  ? "La table ne répond pas."
+                  : !ack?.ok
+                    ? (ack as { error: string }).error
+                    : "La table privée n’a pas pu être créée.",
+              );
+              resolve(null);
+              return;
+            }
+            roomRef.current = ack.tableId;
+            const url = new URL(window.location.href);
+            url.searchParams.set("table", ack.tableId);
+            window.history.replaceState({}, "", url);
+            resolve(ack.tableId);
+          },
+        );
+    });
+  }, []);
   return {
     profile,
     loaded,
@@ -420,8 +467,10 @@ export function useGame() {
     rouletteCommand,
     enterRoulette,
     leaveRoulette,
+    joinRouletteTable,
     minesCommand,
     changeTable,
     createPrivateTable,
+    socket,
   };
 }

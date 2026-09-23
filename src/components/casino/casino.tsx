@@ -14,6 +14,7 @@ import { MinesCasino } from "../games/mines/mines-casino";
 import { CasinoHome, PokerCasino } from "../games/poker/poker-casino";
 import { RouletteCasino } from "../games/roulette/roulette-casino";
 import { TowerCasino } from "../games/tower/tower-casino";
+import { SocialProvider } from "../social/social-provider";
 
 export function Casino() {
   const game = useGame();
@@ -80,7 +81,7 @@ export function Casino() {
 
   return (
     <ServerClockProvider offset={game.serverTimeOffset}>
-      <>
+      <SocialProvider game={game} view={view} onNavigate={navigate}>
         {content}
         {canRefill && refillDismissed && !showRefill && (
           <button
@@ -206,7 +207,7 @@ export function Casino() {
             </div>
           </Modal>
         )}
-      </>
+      </SocialProvider>
     </ServerClockProvider>
   );
 }
