@@ -55,6 +55,8 @@ export type Seat = {
   hands: Hand[];
   sides: { three: SideResult | null; pairs: SideResult | null };
   committed: number;
+  insurance: number;
+  insuranceDecision: boolean;
 };
 export type PublicPlayer = {
   id: string;
@@ -63,7 +65,7 @@ export type PublicPlayer = {
   connected: boolean;
   ready: boolean;
 };
-export type HistoryBetType = keyof Bet;
+export type HistoryBetType = keyof Bet | "insurance";
 export type HistoryBetResult = "win" | "lose" | "push" | "blackjack" | "none";
 export type HistoryBet = {
   /** Which of the three betting areas produced this line. */
@@ -101,6 +103,7 @@ export type TableState = {
     | "betting"
     | "dealing"
     | "bonuses"
+    | "insurance"
     | "playing"
     | "dealer"
     | "settled";
@@ -124,6 +127,7 @@ export type Command =
   | { type: "ready"; ready: boolean }
   | { type: "hit" | "stand" | "split"; handId: string }
   | { type: "double"; handId: string; reveal?: "now" | "dealer" }
+  | { type: "insurance"; seat: number; take: boolean }
   | { type: "gamble"; color: GambleColor }
   | { type: "cashout" };
 export type Ack =

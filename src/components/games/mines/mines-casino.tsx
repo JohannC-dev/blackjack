@@ -56,6 +56,7 @@ const MINES_LOOP_ROUND_DELAY = 650;
 const MINES_LOOP_STATE_TIMEOUT = 8_000;
 const MINES_LOOP_DEFAULT_COUNT = 10;
 const MINES_LOOP_MAX_COUNT = 100;
+const MINES_RESULT_DISPLAY_MS = 1_900;
 
 const EMPTY_CELLS: MinesCell[] = Array.from({ length: 25 }, (_, index) => ({
   index,
@@ -216,14 +217,14 @@ function MinesControls({
   };
 
   const start = () => {
-    if (!canStart) return;
+    if (!canStart || game.pending) return;
     onStart();
   };
   const actionDisabled = looping
     ? false
     : active
-      ? !state?.revealedCount || game.pending
-      : !canStart || game.pending;
+      ? !state?.revealedCount
+      : !canStart;
   const actionLabel = looping
     ? "Arrêter le pattern"
     : patternMode
@@ -384,7 +385,7 @@ function MinesControls({
 
         <GameActionButton
           variant={looping ? "stop" : active ? "cashout" : "start"}
-          busy={game.pending && !looping}
+          busy={false}
           disabled={actionDisabled}
           icon={
             looping ? (
@@ -613,7 +614,20 @@ export function MinesCasino({
   const [loopRounds, setLoopRounds] = useState(0);
   const [loopCount, setLoopCount] = useState(MINES_LOOP_DEFAULT_COUNT);
   const [loopMessage, setLoopMessage] = useState("");
+  const [showResultCells, setShowResultCells] = useState(false);
   const active = state?.phase === "playing";
+  useEffect(() => {
+    if (!state || state.phase === "idle" || state.phase === "playing") {
+      setShowResultCells(false);
+      return;
+    }
+    setShowResultCells(true);
+    const timer = window.setTimeout(
+      () => setShowResultCells(false),
+      MINES_RESULT_DISPLAY_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [state?.phase, state?.round]);
   const cells = state?.cells ?? EMPTY_CELLS;
   const balance = getClubBalance(game);
   const maxBet = Math.min(MINES_MAX_BET, Math.floor(balance));
@@ -873,7 +887,8 @@ export function MinesCasino({
   }, [active, game.pending, looping, stopLoop]);
 
   const patternEditable = patternMode && !active && !looping && !game.pending;
-  const boardCells = patternEditable ? EMPTY_CELLS : cells;
+  const boardCells =
+    patternEditable || (!active && !showResultCells) ? EMPTY_CELLS : cells;
 
   return (
     <div className="casino-shell mines-shell">
@@ -913,11 +928,7 @@ export function MinesCasino({
                       key={cell.index}
                       cell={cell}
                       active={!!active || patternEditable}
-                      disabled={
-                        patternEditable
-                          ? false
-                          : !active || game.pending || looping
-                      }
+                      disabled={patternEditable ? false : !active || looping}
                       patternEditable={patternEditable}
                       patternPosition={
                         patternMode ? pattern.indexOf(cell.index) : -1

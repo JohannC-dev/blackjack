@@ -26,6 +26,11 @@ const BetSchema = Schema.Struct({
 export const BlackjackCommandSchema = Schema.Union(
   Schema.Struct({ type: Schema.Literal("claim"), seat: Seat }),
   Schema.Struct({ type: Schema.Literal("release"), seat: Seat }),
+  Schema.Struct({
+    type: Schema.Literal("insurance"),
+    seat: Seat,
+    take: Schema.Boolean,
+  }),
   Schema.Struct({ type: Schema.Literal("bet"), seat: Seat, bet: BetSchema }),
   Schema.Struct({ type: Schema.Literal("repeat") }),
   Schema.Struct({

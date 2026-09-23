@@ -28,6 +28,7 @@ import {
   History,
   House,
   Layers2,
+  LogOut,
   LoaderCircle,
   Maximize2,
   Minus,
@@ -116,6 +117,8 @@ const EMPTY_SEATS: Seat[] = Array.from({ length: 5 }, (_, index) => ({
   hands: [],
   sides: { three: null, pairs: null },
   committed: 0,
+  insurance: 0,
+  insuranceDecision: false,
 }));
 const POSITIONS = [
   { x: 12, y: 49 },
@@ -124,7 +127,12 @@ const POSITIONS = [
   { x: 70, y: 66 },
   { x: 88, y: 49 },
 ];
-const labels = { main: "Blackjack", three: "21 + 3", pairs: "Super Pairs" };
+const labels = {
+  main: "Blackjack",
+  three: "21 + 3",
+  pairs: "Super Pairs",
+  insurance: "Assurance",
+};
 const historyResultLabels = {
   win: "Gagné",
   lose: "Perdu",
@@ -401,6 +409,7 @@ type SeatViewProps = {
   selected: boolean;
   onSelect: (seat: Seat) => void;
   onBet: (seat: Seat, type: keyof Bet) => void;
+  onRelease: (seat: Seat) => void;
   chip: number;
   disabled: boolean;
 };
@@ -443,6 +452,8 @@ function sameSeat(left: Seat, right: Seat) {
     left.bet.main === right.bet.main &&
     left.bet.three === right.bet.three &&
     left.bet.pairs === right.bet.pairs &&
+    left.insurance === right.insurance &&
+    left.insuranceDecision === right.insuranceDecision &&
     left.hands.length === right.hands.length &&
     left.hands.every((hand, index) => sameHand(hand, right.hands[index])) &&
     sameSide(left.sides.three, right.sides.three) &&
@@ -475,6 +486,7 @@ function areSeatViewPropsEqual(left: SeatViewProps, right: SeatViewProps) {
     left.selected === right.selected &&
     left.onSelect === right.onSelect &&
     left.onBet === right.onBet &&
+    left.onRelease === right.onRelease &&
     left.chip === right.chip &&
     left.disabled === right.disabled
   );
@@ -490,6 +502,7 @@ const SeatView = memo(function SeatView({
   selected,
   onSelect,
   onBet,
+  onRelease,
   chip,
   disabled,
 }: SeatViewProps) {
@@ -621,41 +634,55 @@ const SeatView = memo(function SeatView({
           <span className="empty-bonus-zone right">PAIRS</span>
         </div>
       ) : null}
-      <button
-        className="seat-name"
-        data-emote-player={owner?.id}
-        onClick={() => onSelect(seat)}
-        disabled={!!owner && !mine}
-        aria-label={
-          owner
-            ? `Main ${seat.index + 1} · ${owner.name}`
-            : `Place ${seat.index + 1} libre`
-        }
-      >
-        {owner ? (
-          <>
-            <span className="avatar tiny">
-              {owner.name.slice(0, 1).toUpperCase()}
-            </span>
-            <span>
-              {owner.name}
-              {mine && (
-                <small>
-                  vous
-                  {playerSeatCount > 1 ? ` · ${seat.index + 1}` : ""}
-                </small>
-              )}
-            </span>
-            {owner.ready && phase === "betting" ? (
-              <Check className="ready-mark" size={13} />
-            ) : !owner.connected ? (
-              <span className="offline-dot" />
-            ) : null}
-          </>
-        ) : (
-          <span className="empty-seat-label">Installez-vous</span>
+      <div className="seat-name-row">
+        <button
+          className="seat-name"
+          data-emote-player={owner?.id}
+          onClick={() => onSelect(seat)}
+          disabled={!!owner && !mine}
+          aria-label={
+            owner
+              ? `Main ${seat.index + 1} · ${owner.name}`
+              : `Place ${seat.index + 1} libre`
+          }
+        >
+          {owner ? (
+            <>
+              <span className="avatar tiny">
+                {owner.name.slice(0, 1).toUpperCase()}
+              </span>
+              <span>
+                {owner.name}
+                {mine && (
+                  <small>
+                    vous
+                    {playerSeatCount > 1 ? ` · ${seat.index + 1}` : ""}
+                  </small>
+                )}
+              </span>
+              {owner.ready && phase === "betting" ? (
+                <Check className="ready-mark" size={13} />
+              ) : !owner.connected ? (
+                <span className="offline-dot" />
+              ) : null}
+            </>
+          ) : (
+            <span className="empty-seat-label">Installez-vous</span>
+          )}
+        </button>
+        {mine && phase === "betting" && (
+          <button
+            type="button"
+            className="seat-release"
+            disabled={disabled}
+            onClick={() => onRelease(seat)}
+            aria-label={`Libérer la place ${seat.index + 1}`}
+            title="Libérer cette place"
+          >
+            <LogOut size={14} />
+          </button>
         )}
-      </button>
+      </div>
       {(seat.sides.three || seat.sides.pairs) && (
         <div className="side-win">
           <Sparkles size={10} />
@@ -1117,6 +1144,10 @@ export function BlackjackCasino({
   );
   const ownSeats = state?.seats.filter((s) => s.playerId === playerId) ?? [];
   const seat = ownSeats.find((s) => s.index === selectedSeat) ?? ownSeats[0];
+  const insuranceSeat =
+    state?.phase === "insurance"
+      ? ownSeats.find((s) => s.hands.length > 0 && !s.insuranceDecision)
+      : undefined;
   const balance =
     game.balance ?? me?.balance ?? profile?.balance ?? INITIAL_CREDIT_BALANCE;
   const chipBalance = game.balance ?? me?.balance ?? profile?.balance ?? 0;
@@ -1385,6 +1416,14 @@ export function BlackjackCasino({
     },
     [command],
   );
+  const releaseSeat = useCallback(
+    (target: Seat) => {
+      void command({ type: "release", seat: target.index }).then((ok) => {
+        if (ok) setBetHistory([]);
+      });
+    },
+    [command],
+  );
   const placeBet = useCallback(
     (target: Seat, type: keyof Bet) => {
       const { playerId, betting, playerReady, disabled, chip, chipBalance } =
@@ -1519,23 +1558,27 @@ export function BlackjackCasino({
   const openRules = useCallback(() => setModal("rules"), []);
   const subtitle = myTurn
     ? "C’est à vous de jouer"
-    : state?.phase === "shuffling"
-      ? "Mélange du sabot"
-      : state?.phase === "dealing"
-        ? "Distribution en cours"
-        : state?.phase === "bonuses"
-          ? "Les paris annexes sont réglés"
-          : state?.phase === "dealer"
-            ? "Au tour du croupier"
-            : state?.phase === "settled"
-              ? ownGamble?.status === "available" && gambleOpen
-                ? "Double ou rien"
-                : ownGamble?.status === "available"
-                  ? "Tentez vos gains"
-                  : "Les jeux sont faits"
-              : me?.ready
-                ? "Vous êtes prêt"
-                : "Faites vos jeux";
+    : state?.phase === "insurance"
+      ? insuranceSeat
+        ? "Choisissez votre assurance"
+        : "Assurances en cours"
+      : state?.phase === "shuffling"
+        ? "Mélange du sabot"
+        : state?.phase === "dealing"
+          ? "Distribution en cours"
+          : state?.phase === "bonuses"
+            ? "Les paris annexes sont réglés"
+            : state?.phase === "dealer"
+              ? "Au tour du croupier"
+              : state?.phase === "settled"
+                ? ownGamble?.status === "available" && gambleOpen
+                  ? "Double ou rien"
+                  : ownGamble?.status === "available"
+                    ? "Tentez vos gains"
+                    : "Les jeux sont faits"
+                : me?.ready
+                  ? "Vous êtes prêt"
+                  : "Faites vos jeux";
 
   return (
     <div
@@ -1689,6 +1732,7 @@ export function BlackjackCasino({
                       selected={s.index === seat?.index}
                       onSelect={selectSeat}
                       onBet={placeBet}
+                      onRelease={releaseSeat}
                       chip={s.playerId === playerId ? chip : 0}
                       disabled={s.playerId === playerId && disabled}
                     />
@@ -1753,7 +1797,7 @@ export function BlackjackCasino({
                   </span>
                 </div>
                 <div
-                  className={`controls-panel ${myTurn ? "controls-active" : ""}`}
+                  className={`controls-panel ${myTurn || insuranceSeat ? "controls-active" : ""}`}
                   aria-label="Actions de jeu"
                 >
                   <div className="controls-heading">
@@ -1761,11 +1805,13 @@ export function BlackjackCasino({
                       <span className="section-kicker">
                         {betting
                           ? "À VOUS DE MISER"
-                          : state?.phase === "shuffling"
-                            ? "MÉLANGE EN COURS"
-                            : myTurn
-                              ? `MAIN ${(activeSeat?.index ?? 0) + 1} · ${activeHand ? score(activeHand.cards).total : ""} POINTS`
-                              : "LA PARTIE CONTINUE"}
+                          : state?.phase === "insurance"
+                            ? "ASSURANCE · AS DU CROUPIER"
+                            : state?.phase === "shuffling"
+                              ? "MÉLANGE EN COURS"
+                              : myTurn
+                                ? `MAIN ${(activeSeat?.index ?? 0) + 1} · ${activeHand ? score(activeHand.cards).total : ""} POINTS`
+                                : "LA PARTIE CONTINUE"}
                       </span>
                       <h2>{subtitle}</h2>
                     </div>
@@ -1890,20 +1936,60 @@ export function BlackjackCasino({
                           className="text-button"
                           disabled={disabled}
                           title="Annuler votre place et retirer ses mises"
-                          onClick={() => {
-                            void command({
-                              type: "release",
-                              seat: seat.index,
-                            }).then((ok) => {
-                              if (ok) setBetHistory([]);
-                            });
-                          }}
+                          onClick={() => releaseSeat(seat)}
                         >
                           Libérer cette place
                         </button>
                       )}
                     </div>
                   )}
+                  <AnimatedMenu
+                    active={!!insuranceSeat}
+                    className="play-actions insurance-actions"
+                  >
+                    {insuranceSeat && (
+                      <>
+                        <button
+                          className="button insurance-decline"
+                          disabled={disabled}
+                          aria-label={`Refuser l’assurance pour la main ${insuranceSeat.index + 1}`}
+                          onClick={() =>
+                            command({
+                              type: "insurance",
+                              seat: insuranceSeat.index,
+                              take: false,
+                            })
+                          }
+                        >
+                          <span>
+                            Refuser<small>Continuer</small>
+                          </span>
+                        </button>
+                        <button
+                          className="button insurance-accept"
+                          disabled={
+                            disabled || balance < insuranceSeat.bet.main / 2
+                          }
+                          aria-label={`Assurer la main ${insuranceSeat.index + 1} pour ${credits(insuranceSeat.bet.main / 2)} crédits. Gain net de ${credits(insuranceSeat.bet.main)} crédits si le croupier a un blackjack`}
+                          onClick={() =>
+                            command({
+                              type: "insurance",
+                              seat: insuranceSeat.index,
+                              take: true,
+                            })
+                          }
+                        >
+                          <ShieldCheck size={20} />
+                          <span>
+                            Assurer
+                            <small>
+                              {credits(insuranceSeat.bet.main / 2)} cr.
+                            </small>
+                          </span>
+                        </button>
+                      </>
+                    )}
+                  </AnimatedMenu>
                   <AnimatedMenu
                     active={!!myTurn && !!activeHand}
                     className="play-actions"
@@ -2033,7 +2119,7 @@ export function BlackjackCasino({
                       </>
                     ) : null}
                   </AnimatedMenu>
-                  {!betting && !(myTurn && activeHand) && (
+                  {!betting && !insuranceSeat && !(myTurn && activeHand) && (
                     <div className="waiting-state">
                       {state?.phase === "settled" ? (
                         <>
@@ -2313,9 +2399,11 @@ export function BlackjackCasino({
             du blackjack. Un gain net peut ensuite être tenté autant de fois que
             vous le souhaitez sur rouge ou noir : chaque bonne carte double le
             montant, une mauvaise carte arrête la série. Vous pouvez encaisser
-            quand vous voulez. Pas d’assurance ni d’abandon. Votre profil est
-            sauvegardé sur cet appareil ; les tables sont conservées en mémoire
-            tant que le serveur fonctionne.
+            quand vous voulez. Si le croupier montre un as, vous pouvez assurer
+            chaque main pour la moitié de sa mise : l’assurance paie 2:1 si le
+            croupier a un blackjack. Pas d’abandon. Votre profil est sauvegardé
+            sur cet appareil ; les tables sont conservées en mémoire tant que le
+            serveur fonctionne.
           </p>
           <button className="button primary" onClick={() => setModal(null)}>
             À la table

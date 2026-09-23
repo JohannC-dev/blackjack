@@ -70,6 +70,7 @@ function validBetChips(chips: BetChips, bet: Bet) {
 const BETTING_COUNTDOWN_MS = 12_000;
 const ALL_READY_COUNTDOWN_MS = 3_000;
 const SETTLED_COUNTDOWN_MS = 7_000;
+const INSURANCE_COUNTDOWN_MS = 12_000;
 const IDLE_SEAT_ROUNDS = 2;
 const BLACKJACK_STAKE_UNIT = 5_000;
 
@@ -134,6 +135,8 @@ export class Table {
         hands: [],
         sides: emptySides(),
         committed: 0,
+        insurance: 0,
+        insuranceDecision: false,
       })),
       dealer: [],
       activeHandId: null,
@@ -267,6 +270,8 @@ export class Table {
     seat.hands = [];
     seat.sides = emptySides();
     seat.committed = 0;
+    seat.insurance = 0;
+    seat.insuranceDecision = false;
     this.idleSeatRounds.delete(seat.index);
   }
   remove(playerId: string) {
@@ -347,6 +352,34 @@ export class Table {
           gamble.status = "lost";
         }
       }
+    } else if (command.type === "insurance") {
+      if (this.state.phase !== "insurance")
+        throw new Error("L’assurance n’est plus disponible.");
+      const seat = this.state.seats[command.seat];
+      if (!seat || seat.playerId !== playerId || !seat.hands.length)
+        throw new Error("Cette place ne vous appartient pas.");
+      if (seat.insuranceDecision)
+        throw new Error("L’assurance a déjà été choisie pour cette place.");
+      if (typeof command.take !== "boolean") throw new Error("Choix invalide.");
+      if (command.take) {
+        const amount = seat.bet.main / 2;
+        if (this.wallet.balance(player) < amount)
+          throw new Error("Solde insuffisant pour l’assurance.");
+        this.wallet.debit(player, {
+          operationId: `blackjack:${this.state.id}:${this.state.round}:${seat.index}:insurance`,
+          game: "blackjack",
+          kind: "additional-wager",
+          reason: "insurance",
+          referenceId: `${this.state.id}:${this.state.round}`,
+          amount,
+          metadata: { seat: seat.index },
+        });
+        seat.insurance = amount;
+        seat.committed += amount;
+      }
+      seat.insuranceDecision = true;
+      if (this.state.seats.every((s) => !s.hands.length || s.insuranceDecision))
+        this.advance();
     } else if (
       ["claim", "release", "bet", "repeat", "ready"].includes(command.type)
     ) {
@@ -671,6 +704,8 @@ export class Table {
       seat.previousBet = { ...seat.bet };
       seat.previousChips = copyBetChips(seat.chips);
       seat.committed = betTotal(seat.bet);
+      seat.insurance = 0;
+      seat.insuranceDecision = false;
       seat.hands = [
         {
           id: randomUUID(),
@@ -727,7 +762,18 @@ export class Table {
       this.state.message =
         "Les paris annexes sont réglés. Les gains sont versés.";
       this.nextStep = Date.now() + 3200;
-    } else this.advance();
+    } else this.startInsuranceOrAdvance();
+  }
+  private startInsuranceOrAdvance() {
+    if (this.state.dealer[0]?.rank !== 1) {
+      this.advance();
+      return;
+    }
+    this.state.phase = "insurance";
+    this.state.activeHandId = null;
+    this.state.deadline = Date.now() + INSURANCE_COUNTDOWN_MS;
+    this.state.message =
+      "As visible : choisissez votre assurance avant de jouer.";
   }
   private advance() {
     const hands = this.state.seats.flatMap((s) => s.hands);
@@ -805,6 +851,18 @@ export class Table {
           result: bet === 0 ? "none" : side ? "win" : "lose",
           ...(side?.label ? { label: side.label } : {}),
         });
+      }
+      if (seat.insurance > 0) {
+        const payout = dealerBJ ? seat.insurance * 3 : 0;
+        bets.push({
+          type: "insurance",
+          seat: seat.index,
+          bet: seat.insurance,
+          payout,
+          net: payout - seat.insurance,
+          result: dealerBJ ? "win" : "lose",
+        });
+        mainPayout += payout;
       }
       historyBets.set(seat.playerId!, bets);
       if (mainPayout > 0)
@@ -918,6 +976,13 @@ export class Table {
       else this.nextStep = now + 320;
       changed = true;
     } else if (this.state.phase === "bonuses" && now >= this.nextStep) {
+      this.startInsuranceOrAdvance();
+      changed = true;
+    } else if (
+      this.state.phase === "insurance" &&
+      this.state.deadline &&
+      now >= this.state.deadline
+    ) {
       this.advance();
       changed = true;
     } else if (
@@ -951,6 +1016,8 @@ export class Table {
         seat.hands = [];
         seat.sides = emptySides();
         seat.committed = 0;
+        seat.insurance = 0;
+        seat.insuranceDecision = false;
       }
       if (this.shoe.length < 160) {
         this.startShuffle(now);

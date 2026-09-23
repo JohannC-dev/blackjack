@@ -9245,7 +9245,6 @@ h1 > span:not(.live-tag) {
     0 5px 0 #10221f,
     0 9px 25px #8ee8c41e,
     inset 0 1px #d0fff32e;
-  animation: mines-reveal-diamond 420ms var(--ease) both;
 }
 .mine-cell.diamond::before {
   border-color: #8ee8c438;
@@ -9258,7 +9257,6 @@ h1 > span:not(.live-tag) {
     0 5px 0 #1e1118,
     0 9px 25px #dc74771c,
     inset 0 1px #ffd3d32e;
-  animation: mines-reveal-mine 400ms var(--ease) both;
 }
 .mine-cell.mine::before {
   border-color: #dc74773b;
@@ -11554,6 +11552,110 @@ h1 > span:not(.live-tag) {
   flex: none;
   width: 38px;
   height: 38px;
+}
+
+/* Keep revealed mine tiles steady and leave the payout legible while a request is pending. */
+.mines-shell .mine-cell.diamond,
+.mines-shell .mine-cell.mine,
+.mines-shell .game-action-cashout:not(:disabled) {
+  animation: none;
+}
+.mines-shell .mine-cell:disabled {
+  opacity: 1;
+}
+.mines-shell .game-controls-bar {
+  grid-template-columns:
+    minmax(210px, 270px) minmax(240px, 1fr) minmax(235px, 275px)
+    135px;
+  gap: 12px;
+  padding: 10px 14px;
+}
+.mines-shell .mines-difficulty-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 10px;
+}
+.mines-shell .mines-difficulty-control .game-control-label {
+  align-self: center;
+}
+.mines-shell .mines-difficulty-summary {
+  min-height: 0;
+}
+.mines-shell .mines-difficulty-slider,
+.mines-shell .mines-difficulty-scale {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+.mines-shell .mines-difficulty-hint {
+  display: none;
+}
+.mines-shell .game-controls-bar .game-action {
+  min-width: 235px;
+  padding-inline: 16px;
+}
+.mines-shell .game-action b,
+.mines-shell .game-action small {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+.mines-shell .game-action:disabled {
+  opacity: 0.78;
+}
+
+/* The decision panel uses the same compact spacing as the table. */
+.table-panel .controls-panel {
+  min-height: 0;
+  padding: 12px 16px 9px;
+}
+.table-panel .controls-heading {
+  margin-bottom: 8px;
+}
+.table-panel .play-actions {
+  margin: 8px 0 5px;
+}
+.table-panel .bet-confirm {
+  padding-bottom: 4px;
+}
+.table-panel .deal-button {
+  min-width: 175px;
+  min-height: 48px;
+  white-space: nowrap;
+}
+.seat-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  margin-top: 5px;
+}
+.seat-name-row .seat-name,
+.seat-name-row .seat-release {
+  margin-top: 0;
+}
+.seat-release {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid #b995cf55;
+  border-radius: 50%;
+  background: #24172dc9;
+  color: #dcc4ed;
+  cursor: pointer;
+}
+.seat-release:hover:not(:disabled),
+.seat-release:focus-visible {
+  background: #7d4f99;
+  color: white;
+}
+.seat-release:disabled {
+  opacity: 0.5;
+}
+@media (max-width: 820px) {
+  .mines-shell .game-controls-bar .game-action {
+    min-width: 0;
+  }
 }
 
 .mines-message-icon .mines-poster-gem {

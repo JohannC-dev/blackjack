@@ -3,6 +3,7 @@
 import { Check, CircleDot, Repeat2, RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
+import { playRouletteSpin } from "@/lib/roulette-audio";
 import { useGameAudio } from "@/lib/audio-context";
 import { CASINO_CHIP_DENOMINATIONS, mergeChipCounts } from "@/lib/chips";
 import {
@@ -86,9 +87,9 @@ export function RouletteCasino({
     const previous = previousPhase.current;
     previousPhase.current = phase;
     if (previous === phase) return;
-    if (phase === "spinning") play("chips");
+    if (phase === "spinning" && soundRef.current && audioRef.current)
+      playRouletteSpin(audioRef.current);
     if (phase === "settled") {
-      play("knock");
       if ((myResult?.payout ?? 0) > 0) {
         const timer = window.setTimeout(
           () => play("chips", 2),

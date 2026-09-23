@@ -49,7 +49,11 @@ function tableWith(draws: Card[], players = [player()]) {
   });
   return { table, p: players[0], players };
 }
-function begin(table: Table, players: Player[]) {
+function begin(
+  table: Table,
+  players: Player[],
+  insurance: "decline" | "manual" = "decline",
+) {
   players.forEach((p) => table.command(p.id, { type: "ready", ready: true }));
   table.startRound();
   let now = Date.now() + 1000;
@@ -58,6 +62,14 @@ function begin(table: Table, players: Player[]) {
     now += 1000;
   }
   if (table.state.phase === "bonuses") table.tick(now + 4000);
+  if (table.state.phase === "insurance" && insurance === "decline") {
+    for (const seat of table.state.seats.filter((seat) => seat.hands.length))
+      table.command(seat.playerId!, {
+        type: "insurance",
+        seat: seat.index,
+        take: false,
+      });
+  }
 }
 function settle(table: Table) {
   let now = Date.now() + 100_000;
@@ -147,6 +159,67 @@ describe("Cards and requested side-bet paytables", () => {
 });
 
 describe("European blackjack and credit accounting", () => {
+  test("offers insurance on a dealer ace before actions and pays 2:1 on dealer blackjack", () => {
+    const { table, p } = tableWith([card(9), card(1), card(8), card(10)]);
+    begin(table, [p], "manual");
+    expect(table.state.phase).toBe("insurance");
+    expect(table.state.activeHandId).toBeNull();
+    expect(() =>
+      table.command(p.id, { type: "stand", handId: ownHand(table, p).id }),
+    ).toThrow();
+    table.command(p.id, { type: "insurance", seat: 2, take: true });
+    expect(table.state.phase).toBe("playing");
+    expect(p.balance).toBe(1962.5);
+    expect(() =>
+      table.command(p.id, { type: "insurance", seat: 2, take: true }),
+    ).toThrow();
+    table.command(p.id, { type: "stand", handId: ownHand(table, p).id });
+    settle(table);
+    expect(p.balance).toBe(2000);
+    expect(
+      table.state.history[0].bets.find((bet) => bet.type === "insurance"),
+    ).toMatchObject({
+      bet: 12.5,
+      payout: 37.5,
+      net: 25,
+      result: "win",
+    });
+  });
+  test("insurance expires before the first decision and a losing policy stays lost", () => {
+    const { table, p } = tableWith([card(9), card(1), card(8), card(7)]);
+    begin(table, [p], "manual");
+    const deadline = table.state.deadline!;
+    table.tick(deadline);
+    expect(table.state.phase).toBe("playing");
+    expect(ownHand(table, p).id).toBe(table.state.activeHandId!);
+    table.command(p.id, { type: "stand", handId: ownHand(table, p).id });
+    settle(table);
+    expect(
+      table.state.history[0].bets.some((bet) => bet.type === "insurance"),
+    ).toBe(false);
+
+    const insured = tableWith([card(9), card(1), card(8), card(7)]);
+    begin(insured.table, [insured.p], "manual");
+    insured.table.command(insured.p.id, {
+      type: "insurance",
+      seat: 2,
+      take: true,
+    });
+    insured.table.command(insured.p.id, {
+      type: "stand",
+      handId: ownHand(insured.table, insured.p).id,
+    });
+    settle(insured.table);
+    expect(
+      insured.table.state.history[0].bets.find(
+        (bet) => bet.type === "insurance",
+      ),
+    ).toMatchObject({
+      payout: 0,
+      net: -12.5,
+      result: "lose",
+    });
+  });
   test("winnings remain optional across rounds without a streak cap", () => {
     const { table, p } = tableWith([card(10), card(7), card(8), card(10)]);
     begin(table, [p]);
