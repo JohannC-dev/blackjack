@@ -7,6 +7,17 @@ export const TOWER_FLOORS = 10;
  * floor multipliers return.
  */
 export const TOWER_LUCKY_SHARE = 0.03;
+/**
+ * Fixed multiplier paid by a Lucky Tower, on top of the player's pot. Doubled
+ * on Impossible, where the floors the golden card hides on already pay more
+ * than ×10 on their own.
+ */
+export const TOWER_LUCKY_MULTIPLIER: Record<TowerDifficulty, number> = {
+  easy: 10,
+  normal: 10,
+  hard: 10,
+  impossible: 20,
+};
 export const TOWER_MIN_BET = CASINO_CHIP_DENOMINATIONS[0];
 export const TOWER_MAX_BET = CASINO_MAX_BET;
 export const TOWER_BET_STEP = CASINO_CHIP_DENOMINATIONS[0];
@@ -78,6 +89,11 @@ export function towerPayout(
 /** The part of a Lucky pot that can be paid out, in half credits. */
 export function towerLuckyPayout(pot: number) {
   return halfCredit(pot);
+}
+
+/** What a Lucky Tower pays by itself, the pot aside. */
+export function towerLuckyBase(bet: number, difficulty: TowerDifficulty) {
+  return halfCredit(bet * TOWER_LUCKY_MULTIPLIER[difficulty]);
 }
 
 /** Fire intensity from 0 (cold) to 1 (full blaze). */

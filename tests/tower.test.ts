@@ -10,6 +10,7 @@ import {
   TOWER_GOLD_FIRST_FLOOR,
   TOWER_GOLD_LAST_FLOOR,
   TOWER_LUCKY_SHARE,
+  towerLuckyBase,
   towerMultipliers,
   towerPayout,
 } from "../src/lib/tower";
@@ -294,7 +295,7 @@ describe("Lucky Tower", () => {
     expect(manager.state(other).luckyPot).toBe(15);
   });
 
-  test("the golden card cashes the floor and pays the pot, the rest is only a show", () => {
+  test("the golden card pays ×10 the wager plus the pot, the rest is only a show", () => {
     const { manager, sent, climber, lastIn } = setup({
       gold: true,
       trapColumn: 0,
@@ -320,8 +321,8 @@ describe("Lucky Tower", () => {
     expect(run.lucky).toBe(true);
     expect(run.status).toBe("cashed");
     expect(run.floor).toBe(3);
-    expect(run.payout).toBe(towerPayout(10, "easy", 3) + 300);
-    expect(me.balance).toBe(before + 17 + 300);
+    expect(run.payout).toBe(towerLuckyBase(10, "easy") + 300);
+    expect(me.balance).toBe(before + 100 + 300);
     expect(sent.at(-1)!.luckyPot).toBe(0);
     expect(run.rows[2].cells).toEqual(["trap", "gold", "safe", "safe", "safe"]);
     expect(run.rows[5].cells).toEqual(Array(5).fill("gold"));

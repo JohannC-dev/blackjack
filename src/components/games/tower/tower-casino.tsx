@@ -27,6 +27,7 @@ import {
   TOWER_FLOORS,
   TOWER_GOLD_FIRST_FLOOR,
   TOWER_GOLD_LAST_FLOOR,
+  TOWER_LUCKY_MULTIPLIER,
   TOWER_LUCKY_SHARE,
   TOWER_MAX_BET,
   TOWER_MIN_BET,
@@ -485,7 +486,9 @@ export function TowerCasino({
               aria-hidden="true"
             />
             <div className={styles.shock} ref={shockRef} aria-hidden="true" />
-            {luckyIntro && <LuckyBanner />}
+            {luckyIntro && shownRun && (
+              <LuckyBanner difficulty={shownRun.difficulty} />
+            )}
             {shownRun &&
               shownRun.status !== "playing" &&
               phase !== "idle" &&
@@ -903,13 +906,16 @@ function LuckyBadge({ hot, pot }: { hot: boolean; pot: number }) {
   );
 }
 
-function LuckyBanner() {
+function LuckyBanner({ difficulty }: { difficulty: TowerDifficulty }) {
   return (
     <div className={styles.luckyBanner} role="status">
       <div className={styles.luckyRays} aria-hidden="true" />
       <Sparkles size={22} />
       <strong>LUCKY TOWER</strong>
-      <span>Carte dorée · votre cagnotte Lucky est à vous</span>
+      <span>
+        Carte dorée · mise × {TOWER_LUCKY_MULTIPLIER[difficulty]} + votre
+        cagnotte Lucky
+      </span>
     </div>
   );
 }
@@ -985,8 +991,9 @@ function TowerRules({ onClose }: { onClose: () => void }) {
           Certaines ascensions cachent une <b>carte dorée</b>, jamais à la place
           du piège, entre les lignes {TOWER_GOLD_FIRST_FLOOR} et{" "}
           {TOWER_GOLD_LAST_FLOOR}. La retourner déclenche la <b>Lucky Tower</b>{" "}
-          : l’étage atteint est encaissé et votre cagnotte Lucky vous est
-          versée. Chacune de vos mises y ajoute{" "}
+          : elle paie une prime fixe de mise × {TOWER_LUCKY_MULTIPLIER.easy} (×
+          {TOWER_LUCKY_MULTIPLIER.impossible} en Impossible), plus votre
+          cagnotte Lucky. Chacune de vos mises y ajoute{" "}
           {Math.round(TOWER_LUCKY_SHARE * 100)} %.
         </li>
         <li>
