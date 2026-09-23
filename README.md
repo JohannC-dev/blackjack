@@ -1,6 +1,6 @@
 # MINUIT · Casino multijoueur
 
-Blackjack européen, Texas Hold’em, La Tower, Mines et Roulette, multijoueurs en crédits fictifs. Next.js **16.3.5**, React, TypeScript, **Bun**, Socket.IO, Effect TS, Drizzle et PostgreSQL 18.
+Blackjack européen, Texas Hold’em, La Tower, Mines, Roulette et Chicken, multijoueurs en crédits fictifs. Next.js **16.3.5**, React, TypeScript, **Bun**, Socket.IO, Effect TS, Drizzle et PostgreSQL 18.
 
 ## Lancer le jeu
 
@@ -59,6 +59,14 @@ Sur le même réseau, les amis ouvrent `http://ADRESSE_IP_DU_SERVEUR:3000/?table
 - Sons synthétisés en direct (Web Audio) : note montante à chaque étage, roulements de tambour près du sommet, effondrement, sonnerie de jackpot. Les voix « Lucky! » et « JACKPOT! » (`public/audio/tower/`) ont été générées avec la synthèse vocale de Windows ; les remplacer par de vrais enregistrements si besoin.
 - Les joueurs sont répartis en **salles de 10** (rooms Socket.IO) : on ne voit, et on ne reçoit les mises à jour, que des grimpeurs de sa salle. Quitter la Tower règle l’ascension immédiatement : gains acquis encaissés, mise rendue avant le premier étage. Après une coupure réseau, l’ascension reste reprenable 10 minutes puis est réglée de la même façon.
 - Le solde partagé entre les jeux n’est transmis que par l’événement serveur `wallet` (numéroté), jamais par les snapshots de jeu. Une mise Blackjack confirmée mais dépensée ailleurs avant la donne fait sortir le joueur de la manche au lieu de rendre son solde négatif.
+
+### Chicken
+
+- Quatre difficultés, **Facile**, **Moyen**, **Difficile** et **Expert**, avec respectivement 19, 17, 15 et 10 sauts possibles. Les multiplicateurs suivent la table publiée pour Chicken de Stake Originals. Le serveur mélange 20 positions à chaque partie et y place respectivement 1, 3, 5 ou 10 dangers ; ces nombres sont déduits de la table et donnent 98 % de retour théorique avant les arrondis.
+- Mise de **5 000 à 50 millions** de crédits. Un tap sur la route ou le bouton **Avancer** tente le prochain saut. Après un saut sûr, encaisser paie `mise × multiplicateur` ; une case fatale perd la mise. La dernière case sûre encaisse automatiquement.
+- Mode manuel et mode auto avec nombre de sauts et de parties, limites de gain et perte nets, et variation de la mise après gain ou perte. Le mode auto cesse de lancer de nouvelles mises dès que le joueur quitte Chicken ou se déconnecte.
+- Les salons publics et privés accueillent jusqu’à **10 joueurs**. Les parties restent indépendantes : les joueurs du même salon ne voient en direct que le pseudo et la position des poulets en cours de partie, atténués sur la route. Un salon privé ne se rejoint que par une invitation d’ami, et chaque membre peut inviter.
+- Quitter la vue encaisse les sauts réussis ou rembourse avant le premier saut. Après une coupure, la partie reste reprenable pendant 10 minutes puis est réglée de la même façon. Les parties restent en mémoire du processus serveur, comme celles de la Tower.
 
 ### Blackjack européen
 

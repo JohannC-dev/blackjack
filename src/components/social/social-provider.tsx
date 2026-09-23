@@ -235,6 +235,13 @@ export function SocialProvider({
   }, [gameInvites.length]);
 
   const inviteContext = useMemo((): InviteContext => {
+    if (view === "chicken")
+      return {
+        game: "chicken",
+        tableId: game.chickenState?.roomId ?? null,
+        isPrivate: game.chickenState?.visibility === "private",
+        canBePrivate: true,
+      };
     if (view === "roulette")
       return {
         game: "roulette",
@@ -259,6 +266,8 @@ export function SocialProvider({
     };
   }, [
     game.rouletteState?.id,
+    game.chickenState?.roomId,
+    game.chickenState?.visibility,
     game.state?.id,
     game.state?.visibility,
     privateRouletteId,
@@ -288,7 +297,7 @@ export function SocialProvider({
         let { tableId } = inviteContext;
         const { game: target } = inviteContext;
         if (
-          privateInvite &&
+          (privateInvite || target === "chicken") &&
           inviteContext.canBePrivate &&
           !inviteContext.isPrivate
         ) {
@@ -298,6 +307,8 @@ export function SocialProvider({
               return false;
             }
             tableId = await current.createPrivateTable();
+          } else if (target === "chicken") {
+            tableId = await current.createPrivateChickenRoom();
           } else {
             const code = randomTableCode();
             tableId = (await current.joinRouletteTable(code)) ? code : null;
@@ -308,7 +319,12 @@ export function SocialProvider({
             return false;
           }
         }
-        if ((target === "blackjack" || target === "roulette") && !tableId) {
+        if (
+          (target === "blackjack" ||
+            target === "roulette" ||
+            target === "chicken") &&
+          !tableId
+        ) {
           toast.error("Votre table est en cours de connexion, réessayez.");
           return false;
         }
@@ -380,6 +396,11 @@ export function SocialProvider({
         if (invite.private) setPrivateRouletteId(invite.tableId);
         if (!(await current.joinRouletteTable(invite.tableId))) {
           toast.error("Impossible de rejoindre cette table.");
+          return;
+        }
+      } else if (invite.game === "chicken" && invite.tableId) {
+        if (!(await current.joinChickenRoom(invite.tableId))) {
+          toast.error("Impossible de rejoindre ce salon Chicken.");
           return;
         }
       }

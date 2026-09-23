@@ -177,12 +177,13 @@ function FriendCodeCard({ code }: { code: string | null }) {
 function InviteSettings() {
   const social = useSocial();
   const context = social.inviteContext;
+  const requiredPrivate = context.game === "chicken";
   const game = INVITE_GAME_LABELS[context.game];
   const destination = !context.canBePrivate
     ? `${game} · votre ami rejoindra le jeu`
     : context.isPrivate
       ? `${game} · votre table privée`
-      : social.privateInvite
+      : requiredPrivate || social.privateInvite
         ? `${game} · une nouvelle table privée`
         : `${game} · votre table`;
   return (
@@ -203,9 +204,13 @@ function InviteSettings() {
         <Switch
           id="private-invite"
           checked={
-            context.isPrivate || (context.canBePrivate && social.privateInvite)
+            requiredPrivate ||
+            context.isPrivate ||
+            (context.canBePrivate && social.privateInvite)
           }
-          disabled={!context.canBePrivate || context.isPrivate}
+          disabled={
+            !context.canBePrivate || context.isPrivate || requiredPrivate
+          }
           onCheckedChange={social.setPrivateInvite}
         />
       </div>

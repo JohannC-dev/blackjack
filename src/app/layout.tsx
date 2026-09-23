@@ -13,9 +13,9 @@ import "../styles/table-center.css";
 import { VersionNotice } from "@/components/version-notice";
 
 export const metadata: Metadata = {
-  title: "MINUIT — Le blackjack, entre amis.",
+  title: "MINUIT — Le casino entre amis.",
   description:
-    "Une table, vos amis et la nuit devant vous. Blackjack européen multijoueur avec 21+3 et Super Pairs. Crédits fictifs, plaisir réel.",
+    "Six jeux, vos amis et la nuit devant vous. Blackjack, poker, roulette, Tower, Mine et Chicken en crédits fictifs.",
 };
 export const viewport: Viewport = {
   width: "device-width",

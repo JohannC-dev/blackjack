@@ -25,7 +25,14 @@ const UserId = Schema.String.pipe(Schema.minLength(1), Schema.maxLength(64));
 
 export const FriendInviteSchema = Schema.Struct({
   friendId: UserId,
-  game: Schema.Literal("blackjack", "roulette", "poker", "tower", "mines"),
+  game: Schema.Literal(
+    "blackjack",
+    "roulette",
+    "poker",
+    "tower",
+    "mines",
+    "chicken",
+  ),
   tableId: Schema.optional(Schema.Union(TableId, Schema.Null)),
 });
 
@@ -122,6 +129,46 @@ export const TowerCommandSchema = Schema.Union(
     column: Schema.Int.pipe(Schema.between(0, 4)),
   }),
   Schema.Struct({ type: Schema.Literal("cashout") }),
+);
+
+const ChickenDifficulty = Schema.Union(
+  Schema.Literal("easy"),
+  Schema.Literal("medium"),
+  Schema.Literal("hard"),
+  Schema.Literal("expert"),
+);
+const ChickenBet = Schema.Int.pipe(Schema.between(5_000, 50_000_000));
+const AutoPercent = Schema.Number.pipe(
+  Schema.finite(),
+  Schema.between(-100, 500),
+);
+export const ChickenJoinSchema = Schema.Struct({
+  roomId: Schema.optional(Schema.Union(TableId, Schema.Null)),
+  createPrivate: Schema.optional(Schema.Literal(true)),
+  joinPublic: Schema.optional(Schema.Literal(true)),
+});
+export const ChickenCommandSchema = Schema.Union(
+  Schema.Struct({
+    type: Schema.Literal("start"),
+    difficulty: ChickenDifficulty,
+    bet: ChickenBet,
+  }),
+  Schema.Struct({ type: Schema.Literal("advance") }),
+  Schema.Struct({ type: Schema.Literal("cashout") }),
+  Schema.Struct({ type: Schema.Literal("auto:stop") }),
+  Schema.Struct({
+    type: Schema.Literal("auto:start"),
+    config: Schema.Struct({
+      bet: ChickenBet,
+      difficulty: ChickenDifficulty,
+      steps: Schema.Int.pipe(Schema.between(1, 19)),
+      rounds: Schema.Int.pipe(Schema.between(1, 1000)),
+      stopProfit: NonNegativeNumber,
+      stopLoss: NonNegativeNumber,
+      onWinPercent: AutoPercent,
+      onLossPercent: AutoPercent,
+    }),
+  }),
 );
 
 export const MinesCommandSchema = Schema.Union(

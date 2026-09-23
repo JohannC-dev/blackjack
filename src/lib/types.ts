@@ -357,3 +357,47 @@ export type TowerCommand =
   | { type: "start"; difficulty: TowerDifficulty; bet: number }
   | { type: "pick"; column: number }
   | { type: "cashout" };
+
+export type ChickenDifficulty = "easy" | "medium" | "hard" | "expert";
+export type ChickenStatus = "playing" | "lost" | "cashed" | "finished";
+export type ChickenRun = {
+  id: string;
+  difficulty: ChickenDifficulty;
+  bet: number;
+  step: number;
+  status: ChickenStatus;
+  payout: number;
+  startedAt: number;
+};
+export type ChickenGhost = { playerId: string; name: string; step: number };
+export type ChickenAutoConfig = {
+  bet: number;
+  difficulty: ChickenDifficulty;
+  steps: number;
+  rounds: number;
+  stopProfit: number;
+  stopLoss: number;
+  onWinPercent: number;
+  onLossPercent: number;
+};
+export type ChickenAutoState = ChickenAutoConfig & {
+  played: number;
+  net: number;
+  nextBet: number;
+};
+export type ChickenPublicState = {
+  roomId: string;
+  visibility: RoomVisibility;
+  members: number;
+  ghosts: ChickenGhost[];
+};
+export type ChickenClientState = ChickenPublicState & {
+  run: ChickenRun | null;
+  auto: ChickenAutoState | null;
+};
+export type ChickenCommand =
+  | { type: "start"; difficulty: ChickenDifficulty; bet: number }
+  | { type: "advance" }
+  | { type: "cashout" }
+  | { type: "auto:start"; config: ChickenAutoConfig }
+  | { type: "auto:stop" };

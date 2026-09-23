@@ -9508,6 +9508,46 @@ h1 > span:not(.live-tag) {
 .mines-poster {
   background: #111210;
 }
+.chicken-poster {
+  background: #17131b;
+}
+.chicken-poster:hover {
+  border-color: #e5b97880;
+}
+.chicken-poster-art {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 72% 25%, #e2ba7550, transparent 22%),
+    linear-gradient(#30233d 0 52%, #454049 52% 100%);
+}
+.chicken-poster-road {
+  position: absolute;
+  inset: 62% 0 0;
+  background: repeating-linear-gradient(
+    90deg,
+    #39353e 0 44px,
+    #e8d3a44d 45px 49px,
+    #39353e 50px 100px
+  );
+  transform: skewY(-8deg);
+}
+.chicken-poster-art svg {
+  position: relative;
+  z-index: 1;
+  width: 128px;
+  height: 128px;
+  filter: drop-shadow(0 13px 14px #0009);
+  transform: rotate(-9deg);
+}
+.chicken-poster:hover .chicken-poster-art svg {
+  transform: translateY(-9px) rotate(-4deg);
+  transition: transform 0.25s;
+}
+.chicken-poster .poster-copy > span,
+.chicken-poster .poster-copy strong {
+  color: #e5b978;
+}
 .mines-poster:hover {
   border-color: #b79afa70;
 }
@@ -11710,6 +11750,8 @@ h1 > span:not(.live-tag) {
 .welcome-error {
   margin-top: 12px;
   color: #f1a4b1;
-  font: 500 11px "DM Sans", sans-serif;
+  font:
+    500 11px "DM Sans",
+    sans-serif;
   line-height: 1.5;
 }
