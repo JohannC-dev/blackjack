@@ -10,10 +10,12 @@ import {
 } from "react";
 import {
   ArrowRight,
+  ChevronDown,
   CircleHelp,
   LockKeyhole,
   Play,
   RotateCcw,
+  Repeat2,
   Square,
   Users,
   Wallet,
@@ -75,6 +77,8 @@ export function ChickenCasino({
   const [difficulty, setDifficulty] = useState<ChickenDifficulty>("medium");
   const [bet, setBet] = useState<number>(CHICKEN_MIN_BET);
   const [mode, setMode] = useState<"manual" | "auto">("manual");
+  const [autoOpen, setAutoOpen] = useState(false);
+  const autoControlRef = useRef<HTMLDivElement>(null);
   const [steps, setSteps] = useState(3);
   const [rounds, setRounds] = useState(10);
   const [stopProfit, setStopProfit] = useState(0);
@@ -139,6 +143,26 @@ export function ChickenCasino({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!autoOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (
+        autoControlRef.current &&
+        !autoControlRef.current.contains(event.target as Node)
+      )
+        setAutoOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAutoOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [autoOpen]);
 
   useLayoutEffect(() => {
     if (!sceneCurrent) {
@@ -544,93 +568,7 @@ export function ChickenCasino({
             </div>
           </section>
 
-          {mode === "auto" && (
-            <section
-              className={styles.autoSettings}
-              aria-label="Réglages automatiques"
-            >
-              <AutoField
-                label="Sauts par partie"
-                value={steps}
-                min={1}
-                max={CHICKEN_MULTIPLIERS[difficulty].length}
-                disabled={active || autoRunning}
-                onChange={setSteps}
-              />
-              <AutoField
-                label="Parties"
-                value={rounds}
-                min={1}
-                max={1000}
-                disabled={active || autoRunning}
-                onChange={setRounds}
-              />
-              <AutoField
-                label="Arrêt gain net"
-                value={stopProfit}
-                min={0}
-                disabled={active || autoRunning}
-                onChange={setStopProfit}
-              />
-              <AutoField
-                label="Arrêt perte nette"
-                value={stopLoss}
-                min={0}
-                disabled={active || autoRunning}
-                onChange={setStopLoss}
-              />
-              <AutoField
-                label="Après gain %"
-                value={onWinPercent}
-                min={-100}
-                max={500}
-                disabled={active || autoRunning}
-                onChange={setOnWinPercent}
-              />
-              <AutoField
-                label="Après perte %"
-                value={onLossPercent}
-                min={-100}
-                max={500}
-                disabled={active || autoRunning}
-                onChange={setOnLossPercent}
-              />
-              {autoRunning && (
-                <p>
-                  {state?.auto?.played ?? 0}/{state?.auto?.rounds ?? rounds}{" "}
-                  parties · bilan {money(state?.auto?.net ?? 0)}
-                </p>
-              )}
-            </section>
-          )}
-
           <GameControlsBar ariaLabel="Réglages de la partie">
-            <GameControlGroup label="Mode">
-              <div
-                className="game-options"
-                role="radiogroup"
-                aria-label="Mode de jeu"
-              >
-                <GameOption
-                  selected={mode === "manual"}
-                  disabled={active || autoRunning}
-                  compact
-                  onClick={() => setMode("manual")}
-                >
-                  <b>Manuel</b>
-                  <small>Un saut à la fois</small>
-                </GameOption>
-                <GameOption
-                  selected={mode === "auto"}
-                  disabled={active || autoRunning}
-                  compact
-                  onClick={() => setMode("auto")}
-                >
-                  <b>Auto</b>
-                  <small>Série réglable</small>
-                </GameOption>
-              </div>
-            </GameControlGroup>
             <GameControlGroup label="Difficulté">
               <div
                 className="game-options is-compact"
@@ -715,6 +653,139 @@ export function ChickenCasino({
                 onClick={start}
               />
             )}
+            <div
+              ref={autoControlRef}
+              className={`${styles.autoControl} ${autoOpen ? styles.autoOpen : ""} ${mode === "auto" || autoRunning ? styles.autoSelected : ""}`}
+            >
+              <button
+                type="button"
+                className={styles.autoTrigger}
+                aria-haspopup="dialog"
+                aria-expanded={autoOpen}
+                aria-controls="chicken-auto-popover"
+                onClick={() => setAutoOpen((current) => !current)}
+              >
+                <span className={styles.autoTriggerIcon} aria-hidden="true">
+                  {autoRunning ? (
+                    <Square size={14} fill="currentColor" />
+                  ) : (
+                    <Repeat2 size={15} />
+                  )}
+                </span>
+                <span className={styles.autoTriggerCopy}>
+                  <b>Auto</b>
+                  <small>
+                    {autoRunning
+                      ? "En cours"
+                      : mode === "auto"
+                        ? "Activé"
+                        : "À configurer"}
+                  </small>
+                </span>
+                <ChevronDown
+                  size={14}
+                  className={styles.autoTriggerChevron}
+                  aria-hidden="true"
+                />
+              </button>
+              {autoOpen && (
+                <section
+                  id="chicken-auto-popover"
+                  className={styles.autoPopover}
+                  role="dialog"
+                  aria-label="Réglages du mode automatique"
+                >
+                  <div className={styles.autoPopoverHeading}>
+                    <div>
+                      <span className={styles.autoKicker}>
+                        MODE AUTOMATIQUE
+                      </span>
+                      <strong>Régler la série</strong>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.autoClose}
+                      aria-label="Fermer les réglages automatiques"
+                      onClick={() => setAutoOpen(false)}
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                  <p className={styles.autoIntro}>
+                    Choisissez le nombre de sauts et les limites de la série.
+                  </p>
+                  <div className={styles.autoSettings}>
+                    <AutoField
+                      label="Sauts par partie"
+                      value={steps}
+                      min={1}
+                      max={CHICKEN_MULTIPLIERS[difficulty].length}
+                      disabled={active || autoRunning}
+                      onChange={setSteps}
+                    />
+                    <AutoField
+                      label="Parties"
+                      value={rounds}
+                      min={1}
+                      max={1000}
+                      disabled={active || autoRunning}
+                      onChange={setRounds}
+                    />
+                    <AutoField
+                      label="Arrêt gain net"
+                      value={stopProfit}
+                      min={0}
+                      disabled={active || autoRunning}
+                      onChange={setStopProfit}
+                    />
+                    <AutoField
+                      label="Arrêt perte nette"
+                      value={stopLoss}
+                      min={0}
+                      disabled={active || autoRunning}
+                      onChange={setStopLoss}
+                    />
+                    <AutoField
+                      label="Après gain %"
+                      value={onWinPercent}
+                      min={-100}
+                      max={500}
+                      disabled={active || autoRunning}
+                      onChange={setOnWinPercent}
+                    />
+                    <AutoField
+                      label="Après perte %"
+                      value={onLossPercent}
+                      min={-100}
+                      max={500}
+                      disabled={active || autoRunning}
+                      onChange={setOnLossPercent}
+                    />
+                  </div>
+                  {autoRunning && (
+                    <p className={styles.autoProgress} aria-live="polite">
+                      {state?.auto?.played ?? 0}/{state?.auto?.rounds ?? rounds}{" "}
+                      parties · bilan {money(state?.auto?.net ?? 0)}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    className={styles.autoModeButton}
+                    disabled={active || autoRunning}
+                    aria-pressed={mode === "auto"}
+                    onClick={() =>
+                      setMode((current) =>
+                        current === "auto" ? "manual" : "auto",
+                      )
+                    }
+                  >
+                    {mode === "auto"
+                      ? "Revenir au mode manuel"
+                      : "Activer le mode auto"}
+                  </button>
+                </section>
+              )}
+            </div>
           </GameControlsBar>
         </main>
       </div>
