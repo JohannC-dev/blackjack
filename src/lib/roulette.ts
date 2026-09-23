@@ -12,7 +12,9 @@ import type { ChipCount } from "./types";
 export type RouletteBetKind =
   | "straight"
   | "split"
+  | "street"
   | "corner"
+  | "line"
   | "dozen"
   | "column"
   | "parity"
@@ -50,7 +52,9 @@ export function rouletteNumberColor(number: number) {
 export const ROULETTE_PAYOUTS: Record<RouletteBetKind, number> = {
   straight: 35,
   split: 17,
+  street: 11,
   corner: 8,
+  line: 5,
   dozen: 2,
   column: 2,
   parity: 1,
@@ -100,6 +104,29 @@ function isSplit(selection: string) {
   return vertical || horizontal;
 }
 
+/** Transversale pleine: the three numbers of a printed column, 1-2-3 up. */
+function isStreet(selection: string) {
+  const numbers = canonicalNumbers(selection, 3);
+  if (!numbers) return false;
+  const [first, second, third] = numbers;
+  return (
+    first >= 1 && first % 3 === 1 && second === first + 1 && third === first + 2
+  );
+}
+
+/** Sixain: the six numbers of two neighbouring columns, 1 to 6 up. */
+function isLine(selection: string) {
+  const numbers = canonicalNumbers(selection, 6);
+  if (!numbers) return false;
+  const [first] = numbers;
+  return (
+    first >= 1 &&
+    first <= 31 &&
+    first % 3 === 1 &&
+    numbers.every((number, index) => number === first + index)
+  );
+}
+
 function isCorner(selection: string) {
   const numbers = canonicalNumbers(selection, 4);
   if (!numbers) return false;
@@ -123,8 +150,12 @@ export function isValidRouletteSelection(
       return isStraight(selection);
     case "split":
       return isSplit(selection);
+    case "street":
+      return isStreet(selection);
     case "corner":
       return isCorner(selection);
+    case "line":
+      return isLine(selection);
     case "dozen":
     case "column":
       return selection === "1" || selection === "2" || selection === "3";
@@ -173,7 +204,9 @@ export function rouletteBetWins(
   switch (bet.kind) {
     case "straight":
     case "split":
+    case "street":
     case "corner":
+    case "line":
       return parseNumbers(bet.selection).includes(result);
     case "dozen":
       return result !== 0 && Math.ceil(result / 12) === Number(bet.selection);
@@ -211,8 +244,14 @@ export function rouletteBetLabel(bet: Pick<RouletteBet, "kind" | "selection">) {
       return `Plein ${bet.selection}`;
     case "split":
       return `Cheval ${bet.selection.replace("-", "/")}`;
+    case "street":
+      return `Transversale pleine ${bet.selection.split("-").join("/")}`;
     case "corner":
       return `Carré ${bet.selection.split("-").join("/")}`;
+    case "line": {
+      const numbers = parseNumbers(bet.selection);
+      return `Sixain ${numbers[0]} à ${numbers[numbers.length - 1]}`;
+    }
     case "dozen":
       return `${bet.selection}${bet.selection === "1" ? "re" : "e"} douzaine`;
     case "column":

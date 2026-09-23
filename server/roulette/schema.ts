@@ -13,7 +13,9 @@ import { InvalidBets, InvalidCommand, UnknownCommand } from "./errors";
 const BetKind = Schema.Literal(
   "straight",
   "split",
+  "street",
   "corner",
+  "line",
   "dozen",
   "column",
   "parity",

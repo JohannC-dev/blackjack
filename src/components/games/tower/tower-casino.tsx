@@ -662,8 +662,9 @@ function TowerView({
 }) {
   const floor = run?.floor ?? 0;
   const lostFloor = run?.status === "lost" ? floor : -1;
-  // With two cards, the other card of a cleared floor is necessarily the trap.
-  const revealWholeRow = cols === 2;
+  // Traps stay hidden while the climb is on: the whole tower only opens up
+  // once the run is over, won or lost.
+  const revealWholeRow = run !== null && run.status !== "playing";
   const climbers = new Map<number, TowerGhost[]>();
   for (const ghost of ghosts) {
     const row = Math.min(ghost.floor, TOWER_FLOORS - 1);

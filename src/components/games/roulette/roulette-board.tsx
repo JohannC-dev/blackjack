@@ -51,7 +51,10 @@ const OUTSIDE = [
 
 /**
  * Aiming near the edge of a number plays a split with its neighbour, near a
- * corner the four numbers around it, as on online roulette tables.
+ * corner the four numbers around it, as on online roulette tables. On the
+ * outer edge of the layout, above 3-6-9… or below 1-4-7…, it plays the three
+ * numbers of the printed column, and their six at the line between two
+ * columns.
  */
 export function targetAt(number: number, x: number, y: number): Target {
   const column = columnOf(number);
@@ -67,6 +70,15 @@ export function targetAt(number: number, x: number, y: number): Target {
   const vertical = dy && row + dy >= 0 && row + dy <= 2 ? number - dy : null;
   const join = (numbers: number[]) =>
     [...numbers].sort((a, b) => a - b).join("-");
+  const run = (first: number, length: number) =>
+    join(Array.from({ length }, (_, index) => first + index));
+  // The top and bottom edges leave the layout: transversale or sixain.
+  if (dy !== 0 && vertical === null) {
+    const first = (column - 1) * 3 + 1;
+    return side !== null
+      ? { kind: "line", selection: run(Math.min(first, first + dx * 3), 6) }
+      : { kind: "street", selection: run(first, 3) };
+  }
   if (side !== null && vertical !== null)
     return {
       kind: "corner",
@@ -109,19 +121,28 @@ function zeroPointerTarget(event: {
   );
 }
 
-/** Where the chips of a split or corner sit, on the lines between numbers. */
+/** Where the chips of an inside bet sit, on the lines between numbers. */
 function anchorOf({ kind, selection }: Target) {
   const numbers = selection.split("-").map(Number);
   const average = (values: number[]) =>
     values.reduce((sum, value) => sum + value, 0) / values.length;
+  // Transversales and sixains are laid on the outer edge of the layout.
+  const outer = kind === "street" || kind === "line";
   // The zero spans the three rows: a zero split sits on its neighbour's row,
   // on the line between the zero and the first column (column 0 here).
   return {
     left: `${((average(numbers.map(columnOf)) - 0.5) * 100) / 12}%`,
-    top: `${((average(numbers.filter((number) => number).map(rowOf)) + 0.5) * 100) / 3}%`,
-    shape: kind === "corner" ? "is-corner" : "is-split",
+    top: outer
+      ? "0%"
+      : `${((average(numbers.filter((number) => number).map(rowOf)) + 0.5) * 100) / 3}%`,
+    shape: `${kind === "corner" || kind === "line" ? "is-corner" : "is-split"}${
+      outer ? " is-outer" : ""
+    }`,
   };
 }
+
+/** Bet kinds drawn on a line rather than inside a single spot. */
+const ANCHORED = new Set<string>(["split", "street", "corner", "line"]);
 
 function Chips({ id, board }: { id: string; board: BoardProps }) {
   const amount = board.mine.get(id) ?? 0;
@@ -229,12 +250,12 @@ export function RouletteBoard(props: BoardProps) {
       board.onRemove(target.kind, target.selection);
     },
   });
-  // Splits and corners carrying chips, mine or the other players'.
+  // Bets laid on a line between numbers, mine or the other players'.
   const inside = [
     ...new Set([...board.mine.keys(), ...board.others.keys()]),
-  ].filter((id) => id.startsWith("split:") || id.startsWith("corner:"));
+  ].filter((id) => ANCHORED.has(id.split(":")[0]));
   const previewAnchor =
-    preview && preview.kind !== "straight" && board.canBet
+    preview && ANCHORED.has(preview.kind) && board.canBet
       ? anchorOf(preview)
       : null;
 
