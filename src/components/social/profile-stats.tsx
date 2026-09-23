@@ -1,16 +1,19 @@
 "use client";
 
-import { Lock, TrendingDown, TrendingUp } from "lucide-react";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+  Flame,
+  Gamepad2,
+  Lock,
+  Medal,
+  Scale,
+  Sparkles,
+  Trophy,
+  type LucideIcon,
+} from "lucide-react";
+import type { ReactNode } from "react";
 import { credits } from "@/lib/rules";
 import {
   STAT_GAME_LABELS,
-  type GameStats,
   type PlayerStats,
   type Relation,
 } from "@/lib/social";
@@ -32,31 +35,45 @@ function spokenAmount(value: number) {
   return amount;
 }
 
-function successRate(won: number, played: number) {
-  return played ? Math.round((won / played) * 100) : 0;
+function average(total: number, count: number) {
+  return count ? credits(Math.round((total / count) * 10) / 10) : "—";
 }
 
+/** A figure, large enough to be read at a glance. */
 function Stat({
   label,
   value,
+  icon: Icon,
   spoken,
+  hint,
+  tone,
   className,
 }: {
   label: string;
   value: string;
+  icon?: LucideIcon;
   /** Replaces the value for screen readers when the display is shortened. */
   spoken?: string;
+  hint?: string;
+  tone?: "mint" | "rose";
   className?: string;
 }) {
   return (
-    <div className="rounded-lg bg-white/[0.03] px-3 py-2.5">
-      <dt className="text-[11px] leading-tight text-muted-foreground">
+    <div
+      className={cn(
+        "rounded-xl border border-white/[0.05] bg-white/[0.025] px-4 py-3.5",
+        className,
+      )}
+    >
+      <dt className="flex items-center gap-1.5 text-[11px] leading-tight font-medium tracking-wide text-muted-foreground uppercase">
+        {Icon && <Icon className="size-3.5 shrink-0" aria-hidden="true" />}
         {label}
       </dt>
       <dd
         className={cn(
-          "mt-0.5 font-display text-lg leading-none font-semibold tabular-nums",
-          className,
+          "mt-2 font-display text-2xl leading-none font-semibold tabular-nums",
+          tone === "mint" && "text-minuit-mint",
+          tone === "rose" && "text-rose-300",
         )}
       >
         {spoken ? (
@@ -68,28 +85,11 @@ function Stat({
           value
         )}
       </dd>
-    </div>
-  );
-}
-
-/** A figure that carries a sign: never colour alone, always an arrow too. */
-function SignedStat({ label, value }: { label: string; value: number }) {
-  const Icon = value < 0 ? TrendingDown : TrendingUp;
-  return (
-    <div className="rounded-lg bg-white/[0.03] px-3 py-2.5">
-      <dt className="text-[11px] leading-tight text-muted-foreground">
-        {label}
-      </dt>
-      <dd
-        className={cn(
-          "mt-0.5 flex items-center gap-1.5 font-display text-lg leading-none font-semibold tabular-nums",
-          value < 0 ? "text-rose-300" : value > 0 ? "text-minuit-mint" : "",
-        )}
-      >
-        <Icon className="size-4 shrink-0" aria-hidden="true" />
-        <span aria-hidden="true">{signed(value)}</span>
-        <span className="sr-only">{spokenAmount(value)}</span>
-      </dd>
+      {hint && (
+        <p className="mt-1.5 text-[11px] leading-tight text-muted-foreground">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
@@ -97,12 +97,34 @@ function SignedStat({ label, value }: { label: string; value: number }) {
 /** Says why a figure is missing, rather than showing an unexplained dash. */
 function EarningsLocked({ name }: { name: string }) {
   return (
-    <p className="flex items-start gap-2 rounded-lg bg-white/[0.03] px-3 py-2.5 text-xs text-muted-foreground">
-      <Lock className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+    <p className="flex items-start gap-2 rounded-xl border border-white/[0.05] bg-white/[0.025] px-4 py-3.5 text-sm text-muted-foreground">
+      <Lock className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       {name} garde ses gains privés.
     </p>
   );
 }
+
+function Section({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: LucideIcon;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <h3 className="flex items-center gap-2 text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+        <Icon className="size-4 text-minuit-purple" aria-hidden="true" />
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+const statGrid = "grid grid-cols-2 gap-3 md:grid-cols-4";
 
 /** Shown in place of the figures before the first finished round. */
 export function NoStatsYet({
@@ -113,7 +135,7 @@ export function NoStatsYet({
   relation: Relation;
 }) {
   return (
-    <p className="px-1 py-6 text-center text-sm text-muted-foreground">
+    <p className="rounded-xl border border-white/[0.05] bg-white/[0.025] px-5 py-10 text-center text-sm text-muted-foreground">
       {relation === "self"
         ? "Aucune partie terminée pour l’instant. Vos statistiques apparaîtront ici."
         : `${name} n’a pas encore terminé de partie.`}
@@ -121,8 +143,23 @@ export function NoStatsYet({
   );
 }
 
-/** The headline: how much was played, and the money when it is shared. */
-export function ProfileOverview({
+/** The chip balance, plain: the figure and what it counts. */
+export function Balance({ balance }: { balance: number }) {
+  return (
+    <p className="shrink-0 font-display text-3xl leading-none font-semibold tabular-nums sm:text-4xl">
+      {credits(balance)}
+      <span className="ml-2 text-sm font-normal text-muted-foreground">
+        crédits
+      </span>
+    </p>
+  );
+}
+
+/**
+ * The profile in one page: the figures a player keeps, then the podium of
+ * the games and the records.
+ */
+export function ProfileStats({
   stats,
   name,
   relation,
@@ -137,22 +174,21 @@ export function ProfileOverview({
   if (!summary.played) return <NoStatsYet name={name} relation={relation} />;
 
   return (
-    <div className="space-y-5">
-      <section aria-labelledby="profile-stats-summary">
-        <h3 id="profile-stats-summary" className="sr-only">
-          Résumé des statistiques
-        </h3>
-        <dl className="grid grid-cols-2 gap-2">
-          <Stat label="Parties jouées" value={credits(summary.played)} />
+    <div className="space-y-7">
+      <Section title="Statistiques" icon={Trophy}>
+        <dl className={statGrid}>
           <Stat
-            label="Taux de réussite"
-            value={`${successRate(summary.won, summary.played)} %`}
+            label="Parties gagnées"
+            value={credits(summary.won)}
+            icon={Trophy}
+            tone="mint"
           />
           <Stat
             label="Meilleur coup"
             value={signed(summary.bestWin)}
             spoken={spokenAmount(summary.bestWin)}
-            className="text-minuit-mint"
+            icon={Flame}
+            tone="mint"
           />
           <Stat
             label="Jeu de prédilection"
@@ -161,100 +197,97 @@ export function ProfileOverview({
                 ? STAT_GAME_LABELS[summary.favouriteGame]
                 : "—"
             }
-            className="truncate text-base"
+            icon={Sparkles}
+            className="[&>dd]:truncate [&>dd]:text-xl"
           />
+          {summary.earnings && (
+            <Stat
+              label="Mise moyenne"
+              value={average(summary.earnings.wagered, summary.played)}
+              icon={Scale}
+              hint="Par partie"
+            />
+          )}
         </dl>
-      </section>
+        {!summary.earnings && <EarningsLocked name={who} />}
+      </Section>
 
-      <section aria-labelledby="profile-stats-earnings">
-        <h3
-          id="profile-stats-earnings"
-          className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase"
-        >
-          Gains
-        </h3>
-        {summary.earnings ? (
-          <dl className="grid grid-cols-2 gap-2">
-            <SignedStat label="Résultat net" value={summary.earnings.net} />
-            <Stat
-              label="Total misé"
-              value={credits(summary.earnings.wagered)}
-            />
-            <Stat
-              label="Pire perte"
-              value={signed(-summary.earnings.worstLoss)}
-              spoken={spokenAmount(-summary.earnings.worstLoss)}
-              className="text-rose-300"
-            />
-          </dl>
-        ) : (
-          <EarningsLocked name={who} />
-        )}
-      </section>
+      <ProfileRecords stats={stats} />
     </div>
   );
 }
 
-/** The detail, one collapsible row per game the player has touched. */
-export function ProfileGames({
-  stats,
-  name,
-  relation,
-}: {
-  stats: PlayerStats;
-  name: string;
-  relation: Relation;
-}) {
-  if (!stats.games.length)
-    return <NoStatsYet name={name} relation={relation} />;
-  return (
-    <Accordion type="single" collapsible className="w-full">
-      {stats.games.map((game) => (
-        <GameRow key={game.game} stats={game} />
-      ))}
-    </Accordion>
-  );
-}
+/**
+ * The podium and the records: which games a player really lives in, and the
+ * single figures they will brag about. Same rule as above: no rate, no
+ * counter, no loss.
+ */
+function ProfileRecords({ stats }: { stats: PlayerStats }) {
+  if (!stats.games.length) return null;
 
-/** Closed it shows the essentials; open it shows the detail. */
-function GameRow({ stats }: { stats: GameStats }) {
-  const label = STAT_GAME_LABELS[stats.game];
+  const podium = [...stats.games]
+    .sort((left, right) => right.played - left.played)
+    .slice(0, 3);
+  const mostPlayed = podium[0]!;
+  const best = stats.games.reduce((top, game) =>
+    game.bestWin > top.bestWin ? game : top,
+  );
   return (
-    <AccordionItem value={stats.game} className="border-white/[0.06]">
-      <AccordionTrigger className="py-3 text-sm hover:no-underline">
-        <span className="flex flex-1 items-center justify-between gap-3 pr-2">
-          <span className="font-medium">{label}</span>
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {stats.played} partie{stats.played > 1 ? "s" : ""}
-          </span>
-        </span>
-      </AccordionTrigger>
-      <AccordionContent>
-        <dl className="grid grid-cols-2 gap-2 pb-1">
+    <>
+      <Section title="Podium des jeux" icon={Medal}>
+        <ol className="space-y-2">
+          {podium.map((game, index) => (
+            <li
+              key={game.game}
+              className="flex items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.025] px-4 py-3"
+            >
+              <span
+                className={cn(
+                  "grid size-8 shrink-0 place-items-center rounded-full font-display text-sm font-bold",
+                  index === 0 && "bg-[#e9c46a] text-[#2a1e05]",
+                  index === 1 && "bg-[#c9ccd6] text-[#22242c]",
+                  index === 2 && "bg-[#c98a54] text-[#2a1607]",
+                )}
+                aria-hidden="true"
+              >
+                {index + 1}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-display text-base font-semibold">
+                  {STAT_GAME_LABELS[game.game]}
+                </span>
+                <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                  <span
+                    className="block h-full rounded-full bg-[linear-gradient(90deg,#7d54d8,#b79afa)]"
+                    style={{
+                      width: `${Math.round((game.played / mostPlayed.played) * 100)}%`,
+                    }}
+                  />
+                </span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </Section>
+
+      <Section title="Records" icon={Trophy}>
+        <dl className={statGrid}>
           <Stat
-            label="Taux de réussite"
-            value={`${successRate(stats.won, stats.played)} %`}
+            label="Plus gros gain"
+            value={signed(best.bestWin)}
+            spoken={spokenAmount(best.bestWin)}
+            icon={Flame}
+            hint={STAT_GAME_LABELS[best.game]}
+            tone="mint"
           />
           <Stat
-            label="Meilleur gain"
-            value={signed(stats.bestWin)}
-            spoken={spokenAmount(stats.bestWin)}
-            className="text-minuit-mint"
+            label="Jeu le plus joué"
+            value={STAT_GAME_LABELS[mostPlayed.game]}
+            icon={Gamepad2}
+            className="[&>dd]:truncate [&>dd]:text-xl"
           />
-          {stats.earnings && (
-            <>
-              <SignedStat label="Résultat net" value={stats.earnings.net} />
-              <Stat label="Misé" value={credits(stats.earnings.wagered)} />
-              <Stat
-                label="Pire perte"
-                value={signed(-stats.earnings.worstLoss)}
-                spoken={spokenAmount(-stats.earnings.worstLoss)}
-                className="text-rose-300"
-              />
-            </>
-          )}
         </dl>
-      </AccordionContent>
-    </AccordionItem>
+      </Section>
+    </>
   );
 }

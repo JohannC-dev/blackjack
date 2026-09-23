@@ -218,22 +218,3 @@ export const ClubHeader = memo(function ClubHeader({
     </header>
   );
 });
-
-type BalanceGame = {
-  balance: number | null;
-  pokerState: { balance: number } | null;
-  state: { players: Array<{ id: string; balance: number }> } | null;
-  playerId: string;
-  profile: { balance: number } | null;
-};
-
-export function getClubBalance(game: BalanceGame) {
-  return (
-    game.balance ??
-    game.pokerState?.balance ??
-    game.state?.players.find((player) => player.id === game.playerId)
-      ?.balance ??
-    game.profile?.balance ??
-    0
-  );
-}

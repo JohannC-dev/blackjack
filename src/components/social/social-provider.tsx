@@ -22,12 +22,13 @@ import {
   type SocialOverview,
 } from "@/lib/social";
 import { SocialApiError, socialApi } from "@/lib/social-api";
+import { getClubBalance } from "@/lib/chips";
 import { credits } from "@/lib/rules";
 import type { ReferralTier } from "@/lib/referral";
 import type { Ack } from "@/lib/types";
 import type { useGame } from "@/lib/use-game";
 import { FriendsSheet, type FriendsFocus } from "./friends-sheet";
-import { PlayerProfileDialog } from "./player-profile-dialog";
+import { PlayerProfileModal } from "./player-profile-modal";
 
 type Game = ReturnType<typeof useGame>;
 
@@ -502,9 +503,10 @@ export function SocialProvider({
         onOpenChange={setFriendsOpen}
         focus={friendsFocus}
       />
-      <PlayerProfileDialog
+      <PlayerProfileModal
         playerId={profileId}
         version={socialVersion}
+        balance={getClubBalance(game)}
         onClose={() => setProfileId(null)}
       />
       <Toaster position="bottom-right" closeButton />
