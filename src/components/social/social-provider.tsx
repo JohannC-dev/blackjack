@@ -28,7 +28,7 @@ import type { ReferralTier } from "@/lib/referral";
 import type { Ack } from "@/lib/types";
 import type { useGame } from "@/lib/use-game";
 import { FriendsSheet, type FriendsFocus } from "./friends-sheet";
-import { PlayerProfileScreen } from "./player-profile-screen";
+import { PlayerProfileModal } from "./player-profile-modal";
 
 type Game = ReturnType<typeof useGame>;
 
@@ -503,7 +503,7 @@ export function SocialProvider({
         onOpenChange={setFriendsOpen}
         focus={friendsFocus}
       />
-      <PlayerProfileScreen
+      <PlayerProfileModal
         playerId={profileId}
         version={socialVersion}
         balance={getClubBalance(game)}

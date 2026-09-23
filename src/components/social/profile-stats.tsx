@@ -1,34 +1,20 @@
 "use client";
 
-import {
-  Coins,
-  Dices,
-  Flame,
-  Gamepad2,
-  Gauge,
-  Lock,
-  Percent,
-  Scale,
-  Sparkles,
-  Target,
-  TrendingDown,
-  TrendingUp,
-  Trophy,
-  Wallet,
-  type LucideIcon,
-} from "lucide-react";
+import { Lock } from "lucide-react";
 import type { ReactNode } from "react";
 import { credits } from "@/lib/rules";
 import {
+  STAT_GAMES,
   STAT_GAME_LABELS,
-  type GameStats,
   type PlayerStats,
   type Relation,
+  type StatGame,
 } from "@/lib/social";
 import { cn } from "@/lib/utils";
+import { BlackjackIcon } from "@/components/ui/blackjack-icon";
 
 /** "1 250" becomes "+1 250" or "−1 250": the sign is never left to colour. */
-function signed(value: number) {
+export function signed(value: number) {
   const rounded = Math.round(value * 100) / 100;
   if (rounded === 0) return "0";
   return `${rounded > 0 ? "+" : "−"}${credits(Math.abs(rounded))}`;
@@ -43,8 +29,12 @@ function spokenAmount(value: number) {
   return amount;
 }
 
+function share(part: number, whole: number) {
+  return whole ? Math.round((part / whole) * 100) : 0;
+}
+
 function percent(part: number, whole: number) {
-  return whole ? `${Math.round((part / whole) * 100)} %` : "—";
+  return whole ? `${share(part, whole)} %` : "—";
 }
 
 /** A share that can go either way, e.g. the return on every credit wagered. */
@@ -59,39 +49,142 @@ function average(total: number, count: number) {
   return count ? credits(Math.round((total / count) * 10) / 10) : "—";
 }
 
-/** A figure, large enough to be read at a glance. */
-function Stat({
+/** The game art of the rail, reused as the medals of a player card. */
+const gameArt: Record<StatGame, string | null> = {
+  blackjack: null,
+  roulette: "/art/rail-roulette.svg",
+  poker: "/art/rail-poker.svg?v=2",
+  tower: "/art/rail-tower.svg",
+  mines: "/art/mine-bomb.svg",
+};
+
+/** One medal per game, dimmed for the games never played. */
+export function GameBadges({ stats }: { stats: PlayerStats }) {
+  const played = new Map(stats.games.map((game) => [game.game, game.played]));
+  return (
+    <ul className="grid grid-cols-5 gap-1.5 sm:gap-3">
+      {STAT_GAMES.map((game) => {
+        const count = played.get(game) ?? 0;
+        const art = gameArt[game];
+        return (
+          <li
+            key={game}
+            className={cn(
+              "flex flex-col items-center gap-1.5 text-center",
+              !count && "opacity-35 grayscale",
+            )}
+          >
+            <span className="relative grid size-13 place-items-center rounded-2xl border border-white/[0.07] bg-white/[0.04] sm:size-15">
+              {art ? (
+                <img
+                  src={art}
+                  alt=""
+                  width={30}
+                  height={30}
+                  className="size-7 object-contain sm:size-8"
+                  aria-hidden="true"
+                  draggable={false}
+                />
+              ) : (
+                <BlackjackIcon />
+              )}
+              {!!count && (
+                <span className="absolute -right-1.5 -bottom-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-minuit-purple px-1 font-display text-[11px] font-bold text-[#1a1426] ring-2 ring-[#161221]">
+                  {count > 999 ? "999+" : count}
+                </span>
+              )}
+            </span>
+            <span className="text-[9px] leading-tight font-bold tracking-wide text-muted-foreground uppercase sm:text-[10px]">
+              {STAT_GAME_LABELS[game]}
+            </span>
+            <span className="sr-only">
+              {count ? `${count} partie${count > 1 ? "s" : ""}` : "jamais joué"}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function Bar({
   label,
   value,
-  icon: Icon,
+  max,
+  caption,
+  tone = "purple",
+}: {
+  label: string;
+  value: number;
+  max: number;
+  caption: string;
+  tone?: "purple" | "mint";
+}) {
+  const filled = max ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-28 shrink-0 text-[10px] leading-tight font-bold tracking-wide text-muted-foreground uppercase sm:w-36 sm:text-[11px]">
+        {label}
+      </span>
+      <div className="relative h-5 flex-1 overflow-hidden rounded-full bg-black/40 ring-1 ring-white/[0.06]">
+        <div
+          className={cn(
+            "absolute inset-y-0 left-0 rounded-full",
+            tone === "mint"
+              ? "bg-[linear-gradient(90deg,#4bbd8c,#83e9bc)]"
+              : "bg-[linear-gradient(90deg,#7d54d8,#b79afa)]",
+          )}
+          style={{ width: `${filled}%` }}
+        />
+        <span className="absolute inset-0 grid place-items-center font-display text-[11px] font-bold tabular-nums text-white drop-shadow-[0_1px_2px_#000]">
+          {caption}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** The two gauges of the card: how often it wins, how wide it plays. */
+export function ProfileBars({ stats }: { stats: PlayerStats }) {
+  const { summary } = stats;
+  return (
+    <div className="space-y-2.5">
+      <Bar
+        label="Taux de réussite"
+        value={summary.won}
+        max={summary.played}
+        caption={percent(summary.won, summary.played)}
+        tone="mint"
+      />
+      <Bar
+        label="Jeux explorés"
+        value={stats.games.length}
+        max={STAT_GAMES.length}
+        caption={`${stats.games.length}/${STAT_GAMES.length}`}
+      />
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
   spoken,
-  hint,
   tone,
-  className,
 }: {
   label: string;
   value: string;
-  icon?: LucideIcon;
-  /** Replaces the value for screen readers when the display is shortened. */
   spoken?: string;
-  hint?: string;
   tone?: "mint" | "rose";
-  className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "rounded-xl border border-white/[0.05] bg-white/[0.025] px-4 py-3.5",
-        className,
-      )}
-    >
-      <dt className="flex items-center gap-1.5 text-[11px] leading-tight font-medium tracking-wide text-muted-foreground uppercase">
-        {Icon && <Icon className="size-3.5 shrink-0" aria-hidden="true" />}
+    <div className="flex items-center justify-between gap-4 px-3 py-2 odd:bg-white/[0.02]">
+      <dt className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase sm:text-xs">
         {label}
       </dt>
       <dd
         className={cn(
-          "mt-2 font-display text-2xl leading-none font-semibold tabular-nums",
+          "font-display text-base font-bold tabular-nums sm:text-lg",
           tone === "mint" && "text-minuit-mint",
           tone === "rose" && "text-rose-300",
         )}
@@ -105,82 +198,32 @@ function Stat({
           value
         )}
       </dd>
-      {hint && (
-        <p className="mt-1.5 text-[11px] leading-tight text-muted-foreground">
-          {hint}
-        </p>
-      )}
     </div>
   );
 }
 
-/** A figure that carries a sign: never colour alone, always an arrow too. */
-function SignedStat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: number;
-  hint?: string;
-}) {
-  const Arrow = value < 0 ? TrendingDown : TrendingUp;
-  return (
-    <div className="rounded-xl border border-white/[0.05] bg-white/[0.025] px-4 py-3.5">
-      <dt className="flex items-center gap-1.5 text-[11px] leading-tight font-medium tracking-wide text-muted-foreground uppercase">
-        <Scale className="size-3.5 shrink-0" aria-hidden="true" />
-        {label}
-      </dt>
-      <dd
-        className={cn(
-          "mt-2 flex items-center gap-1.5 font-display text-2xl leading-none font-semibold tabular-nums",
-          value < 0 ? "text-rose-300" : value > 0 ? "text-minuit-mint" : "",
-        )}
-      >
-        <Arrow className="size-5 shrink-0" aria-hidden="true" />
-        <span aria-hidden="true">{signed(value)}</span>
-        <span className="sr-only">{spokenAmount(value)}</span>
-      </dd>
-      {hint && (
-        <p className="mt-1.5 text-[11px] leading-tight text-muted-foreground">
-          {hint}
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** Says why a figure is missing, rather than showing an unexplained dash. */
-function EarningsLocked({ name }: { name: string }) {
-  return (
-    <p className="flex items-start gap-2 rounded-xl border border-white/[0.05] bg-white/[0.025] px-4 py-3.5 text-sm text-muted-foreground">
-      <Lock className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-      {name} garde ses gains privés.
-    </p>
-  );
-}
-
-function Section({
+export function CardSection({
   title,
-  icon: Icon,
+  action,
   children,
 }: {
   title: string;
-  icon: LucideIcon;
+  action?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3">
-      <h3 className="flex items-center gap-2 text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        <Icon className="size-4 text-minuit-purple" aria-hidden="true" />
-        {title}
-      </h3>
+    <section className="mt-4">
+      <div className="mb-2 flex items-center gap-3">
+        <h3 className="font-display text-sm font-bold tracking-[0.16em] text-minuit-purple uppercase">
+          {title}
+        </h3>
+        <span className="h-px flex-1 bg-gradient-to-r from-minuit-purple/40 to-transparent" />
+        {action}
+      </div>
       {children}
     </section>
   );
 }
-
-const statGrid = "grid grid-cols-2 gap-3 md:grid-cols-4";
 
 /** Shown in place of the figures before the first finished round. */
 export function NoStatsYet({
@@ -191,7 +234,7 @@ export function NoStatsYet({
   relation: Relation;
 }) {
   return (
-    <p className="rounded-xl border border-white/[0.05] bg-white/[0.025] px-5 py-10 text-center text-sm text-muted-foreground">
+    <p className="rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-6 text-center text-sm text-muted-foreground">
       {relation === "self"
         ? "Aucune partie terminée pour l’instant. Vos statistiques apparaîtront ici."
         : `${name} n’a pas encore terminé de partie.`}
@@ -199,255 +242,135 @@ export function NoStatsYet({
   );
 }
 
-/** The chip balance: the first figure of a player's own profile. */
-export function BalanceHero({ balance }: { balance: number }) {
-  return (
-    <section
-      className="relative overflow-hidden rounded-2xl border border-minuit-purple/25 bg-minuit-purple/[0.07] px-5 py-5 sm:px-6 sm:py-6"
-      aria-label="Solde de jetons"
-    >
-      <div
-        className="pointer-events-none absolute -top-20 -right-10 size-56 rounded-full bg-[radial-gradient(closest-side,#a880f33d,transparent)]"
-        aria-hidden="true"
-      />
-      <p className="relative flex items-center gap-2 text-[11px] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
-        <Wallet className="size-3.5" aria-hidden="true" />
-        Solde de jetons
-      </p>
-      <p className="relative mt-3 flex items-baseline gap-2.5 font-display text-4xl leading-none font-semibold tabular-nums sm:text-5xl">
-        <Coins
-          className="size-7 shrink-0 self-center text-minuit-purple sm:size-8"
-          aria-hidden="true"
-        />
-        {credits(balance)}
-        <span className="text-base font-normal text-muted-foreground">
-          crédits
-        </span>
-      </p>
-    </section>
-  );
-}
-
-/**
- * The headline: the balance first, then what was played and the money when it
- * is shared.
- */
-export function ProfileOverview({
+/** Every figure of the profile, in one list, as a player card shows them. */
+export function StatisticsList({
   stats,
   name,
   relation,
-  balance,
 }: {
   stats: PlayerStats;
   name: string;
   relation: Relation;
-  /** The player's own chip balance, shown first. Null for other players. */
-  balance: number | null;
 }) {
   const { summary } = stats;
   const who = relation === "self" ? "Vous" : name;
   const lost = Math.max(summary.played - summary.won, 0);
+  const earnings = summary.earnings;
+
+  if (!summary.played) return <NoStatsYet name={name} relation={relation} />;
 
   return (
-    <div className="space-y-7">
-      {balance !== null && <BalanceHero balance={balance} />}
-
-      {!summary.played ? (
-        <NoStatsYet name={name} relation={relation} />
-      ) : (
-        <>
-          <Section title="Parties" icon={Dices}>
-            <dl className={statGrid}>
-              <Stat
-                label="Parties jouées"
-                value={credits(summary.played)}
-                icon={Gamepad2}
-              />
-              <Stat
-                label="Parties gagnées"
-                value={credits(summary.won)}
-                icon={Trophy}
-                tone="mint"
-              />
-              <Stat
-                label="Parties perdues"
-                value={credits(lost)}
-                icon={Target}
-                tone="rose"
-              />
-              <Stat
-                label="Taux de réussite"
-                value={percent(summary.won, summary.played)}
-                icon={Percent}
-              />
-              <Stat
-                label="Meilleur coup"
-                value={signed(summary.bestWin)}
-                spoken={spokenAmount(summary.bestWin)}
-                icon={Flame}
-                tone="mint"
-              />
-              <Stat
-                label="Jeu de prédilection"
-                value={
-                  summary.favouriteGame
-                    ? STAT_GAME_LABELS[summary.favouriteGame]
-                    : "—"
-                }
-                icon={Sparkles}
-                className="[&>dd]:truncate [&>dd]:text-xl"
-              />
-              <Stat
-                label="Jeux pratiqués"
-                value={`${stats.games.length}`}
-                icon={Dices}
-                hint={stats.games
-                  .map((game) => STAT_GAME_LABELS[game.game])
-                  .join(" · ")}
-              />
-              <Stat
-                label="Parties par jeu"
-                value={average(summary.played, stats.games.length)}
-                icon={Gauge}
-                hint="En moyenne"
-              />
-            </dl>
-          </Section>
-
-          <Section title="Gains" icon={Coins}>
-            {summary.earnings ? (
-              <dl className={statGrid}>
-                <SignedStat
-                  label="Résultat net"
-                  value={summary.earnings.net}
-                  hint="Toutes parties confondues"
-                />
-                <Stat
-                  label="Total misé"
-                  value={credits(summary.earnings.wagered)}
-                  icon={Coins}
-                />
-                <Stat
-                  label="Pire perte"
-                  value={signed(-summary.earnings.worstLoss)}
-                  spoken={spokenAmount(-summary.earnings.worstLoss)}
-                  icon={TrendingDown}
-                  tone="rose"
-                />
-                <Stat
-                  label="Rendement"
-                  value={signedPercent(
-                    summary.earnings.net,
-                    summary.earnings.wagered,
-                  )}
-                  icon={Percent}
-                  hint="Résultat net sur total misé"
-                  tone={summary.earnings.net < 0 ? "rose" : "mint"}
-                />
-                <Stat
-                  label="Mise moyenne"
-                  value={average(summary.earnings.wagered, summary.played)}
-                  icon={Scale}
-                  hint="Par partie"
-                />
-                <Stat
-                  label="Résultat moyen"
-                  value={signed(summary.earnings.net / summary.played)}
-                  spoken={spokenAmount(summary.earnings.net / summary.played)}
-                  icon={Gauge}
-                  hint="Par partie"
-                  tone={summary.earnings.net < 0 ? "rose" : "mint"}
-                />
-              </dl>
-            ) : (
-              <EarningsLocked name={who} />
-            )}
-          </Section>
-        </>
-      )}
-    </div>
-  );
-}
-
-/** The detail, one open card per game the player has touched. */
-export function ProfileGames({
-  stats,
-  name,
-  relation,
-}: {
-  stats: PlayerStats;
-  name: string;
-  relation: Relation;
-}) {
-  if (!stats.games.length)
-    return <NoStatsYet name={name} relation={relation} />;
-  return (
-    <div className="space-y-5">
-      {stats.games.map((game) => (
-        <GameCard key={game.game} stats={game} />
-      ))}
-    </div>
-  );
-}
-
-/** Everything one game holds, visible without a click. */
-function GameCard({ stats }: { stats: GameStats }) {
-  const lost = Math.max(stats.played - stats.won, 0);
-  return (
-    <section className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:p-5">
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-display text-lg font-semibold">
-          {STAT_GAME_LABELS[stats.game]}
-        </h3>
-        <span className="text-xs tabular-nums text-muted-foreground">
-          {credits(stats.played)} partie{stats.played > 1 ? "s" : ""} ·{" "}
-          {credits(stats.won)} gagnée{stats.won > 1 ? "s" : ""} ·{" "}
-          {credits(lost)} perdue{lost > 1 ? "s" : ""}
-        </span>
-      </header>
-      <dl className={statGrid}>
-        <Stat
+    <>
+      <dl className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.015]">
+        <Row label="Parties jouées" value={credits(summary.played)} />
+        <Row label="Parties gagnées" value={credits(summary.won)} tone="mint" />
+        <Row label="Parties perdues" value={credits(lost)} tone="rose" />
+        <Row
           label="Taux de réussite"
-          value={percent(stats.won, stats.played)}
-          icon={Percent}
+          value={percent(summary.won, summary.played)}
         />
-        <Stat
-          label="Meilleur gain"
-          value={signed(stats.bestWin)}
-          spoken={spokenAmount(stats.bestWin)}
-          icon={Flame}
+        <Row
+          label="Meilleur coup"
+          value={signed(summary.bestWin)}
+          spoken={spokenAmount(summary.bestWin)}
           tone="mint"
         />
-        {stats.earnings && (
+        <Row
+          label="Jeu de prédilection"
+          value={
+            summary.favouriteGame
+              ? STAT_GAME_LABELS[summary.favouriteGame]
+              : "—"
+          }
+        />
+        <Row
+          label="Parties par jeu"
+          value={average(summary.played, stats.games.length)}
+        />
+        {earnings && (
           <>
-            <SignedStat label="Résultat net" value={stats.earnings.net} />
-            <Stat
-              label="Total misé"
-              value={credits(stats.earnings.wagered)}
-              icon={Coins}
+            <Row
+              label="Résultat net"
+              value={signed(earnings.net)}
+              spoken={spokenAmount(earnings.net)}
+              tone={earnings.net < 0 ? "rose" : "mint"}
             />
-            <Stat
+            <Row label="Total misé" value={credits(earnings.wagered)} />
+            <Row
               label="Pire perte"
-              value={signed(-stats.earnings.worstLoss)}
-              spoken={spokenAmount(-stats.earnings.worstLoss)}
-              icon={TrendingDown}
+              value={signed(-earnings.worstLoss)}
+              spoken={spokenAmount(-earnings.worstLoss)}
               tone="rose"
             />
-            <Stat
-              label="Mise moyenne"
-              value={average(stats.earnings.wagered, stats.played)}
-              icon={Scale}
-              hint="Par partie"
-            />
-            <Stat
+            <Row
               label="Rendement"
-              value={signedPercent(stats.earnings.net, stats.earnings.wagered)}
-              icon={Gauge}
-              tone={stats.earnings.net < 0 ? "rose" : "mint"}
+              value={signedPercent(earnings.net, earnings.wagered)}
+              tone={earnings.net < 0 ? "rose" : "mint"}
+            />
+            <Row
+              label="Mise moyenne"
+              value={average(earnings.wagered, summary.played)}
+            />
+            <Row
+              label="Résultat moyen"
+              value={signed(earnings.net / summary.played)}
+              spoken={spokenAmount(earnings.net / summary.played)}
+              tone={earnings.net < 0 ? "rose" : "mint"}
             />
           </>
         )}
       </dl>
-    </section>
+      {!earnings && (
+        <p className="mt-2 flex items-start gap-2 rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2.5 text-xs text-muted-foreground">
+          <Lock className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+          {who} garde ses gains privés.
+        </p>
+      )}
+    </>
+  );
+}
+
+/** One line per game: what was played there, and what it paid. */
+export function GameBreakdown({ stats }: { stats: PlayerStats }) {
+  if (!stats.games.length) return null;
+  return (
+    <ul className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.015]">
+      {stats.games.map((game) => (
+        <li
+          key={game.game}
+          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2.5 odd:bg-white/[0.02]"
+        >
+          <span className="font-display text-sm font-bold">
+            {STAT_GAME_LABELS[game.game]}
+          </span>
+          <span className="flex flex-wrap items-center gap-x-3 text-xs tabular-nums text-muted-foreground">
+            <span>
+              {credits(game.played)} partie{game.played > 1 ? "s" : ""}
+            </span>
+            <span>{percent(game.won, game.played)} de réussite</span>
+            <span className="text-minuit-mint">
+              <span aria-hidden="true">{signed(game.bestWin)}</span>
+              <span className="sr-only">
+                meilleur gain {spokenAmount(game.bestWin)}
+              </span>{" "}
+              au mieux
+            </span>
+            {game.earnings && (
+              <span
+                className={
+                  game.earnings.net < 0 ? "text-rose-300" : "text-minuit-mint"
+                }
+              >
+                <span aria-hidden="true">{signed(game.earnings.net)}</span>
+                <span className="sr-only">
+                  résultat net {spokenAmount(game.earnings.net)}
+                </span>{" "}
+                net
+              </span>
+            )}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
