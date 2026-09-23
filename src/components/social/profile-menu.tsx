@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, LogOut, UserPlus, UserRound, Users } from "lucide-react";
+import { Copy, Gift, LogOut, UserPlus, UserRound, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -122,9 +122,16 @@ export function ProfileMenu({
                 <UserPlus />
                 Ajouter un ami
               </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!me}
+                onSelect={() => me && social.openProfile(me.id)}
+              >
+                <Gift />
+                Parrainage
+              </DropdownMenuItem>
               <DropdownMenuItem disabled={!me?.friendCode} onSelect={copyCode}>
                 <Copy />
-                Copier mon code ami
+                Copier mon code
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </>

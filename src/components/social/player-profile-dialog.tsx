@@ -34,6 +34,7 @@ import {
 import { usePlayerProfile } from "@/lib/social-api";
 import { cn } from "@/lib/utils";
 import { PlayerAvatar } from "./player-avatar";
+import { ReferralPanel } from "./referral-panel";
 import { useSocial } from "./social-provider";
 
 const dateFormat = new Intl.DateTimeFormat("fr-FR", {
@@ -239,6 +240,7 @@ function ProfileBody({
             Aucune partie jouée pour l’instant.
           </p>
         )}
+        {profile.relation === "self" && <ReferralPanel />}
       </div>
     </>
   );

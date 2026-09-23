@@ -4,8 +4,10 @@ import {
   boolean,
   check,
   index,
+  integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -215,6 +217,76 @@ export const friendship = pgTable(
   ],
 );
 
+/**
+ * The parrainage of a player: who brought them in, and with which code. One
+ * row per filleul, written once at sign-up and never updated.
+ */
+export const referral = pgTable(
+  "referral",
+  {
+    filleulId: text("filleul_id")
+      .primaryKey()
+      .references(() => user.id, { onDelete: "cascade" }),
+    parrainId: text("parrain_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** The code as it was typed in, kept for the record. */
+    code: text("code").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("referral_parrain_idx").on(table.parrainId, table.createdAt),
+    check(
+      "referral_distinct_players",
+      sql`${table.filleulId} <> ${table.parrainId}`,
+    ),
+  ],
+);
+
+/**
+ * A parrain tier already settled. The row is written after the credits reach
+ * the wallet, so a retry re-grants nothing and completes the record.
+ */
+export const referralReward = pgTable(
+  "referral_reward",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    tier: integer("tier").notNull(),
+    amount: bigint("amount", { mode: "number" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.tier] }),
+    check("referral_reward_tier_range", sql`${table.tier} between 1 and 5`),
+  ],
+);
+
+/**
+ * Cosmetic items a player owns. The catalogue lives in the client
+ * (src/lib/cosmetics.ts); only the ownership is stored.
+ */
+export const playerCosmetic = pgTable(
+  "player_cosmetic",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    cosmeticId: text("cosmetic_id").notNull(),
+    /** Why the player owns it, e.g. "parrainage-filleul". */
+    source: text("source").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.cosmeticId] })],
+);
+
 export const authSchema = { user, session, account, verification };
 export const schema = {
   ...authSchema,
@@ -222,4 +294,7 @@ export const schema = {
   walletEntry,
   playerProfile,
   friendship,
+  referral,
+  referralReward,
+  playerCosmetic,
 };
