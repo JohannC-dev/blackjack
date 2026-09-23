@@ -3,11 +3,9 @@
 import {
   CircleHelp,
   Coins,
-  History,
   House,
   Settings2,
   Spade,
-  Users,
   Volume2,
   VolumeX,
   Wallet,
@@ -49,15 +47,11 @@ export const CasinoRail = memo(function CasinoRail({
   active,
   blackjackLabel = "Blackjack",
   onNavigate,
-  onTables,
-  onHistory,
   onRules,
 }: {
   active: CasinoView;
   blackjackLabel?: string;
   onNavigate: Navigate;
-  onTables?: () => void;
-  onHistory?: () => void;
   onRules?: () => void;
 }) {
   const item = (view: CasinoView, label: string, icon: ReactNode) => (
@@ -106,34 +100,6 @@ export const CasinoRail = memo(function CasinoRail({
           <ChickenArt className="h-[30px] w-[30px]" />,
         )}
         {item("roulette", "Roulette", <RailGameIcon game="roulette" />)}
-        {onTables && (
-          <button
-            type="button"
-            className={
-              railButton +
-              " max-[700px]:h-[38px] max-[700px]:w-[35px] max-[700px]:before:-left-[10px]"
-            }
-            title="Changer de table"
-            aria-label="Changer de table"
-            onClick={onTables}
-          >
-            <Users size={22} />
-          </button>
-        )}
-        {onHistory && (
-          <button
-            type="button"
-            className={
-              railButton +
-              " max-[700px]:h-[38px] max-[700px]:w-[35px] max-[700px]:before:-left-[10px]"
-            }
-            title="Historique"
-            aria-label="Historique"
-            onClick={onHistory}
-          >
-            <History size={21} />
-          </button>
-        )}
       </div>
       <div className="mt-auto mb-[25px] flex flex-col items-center gap-[22px] max-[700px]:mb-5 max-[700px]:gap-3">
         {onRules ? (
