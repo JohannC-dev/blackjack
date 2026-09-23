@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { Audience } from "../../src/lib/social";
 import {
   bigint,
   boolean,
@@ -220,6 +221,16 @@ export const playerProfile = pgTable(
       .primaryKey()
       .references(() => user.id, { onDelete: "cascade" }),
     friendCode: text("friend_code").notNull(),
+    /** Who may open the profile at all. */
+    visibility: text("visibility")
+      .$type<Audience>()
+      .default("public")
+      .notNull(),
+    /** Who may read the money: wagered, net and worst loss. */
+    earningsVisibility: text("earnings_visibility")
+      .$type<Audience>()
+      .default("friends")
+      .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -232,6 +243,14 @@ export const playerProfile = pgTable(
     check(
       "player_profile_friend_code_format",
       sql`${table.friendCode} ~ '^[A-Z0-9]{8}$'`,
+    ),
+    check(
+      "player_profile_visibility_values",
+      sql`${table.visibility} in ('public', 'friends', 'private')`,
+    ),
+    check(
+      "player_profile_earnings_visibility_values",
+      sql`${table.earningsVisibility} in ('public', 'friends', 'private')`,
     ),
   ],
 );

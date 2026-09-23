@@ -5,6 +5,7 @@ import {
   Check,
   Clock3,
   Copy,
+  EyeOff,
   LoaderCircle,
   Send,
   UserMinus,
@@ -23,12 +24,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatFriendCode, type PlayerProfile } from "@/lib/social";
 import { usePlayerProfile } from "@/lib/social-api";
 import { cn } from "@/lib/utils";
 import { PlayerAvatar } from "./player-avatar";
+import { ProfileGames, ProfileOverview } from "./profile-stats";
 import { ReferralPanel } from "./referral-panel";
 import { useSocial } from "./social-provider";
+import { VisibilitySettings } from "./visibility-settings";
 
 const dateFormat = new Intl.DateTimeFormat("fr-FR", {
   month: "long",
@@ -45,9 +49,6 @@ export function PlayerProfileDialog({
   onClose: () => void;
 }) {
   const { profile, error, reload } = usePlayerProfile(playerId, version);
-  const social = useSocial();
-  const referralForSelf =
-    playerId !== null && playerId === social.overview?.me.id;
   return (
     <Dialog open={!!playerId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto border-white/[0.06] bg-[#15121d] p-0 font-sans text-foreground sm:max-w-[460px]">
@@ -68,11 +69,6 @@ export function PlayerProfileDialog({
           </div>
         ) : (
           <ProfileSkeleton />
-        )}
-        {referralForSelf && (
-          <div className="px-6 pt-4 pb-5">
-            <ReferralPanel />
-          </div>
         )}
       </DialogContent>
     </Dialog>
@@ -158,8 +154,56 @@ function ProfileBody({
         </div>
         <RelationActions profile={profile} onChanged={onChanged} />
       </div>
-
+      <ProfileTabs profile={profile} />
     </>
+  );
+}
+
+/**
+ * Everything below the identity card. A player who closed their profile shows
+ * no tabs at all: there is nothing to put in them.
+ */
+function ProfileTabs({ profile }: { profile: PlayerProfile }) {
+  const self = profile.relation === "self";
+
+  if (!profile.stats)
+    return (
+      <p className="flex items-start gap-2 px-6 py-6 text-sm text-muted-foreground">
+        <EyeOff className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        {profile.name} garde son profil privé.
+      </p>
+    );
+
+  return (
+    <Tabs defaultValue="overview" className="gap-0 px-6 pt-4 pb-5">
+      <TabsList className="w-full">
+        <TabsTrigger value="overview">Aperçu</TabsTrigger>
+        <TabsTrigger value="games">Jeux</TabsTrigger>
+        {self && <TabsTrigger value="club">Club</TabsTrigger>}
+      </TabsList>
+      <TabsContent value="overview" className="pt-4">
+        <ProfileOverview
+          stats={profile.stats}
+          name={profile.name}
+          relation={profile.relation}
+        />
+      </TabsContent>
+      <TabsContent value="games" className="pt-4">
+        <ProfileGames
+          stats={profile.stats}
+          name={profile.name}
+          relation={profile.relation}
+        />
+      </TabsContent>
+      {self && (
+        <TabsContent value="club" className="space-y-6 pt-4">
+          <ReferralPanel />
+          {profile.visibility && (
+            <VisibilitySettings visibility={profile.visibility} />
+          )}
+        </TabsContent>
+      )}
+    </Tabs>
   );
 }
 
