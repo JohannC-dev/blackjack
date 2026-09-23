@@ -987,3 +987,46 @@
     animation: none;
   }
 }
+
+/* Betting controls stay on the felt without a second, empty footer card. */
+.table-panel .controls-panel.controls-betting {
+  --table-bet-origin-adjustment: 18px;
+  height: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.casino-shell.is-fullscreen .table-panel .controls-panel.controls-betting {
+  --table-bet-origin-adjustment: 0px;
+}
+
+.table-panel .controls-panel.controls-betting .controls-heading,
+.table-panel .controls-panel.controls-betting .controls-footnote {
+  display: none;
+}
+
+.table-panel .controls-panel.controls-betting .betting-actions {
+  height: 0;
+  min-height: 0;
+  margin: 0;
+}
+
+.table-panel .controls-panel.controls-betting .chip-rack {
+  top: calc(
+    -1 * var(--table-status-height) - var(--table-stage-height) / 2 -
+      var(--table-action-lift) + var(--table-bet-origin-adjustment)
+  );
+}
+
+.table-panel .controls-panel.controls-betting .bet-confirm {
+  top: calc(
+    -1 * var(--table-status-height) - var(--table-stage-height) / 2 -
+      var(--table-action-lift) + var(--table-confirm-offset) +
+      var(--table-bet-origin-adjustment)
+  );
+}

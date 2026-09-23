@@ -29,7 +29,6 @@ import {
   House,
   Layers2,
   LogOut,
-  LoaderCircle,
   Maximize2,
   Minus,
   Minimize2,
@@ -1015,7 +1014,7 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
   isFullscreen,
   seatCount,
   round,
-  bettingDeadline,
+  countdownDeadline,
   playerId,
   emotePlayers,
   onToggleFullscreen,
@@ -1027,7 +1026,7 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
   isFullscreen: boolean;
   seatCount: number;
   round: number;
-  bettingDeadline: number | null;
+  countdownDeadline: number | null;
   playerId: string;
   emotePlayers: EmotePlayer[];
   onSendEmote: (request: EmoteRequest) => void;
@@ -1043,9 +1042,9 @@ const BlackjackTableToolbar = memo(function BlackjackTableToolbar({
         <span className="table-description">Mises sur mesure</span>
         <div className="table-round-meta" aria-label="Informations de manche">
           <span>MANCHE {String(round).padStart(3, "0")}</span>
-          {bettingDeadline !== null && (
+          {countdownDeadline !== null && (
             <span className="table-round-countdown">
-              <CountdownText deadline={bettingDeadline} suffix="" />
+              <CountdownText deadline={countdownDeadline} suffix="" />
             </span>
           )}
         </div>
@@ -1181,6 +1180,8 @@ export function BlackjackCasino({
   );
   const myTurn =
     state?.phase === "playing" && activeSeat?.playerId === playerId;
+  const showControlsPanel =
+    betting || !!insuranceSeat || (!!myTurn && !!activeHand);
   const myHistory = state?.history.filter((h) => h.playerId === playerId) ?? [];
   const sessionNet = myHistory.reduce((sum, item) => sum + item.net, 0);
   const myBonus = ownSeats.reduce(
@@ -1639,8 +1640,8 @@ export function BlackjackCasino({
                     state?.seats.filter((seat) => seat.playerId).length ?? 0
                   }
                   round={state?.round ?? 0}
-                  bettingDeadline={
-                    state?.phase === "betting" ? state.deadline : null
+                  countdownDeadline={
+                    state?.phase === "settled" ? null : (state?.deadline ?? null)
                   }
                   playerId={playerId}
                   emotePlayers={emotePlayers}
@@ -1805,395 +1806,326 @@ export function BlackjackCasino({
                       ? "Connexion à la table…"
                       : (state?.message ?? "Bienvenue à la table.")}
                 </div>
-                <div
-                  className={`controls-panel ${myTurn || insuranceSeat ? "controls-active" : ""}`}
-                  aria-label="Actions de jeu"
-                >
-                  <div className="controls-heading">
-                    <div>
-                      <span className="section-kicker">
-                        {betting
-                          ? "À VOUS DE MISER"
-                          : state?.phase === "insurance"
-                            ? "ASSURANCE · AS DU CROUPIER"
-                            : state?.phase === "shuffling"
-                              ? "MÉLANGE EN COURS"
-                              : myTurn
-                                ? `MAIN ${(activeSeat?.index ?? 0) + 1} · ${activeHand ? score(activeHand.cards).total : ""} POINTS`
-                                : "LA PARTIE CONTINUE"}
-                      </span>
-                      <h2>{subtitle}</h2>
+                {showControlsPanel && (
+                  <div
+                    className={`controls-panel ${betting ? "controls-betting" : ""} ${myTurn || insuranceSeat ? "controls-active" : ""}`}
+                    aria-label="Actions de jeu"
+                  >
+                    <div className="controls-heading">
+                      <div>
+                        <span className="section-kicker">
+                          {betting
+                            ? "À VOUS DE MISER"
+                            : state?.phase === "insurance"
+                              ? "ASSURANCE · AS DU CROUPIER"
+                              : state?.phase === "shuffling"
+                                ? "MÉLANGE EN COURS"
+                                : myTurn
+                                  ? `MAIN ${(activeSeat?.index ?? 0) + 1} · ${activeHand ? score(activeHand.cards).total : ""} POINTS`
+                                  : "LA PARTIE CONTINUE"}
+                        </span>
+                        <h2>{subtitle}</h2>
+                      </div>
+                      {betting && (
+                        <span className="selected-hand-label">
+                          {seat ? `Main ${seat.index + 1}` : "Spectateur"}
+                          {ownSeats.length > 1 && (
+                            <span> / {ownSeats.length} mains</span>
+                          )}
+                        </span>
+                      )}
                     </div>
-                    {betting && (
-                      <span className="selected-hand-label">
-                        {seat ? `Main ${seat.index + 1}` : "Spectateur"}
-                        {ownSeats.length > 1 && (
-                          <span> / {ownSeats.length} mains</span>
-                        )}
-                      </span>
-                    )}
-                    {!betting && state?.deadline != null && (
-                      <span className="turn-clock">
-                        <CountdownText deadline={state.deadline} suffix="" />
-                        <small>SEC</small>
-                      </span>
-                    )}
-                  </div>
-                  <AnimatedMenu active={betting} className="betting-actions">
-                    {betting ? (
-                      <>
-                        <div className="chip-rack">
-                          <div className="chip-picker">
-                            <ChipSlider
-                              pages={BLACKJACK_CHIP_PRESETS}
-                              balance={chipBalance}
-                              selected={chip}
-                              disabled={!!me?.ready}
-                              onSelect={selectChip}
-                              onPageChange={(page) => {
-                                const nextChip = affordableChipInPage(
-                                  BLACKJACK_CHIP_PRESETS[page] ?? [],
-                                  chipBalance,
-                                );
-                                if (nextChip !== undefined) setChip(nextChip);
-                              }}
-                            />
-                            <span className="rack-divider" />
+                    <AnimatedMenu active={betting} className="betting-actions">
+                      {betting ? (
+                        <>
+                          <div className="chip-rack">
+                            <div className="chip-picker">
+                              <ChipSlider
+                                pages={BLACKJACK_CHIP_PRESETS}
+                                balance={chipBalance}
+                                selected={chip}
+                                disabled={!!me?.ready}
+                                onSelect={selectChip}
+                                onPageChange={(page) => {
+                                  const nextChip = affordableChipInPage(
+                                    BLACKJACK_CHIP_PRESETS[page] ?? [],
+                                    chipBalance,
+                                  );
+                                  if (nextChip !== undefined) setChip(nextChip);
+                                }}
+                              />
+                              <span className="rack-divider" />
+                              <button
+                                className="icon-button repeat-bet"
+                                disabled={
+                                  disabled ||
+                                  !previousBetTotal ||
+                                  totalBet > 0 ||
+                                  previousBetTotal > balance ||
+                                  !!me?.ready
+                                }
+                                onClick={repeatBet}
+                                title={
+                                  previousBetTotal
+                                    ? `Répéter la mise précédente (${credits(previousBetTotal)} crédits)`
+                                    : "Aucune mise précédente"
+                                }
+                                aria-label="Répéter la mise précédente"
+                              >
+                                <Repeat2 size={16} />
+                                <span>Répéter</span>
+                              </button>
+                              <button
+                                className="icon-button undo-bet"
+                                disabled={
+                                  disabled || !betHistory.length || !!me?.ready
+                                }
+                                onClick={undoBet}
+                                title="Annuler le dernier jeton"
+                                aria-label="Annuler le dernier jeton"
+                              >
+                                <RotateCcw size={17} />
+                              </button>
+                              <HoldToConfirmButton
+                                disabled={disabled || !totalBet || !!me?.ready}
+                                onConfirm={clearBets}
+                                title="Maintenir pour retirer toutes vos mises"
+                                ariaLabel="Maintenir pour retirer toutes vos mises"
+                              >
+                                <X size={17} />
+                              </HoldToConfirmButton>
+                            </div>
+                            <span className="chip-rack-hint">
+                              Jeton de <b>{chipLabel(chip)}</b> sélectionné ·
+                              cliquez sur le tapis pour miser
+                            </span>
+                          </div>
+                          <div className="bet-confirm">
+                            <span>
+                              MISE TOTALE
+                              <b>
+                                {credits(totalBet)} <small>cr.</small>
+                              </b>
+                            </span>
                             <button
-                              className="icon-button repeat-bet"
+                              className={`button primary deal-button ${me?.ready ? "is-ready" : ""}`}
+                              disabled={disabled || totalBet === 0}
+                              onClick={() =>
+                                command({ type: "ready", ready: !me?.ready })
+                              }
+                            >
+                              {me?.ready ? (
+                                <>
+                                  <Check size={18} />
+                                  Prêt · annuler
+                                </>
+                              ) : (
+                                <>
+                                  Je suis prêt
+                                  <ArrowRight size={18} />
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </>
+                      ) : null}
+                    </AnimatedMenu>
+                    {betting && (
+                      <div className="controls-footnote">
+                        <span>
+                          <ShieldCheck size={12} />
+                          Misez directement sur Blackjack, 21+3 ou Super Pairs.
+                        </span>
+                        {seat && (
+                          <button
+                            className="text-button"
+                            disabled={disabled}
+                            title="Annuler votre place et retirer ses mises"
+                            onClick={() => releaseSeat(seat)}
+                          >
+                            Libérer cette place
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <AnimatedMenu
+                      active={!!insuranceSeat}
+                      className="play-actions insurance-actions"
+                    >
+                      {insuranceSeat && (
+                        <>
+                          <button
+                            className="button insurance-decline"
+                            disabled={disabled}
+                            aria-label={`Refuser l’assurance pour la main ${insuranceSeat.index + 1}`}
+                            onClick={() =>
+                              command({
+                                type: "insurance",
+                                seat: insuranceSeat.index,
+                                take: false,
+                              })
+                            }
+                          >
+                            <span>
+                              Refuser<small>Continuer</small>
+                            </span>
+                          </button>
+                          <button
+                            className="button insurance-accept"
+                            disabled={
+                              disabled || balance < insuranceSeat.bet.main / 2
+                            }
+                            aria-label={`Assurer la main ${insuranceSeat.index + 1} pour ${credits(insuranceSeat.bet.main / 2)} crédits. Gain net de ${credits(insuranceSeat.bet.main)} crédits si le croupier a un blackjack`}
+                            onClick={() =>
+                              command({
+                                type: "insurance",
+                                seat: insuranceSeat.index,
+                                take: true,
+                              })
+                            }
+                          >
+                            <ShieldCheck size={20} />
+                            <span>
+                              Assurer
+                              <small>
+                                {credits(insuranceSeat.bet.main / 2)} cr.
+                              </small>
+                            </span>
+                          </button>
+                        </>
+                      )}
+                    </AnimatedMenu>
+                    <AnimatedMenu
+                      active={!!myTurn && !!activeHand}
+                      className="play-actions"
+                    >
+                      {myTurn && activeHand ? (
+                        <>
+                          <button
+                            className="button hit-button"
+                            disabled={disabled}
+                            onClick={() =>
+                              command({ type: "hit", handId: activeHand.id })
+                            }
+                          >
+                            <Plus size={20} />
+                            <span>
+                              Carte<small>Tirer une carte</small>
+                            </span>
+                          </button>
+                          <button
+                            className="button stand-button"
+                            disabled={disabled}
+                            onClick={() =>
+                              command({ type: "stand", handId: activeHand.id })
+                            }
+                          >
+                            <Minus size={20} />
+                            <span>
+                              Rester<small>Garder votre main</small>
+                            </span>
+                          </button>
+                          <div
+                            className={`double-action ${doubleChoice === activeHand.id && !doubleChoiceClosing ? "choice-open" : ""}`}
+                          >
+                            <button
+                              className="button secondary double-trigger"
                               disabled={
                                 disabled ||
-                                !previousBetTotal ||
-                                totalBet > 0 ||
-                                previousBetTotal > balance ||
-                                !!me?.ready
+                                activeHand.cards.length !== 2 ||
+                                activeHand.splitAces ||
+                                balance < activeHand.bet
                               }
-                              onClick={repeatBet}
-                              title={
-                                previousBetTotal
-                                  ? `Répéter la mise précédente (${credits(previousBetTotal)} crédits)`
-                                  : "Aucune mise précédente"
+                              aria-haspopup="menu"
+                              aria-expanded={
+                                doubleChoice === activeHand.id &&
+                                !doubleChoiceClosing
                               }
-                              aria-label="Répéter la mise précédente"
+                              onClick={() => {
+                                if (doubleChoice === activeHand.id) {
+                                  closeDoubleChoice();
+                                  return;
+                                }
+                                if (doubleCloseTimer.current !== null) {
+                                  window.clearTimeout(doubleCloseTimer.current);
+                                  doubleCloseTimer.current = null;
+                                }
+                                setDoubleChoiceClosing(false);
+                                setDoubleChoice(activeHand.id);
+                              }}
                             >
-                              <Repeat2 size={16} />
-                              <span>Répéter</span>
+                              <span className="double-icon">×2</span>
+                              <span>
+                                Doubler<small>Choisir la révélation</small>
+                              </span>
+                              <ChevronDown className="double-chevron" size={14} />
                             </button>
-                            <button
-                              className="icon-button undo-bet"
-                              disabled={
-                                disabled || !betHistory.length || !!me?.ready
-                              }
-                              onClick={undoBet}
-                              title="Annuler le dernier jeton"
-                              aria-label="Annuler le dernier jeton"
-                            >
-                              <RotateCcw size={17} />
-                            </button>
-                            <HoldToConfirmButton
-                              disabled={disabled || !totalBet || !!me?.ready}
-                              onConfirm={clearBets}
-                              title="Maintenir pour retirer toutes vos mises"
-                              ariaLabel="Maintenir pour retirer toutes vos mises"
-                            >
-                              <X size={17} />
-                            </HoldToConfirmButton>
-                          </div>
-                          <span className="chip-rack-hint">
-                            Jeton de <b>{chipLabel(chip)}</b> sélectionné ·
-                            cliquez sur le tapis pour miser
-                          </span>
-                        </div>
-                        <div className="bet-confirm">
-                          <span>
-                            MISE TOTALE
-                            <b>
-                              {credits(totalBet)} <small>cr.</small>
-                            </b>
-                          </span>
-                          <button
-                            className={`button primary deal-button ${me?.ready ? "is-ready" : ""}`}
-                            disabled={disabled || totalBet === 0}
-                            onClick={() =>
-                              command({ type: "ready", ready: !me?.ready })
-                            }
-                          >
-                            {me?.ready ? (
-                              <>
-                                <Check size={18} />
-                                Prêt · annuler
-                              </>
-                            ) : (
-                              <>
-                                Je suis prêt
-                                <ArrowRight size={18} />
-                              </>
+                            {doubleChoice === activeHand.id && (
+                              <div
+                                className={`double-choice-menu ${doubleChoiceClosing ? "is-closing" : ""}`}
+                                role="menu"
+                                aria-label="Révélation de la carte doublée"
+                              >
+                                <button
+                                  role="menuitem"
+                                  onClick={() => {
+                                    closeDoubleChoice();
+                                    void command({
+                                      type: "double",
+                                      handId: activeHand.id,
+                                      reveal: "now",
+                                    });
+                                  }}
+                                >
+                                  <Eye size={17} />
+                                  <span>
+                                    Carte visible
+                                    <small>Révélée immédiatement</small>
+                                  </span>
+                                </button>
+                                <button
+                                  role="menuitem"
+                                  onClick={() => {
+                                    closeDoubleChoice();
+                                    void command({
+                                      type: "double",
+                                      handId: activeHand.id,
+                                      reveal: "dealer",
+                                    });
+                                  }}
+                                >
+                                  <EyeOff size={17} />
+                                  <span>
+                                    Carte cachée
+                                    <small>Après le croupier</small>
+                                  </span>
+                                </button>
+                              </div>
                             )}
-                          </button>
-                        </div>
-                      </>
-                    ) : null}
-                  </AnimatedMenu>
-                  {betting && (
-                    <div className="controls-footnote">
-                      <span>
-                        <ShieldCheck size={12} />
-                        Misez directement sur Blackjack, 21+3 ou Super Pairs.
-                      </span>
-                      {seat && (
-                        <button
-                          className="text-button"
-                          disabled={disabled}
-                          title="Annuler votre place et retirer ses mises"
-                          onClick={() => releaseSeat(seat)}
-                        >
-                          Libérer cette place
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  <AnimatedMenu
-                    active={!!insuranceSeat}
-                    className="play-actions insurance-actions"
-                  >
-                    {insuranceSeat && (
-                      <>
-                        <button
-                          className="button insurance-decline"
-                          disabled={disabled}
-                          aria-label={`Refuser l’assurance pour la main ${insuranceSeat.index + 1}`}
-                          onClick={() =>
-                            command({
-                              type: "insurance",
-                              seat: insuranceSeat.index,
-                              take: false,
-                            })
-                          }
-                        >
-                          <span>
-                            Refuser<small>Continuer</small>
-                          </span>
-                        </button>
-                        <button
-                          className="button insurance-accept"
-                          disabled={
-                            disabled || balance < insuranceSeat.bet.main / 2
-                          }
-                          aria-label={`Assurer la main ${insuranceSeat.index + 1} pour ${credits(insuranceSeat.bet.main / 2)} crédits. Gain net de ${credits(insuranceSeat.bet.main)} crédits si le croupier a un blackjack`}
-                          onClick={() =>
-                            command({
-                              type: "insurance",
-                              seat: insuranceSeat.index,
-                              take: true,
-                            })
-                          }
-                        >
-                          <ShieldCheck size={20} />
-                          <span>
-                            Assurer
-                            <small>
-                              {credits(insuranceSeat.bet.main / 2)} cr.
-                            </small>
-                          </span>
-                        </button>
-                      </>
-                    )}
-                  </AnimatedMenu>
-                  <AnimatedMenu
-                    active={!!myTurn && !!activeHand}
-                    className="play-actions"
-                  >
-                    {myTurn && activeHand ? (
-                      <>
-                        <button
-                          className="button hit-button"
-                          disabled={disabled}
-                          onClick={() =>
-                            command({ type: "hit", handId: activeHand.id })
-                          }
-                        >
-                          <Plus size={20} />
-                          <span>
-                            Carte<small>Tirer une carte</small>
-                          </span>
-                        </button>
-                        <button
-                          className="button stand-button"
-                          disabled={disabled}
-                          onClick={() =>
-                            command({ type: "stand", handId: activeHand.id })
-                          }
-                        >
-                          <Minus size={20} />
-                          <span>
-                            Rester<small>Garder votre main</small>
-                          </span>
-                        </button>
-                        <div
-                          className={`double-action ${doubleChoice === activeHand.id && !doubleChoiceClosing ? "choice-open" : ""}`}
-                        >
+                          </div>
                           <button
-                            className="button secondary double-trigger"
+                            className="button secondary"
                             disabled={
                               disabled ||
-                              activeHand.cards.length !== 2 ||
+                              !canSplitCards(activeHand.cards) ||
                               activeHand.splitAces ||
+                              (activeSeat?.hands.length ?? 0) >= 4 ||
                               balance < activeHand.bet
                             }
-                            aria-haspopup="menu"
-                            aria-expanded={
-                              doubleChoice === activeHand.id &&
-                              !doubleChoiceClosing
+                            onClick={() =>
+                              command({ type: "split", handId: activeHand.id })
                             }
-                            onClick={() => {
-                              if (doubleChoice === activeHand.id) {
-                                closeDoubleChoice();
-                                return;
-                              }
-                              if (doubleCloseTimer.current !== null) {
-                                window.clearTimeout(doubleCloseTimer.current);
-                                doubleCloseTimer.current = null;
-                              }
-                              setDoubleChoiceClosing(false);
-                              setDoubleChoice(activeHand.id);
-                            }}
                           >
-                            <span className="double-icon">×2</span>
+                            <Layers2 size={19} />
                             <span>
-                              Doubler<small>Choisir la révélation</small>
+                              Séparer<small>Deux mains</small>
                             </span>
-                            <ChevronDown className="double-chevron" size={14} />
                           </button>
-                          {doubleChoice === activeHand.id && (
-                            <div
-                              className={`double-choice-menu ${doubleChoiceClosing ? "is-closing" : ""}`}
-                              role="menu"
-                              aria-label="Révélation de la carte doublée"
-                            >
-                              <button
-                                role="menuitem"
-                                onClick={() => {
-                                  closeDoubleChoice();
-                                  void command({
-                                    type: "double",
-                                    handId: activeHand.id,
-                                    reveal: "now",
-                                  });
-                                }}
-                              >
-                                <Eye size={17} />
-                                <span>
-                                  Carte visible
-                                  <small>Révélée immédiatement</small>
-                                </span>
-                              </button>
-                              <button
-                                role="menuitem"
-                                onClick={() => {
-                                  closeDoubleChoice();
-                                  void command({
-                                    type: "double",
-                                    handId: activeHand.id,
-                                    reveal: "dealer",
-                                  });
-                                }}
-                              >
-                                <EyeOff size={17} />
-                                <span>
-                                  Carte cachée
-                                  <small>Après le croupier</small>
-                                </span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          className="button secondary"
-                          disabled={
-                            disabled ||
-                            !canSplitCards(activeHand.cards) ||
-                            activeHand.splitAces ||
-                            (activeSeat?.hands.length ?? 0) >= 4 ||
-                            balance < activeHand.bet
-                          }
-                          onClick={() =>
-                            command({ type: "split", handId: activeHand.id })
-                          }
-                        >
-                          <Layers2 size={19} />
-                          <span>
-                            Séparer<small>Deux mains</small>
-                          </span>
-                        </button>
-                      </>
-                    ) : null}
-                  </AnimatedMenu>
-                  {!betting && !insuranceSeat && !(myTurn && activeHand) && (
-                    <div className="waiting-state">
-                      {state?.phase === "settled" ? (
-                        <>
-                          <span
-                            className={`result-symbol ${roundResult && roundResult.net > 0 ? "positive" : ""}`}
-                          >
-                            {roundResult && roundResult.net > 0 ? (
-                              <Sparkles size={25} />
-                            ) : (
-                              <Spade size={25} />
-                            )}
-                          </span>
-                          <div>
-                            <b>
-                              {roundResult
-                                ? roundResult.net > 0
-                                  ? "La nuit vous sourit."
-                                  : roundResult.net === 0
-                                    ? "On remet ça ?"
-                                    : "La prochaine sera peut-être la vôtre."
-                                : "La prochaine manche vous attend."}
-                            </b>
-                            <p>
-                              Les mises rouvrent dans{" "}
-                              <CountdownText
-                                deadline={state?.deadline}
-                                suffix=""
-                                fallback="0"
-                              />{" "}
-                              secondes.
-                            </p>
-                          </div>
                         </>
-                      ) : (
-                        <>
-                          <LoaderCircle className="spinner" size={24} />
-                          <div>
-                            <b>
-                              {state?.phase === "playing"
-                                ? `${state.players.find((p) => p.id === activeSeat?.playerId)?.name ?? "Un joueur"} prend sa décision.`
-                                : state?.phase === "shuffling"
-                                  ? "Le croupier mélange le sabot."
-                                  : state?.phase === "bonuses"
-                                    ? myBonus > 0
-                                      ? `+${credits(myBonus)} crédits versés sur votre solde.`
-                                      : "Pas de combinaison gagnante cette fois-ci."
-                                    : state?.phase === "dealer"
-                                      ? "Le croupier révèle sa main."
-                                      : "Un peu de suspense…"}
-                            </b>
-                            <p>
-                              {state?.phase === "shuffling"
-                                ? "Les mises et les actions reprennent une fois le mélange terminé."
-                                : state?.phase === "bonuses"
-                                  ? "Les gains annexes sont payés avant de jouer vos mains."
-                                  : ownSeats.length
-                                    ? "Toutes vos mains se jouent l’une après l’autre."
-                                    : "Vous pourrez prendre une place à la prochaine manche."}
-                            </p>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+                      ) : null}
+                    </AnimatedMenu>
+                  </div>
+                )}
               </section>
             </div>
           </div>
