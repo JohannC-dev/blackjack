@@ -1,7 +1,6 @@
 /** Shared vocabulary of the parrainage, used by the server and the client. */
 
 import { INITIAL_CREDIT_BALANCE } from "./chips";
-import type { OwnedCosmetic } from "./cosmetics";
 import type { SocialPlayer } from "./social";
 
 /** Field carrying the parrainage code in the sign-up request. */
@@ -75,5 +74,4 @@ export type ReferralOverview = {
   filleuls: Filleul[];
   /** Credits already granted across all filleuls. */
   earned: number;
-  cosmetics: OwnedCosmetic[];
 };

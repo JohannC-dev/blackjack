@@ -49,6 +49,7 @@ import {
   GameControlsBar,
 } from "../../ui/game-controls";
 import { MineBomb, MineDiamond } from "./mine-art";
+import { useMySkins } from "@/lib/cosmetics-api";
 
 type Game = ReturnType<typeof useGame>;
 
@@ -85,6 +86,7 @@ function MinesCellButton({
   patternPosition: number;
   onReveal: (index: number) => void;
 }) {
+  const gemSkin = useMySkins()?.["mine-gem"];
   const label = patternEditable
     ? `${patternPosition >= 0 ? "Retirer" : "Sélectionner"} la case ${cell.index + 1} du pattern`
     : cell.status === "diamond"
@@ -107,7 +109,7 @@ function MinesCellButton({
         </span>
       )}
       {cell.status === "diamond" ? (
-        <MineDiamond className="mine-cell-art" />
+        <MineDiamond className="mine-cell-art" skin={gemSkin} />
       ) : cell.status === "mine" ? (
         <MineBomb className="mine-cell-art" />
       ) : (
@@ -602,6 +604,7 @@ export function MinesCasino({
   onNavigate: (view: CasinoView) => void;
 }) {
   const state = game.minesState;
+  const mySkins = useMySkins();
   const [bet, setBet] = useState<number>(MINES_MIN_BET);
   const [target, setTarget] = useState<MinesTarget>(200);
   const { enabled: sound, contextRef: audioRef } = useGameAudio(
@@ -943,7 +946,11 @@ export function MinesCasino({
               <div className="mines-board-footer">
                 <div className="mines-message" aria-live="polite">
                   <span className="mines-message-icon">
-                    {state?.phase === "lost" ? <MineBomb /> : <MineDiamond />}
+                    {state?.phase === "lost" ? (
+                      <MineBomb />
+                    ) : (
+                      <MineDiamond skin={mySkins?.["mine-gem"]} />
+                    )}
                   </span>
                   <p>
                     <strong>

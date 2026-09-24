@@ -57,6 +57,9 @@ import {
   getClubBalance,
 } from "../../ui";
 import { ChickenArt, ChickenBarrierArt, ChickenCarArt } from "./chicken-art";
+import { SkinImage } from "../../ui/skin-image";
+import { skinOf } from "@/lib/cosmetics";
+import { useMySkins, useTableSkins } from "@/lib/cosmetics-api";
 import styles from "./chicken.module.css";
 
 type Game = ReturnType<typeof useGame>;
@@ -122,6 +125,12 @@ export function ChickenCasino({
   const displayStep = visualLost ? Math.min(visualStep + 1, 20) : visualStep;
   const ghosts = (state?.ghosts ?? []).filter(
     (ghost) => ghost.playerId !== game.playerId,
+  );
+  const mySkins = useMySkins();
+  // The other chickens wear their owner's skin, read again at each run.
+  const ghostSkins = useTableSkins(
+    ghosts.map((ghost) => ghost.playerId),
+    run?.id,
   );
   const sceneBusy =
     !sceneCurrent ||
@@ -505,7 +514,15 @@ export function ChickenCasino({
                     }
                   >
                     <span>{ghost.name}</span>
-                    <ChickenArt />
+                    <SkinImage
+                      src={skinOf(
+                        ghostSkins[ghost.playerId],
+                        mySkins,
+                        "chicken",
+                      )}
+                      fallback={<ChickenArt className={styles.sprite} />}
+                      className={styles.sprite}
+                    />
                   </div>
                 ))}
                 <div
@@ -518,7 +535,12 @@ export function ChickenCasino({
                   }
                 >
                   <span>VOUS</span>
-                  <ChickenArt key={`${run?.id ?? "idle"}-${displayStep}`} />
+                  <SkinImage
+                    key={`${run?.id ?? "idle"}-${displayStep}`}
+                    src={mySkins?.chicken}
+                    fallback={<ChickenArt className={styles.sprite} />}
+                    className={styles.sprite}
+                  />
                   {visualStep > 0 && !visualLost && (
                     <i
                       key={`landing-${run?.id ?? "idle"}-${visualStep}`}

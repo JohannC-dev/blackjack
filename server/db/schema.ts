@@ -1,9 +1,17 @@
 import { sql } from "drizzle-orm";
+import type {
+  CosmeticKind,
+  CosmeticRarity,
+  CosmeticSource,
+  CosmeticStatus,
+} from "../../src/lib/cosmetics";
 import type { Audience } from "../../src/lib/social";
 import {
   bigint,
   boolean,
   check,
+  customType,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -348,24 +356,142 @@ export const referralReward = pgTable(
   ],
 );
 
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
+
 /**
- * Cosmetic items a player owns. The catalogue lives in the client
- * (src/lib/cosmetics.ts); only the ownership is stored.
+ * Catalogue of the skins (docs/adr/0003-skins.md). The kinds are known to the
+ * code, which draws each of them; the items themselves live here.
  */
+export const cosmetic = pgTable(
+  "cosmetic",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind").$type<CosmeticKind>().notNull(),
+    name: text("name").notNull(),
+    description: text("description").default("").notNull(),
+    rarity: text("rarity").$type<CosmeticRarity>().default("common").notNull(),
+    /** draft: hidden; active: listed; retired: kept by its owners only. */
+    status: text("status").$type<CosmeticStatus>().default("draft").notNull(),
+    /** Shown under a locked item, e.g. "Parraine un ami". */
+    unlockHint: text("unlock_hint"),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    /** Not for sale while null. No purchase reads these yet. */
+    priceCredits: bigint("price_credits", { mode: "number" }),
+    priceCents: integer("price_cents"),
+    priceCurrency: text("price_currency"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    // Target of the equipment key, which also pins the kind.
+    uniqueIndex("cosmetic_id_kind_idx").on(table.id, table.kind),
+    check(
+      "cosmetic_kind_values",
+      sql`${table.kind} in ('card-back', 'profile-icon', 'chicken', 'mine-gem')`,
+    ),
+    check(
+      "cosmetic_rarity_values",
+      sql`${table.rarity} in ('common', 'rare', 'epic', 'legendary')`,
+    ),
+    check(
+      "cosmetic_status_values",
+      sql`${table.status} in ('draft', 'active', 'retired')`,
+    ),
+    check(
+      "cosmetic_price_credits_positive",
+      sql`${table.priceCredits} is null or ${table.priceCredits} > 0`,
+    ),
+    check(
+      "cosmetic_price_cents_positive",
+      sql`${table.priceCents} is null or ${table.priceCents} > 0`,
+    ),
+    check(
+      "cosmetic_price_currency_pair",
+      sql`(${table.priceCents} is null) = (${table.priceCurrency} is null)`,
+    ),
+  ],
+);
+
+/**
+ * The picture of a skin, apart from the catalogue so that listing items never
+ * loads the bytes. The hash versions the asset URL.
+ */
+export const cosmeticAsset = pgTable(
+  "cosmetic_asset",
+  {
+    cosmeticId: text("cosmetic_id")
+      .primaryKey()
+      .references(() => cosmetic.id, { onDelete: "cascade" }),
+    contentType: text("content_type").notNull(),
+    data: bytea("data").notNull(),
+    hash: text("hash").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "cosmetic_asset_content_type_values",
+      sql`${table.contentType} in ('image/svg+xml', 'image/png', 'image/webp')`,
+    ),
+  ],
+);
+
+/** Skins a player owns, and why. */
 export const playerCosmetic = pgTable(
   "player_cosmetic",
   {
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    cosmeticId: text("cosmetic_id").notNull(),
+    // No cascade: a skin someone owns is retired, never deleted.
+    cosmeticId: text("cosmetic_id")
+      .notNull()
+      .references(() => cosmetic.id),
     /** Why the player owns it, e.g. "parrainage-filleul". */
-    source: text("source").notNull(),
+    source: text("source").$type<CosmeticSource>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.cosmeticId] })],
+);
+
+/**
+ * The skin a player wears for each kind; no row means the Classique. The keys
+ * only let a player wear an item they own, under its own kind.
+ */
+export const playerEquippedCosmetic = pgTable(
+  "player_equipped_cosmetic",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<CosmeticKind>().notNull(),
+    cosmeticId: text("cosmetic_id").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.kind] }),
+    foreignKey({
+      name: "player_equipped_cosmetic_owned_fk",
+      columns: [table.userId, table.cosmeticId],
+      foreignColumns: [playerCosmetic.userId, playerCosmetic.cosmeticId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "player_equipped_cosmetic_kind_fk",
+      columns: [table.cosmeticId, table.kind],
+      foreignColumns: [cosmetic.id, cosmetic.kind],
+    }),
+  ],
 );
 
 /** The release currently advertised to connected browsers. */
@@ -390,6 +516,9 @@ export const schema = {
   friendship,
   referral,
   referralReward,
+  cosmetic,
+  cosmeticAsset,
   playerCosmetic,
+  playerEquippedCosmetic,
   deploymentVersion,
 };

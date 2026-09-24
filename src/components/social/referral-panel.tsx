@@ -1,12 +1,10 @@
 "use client";
 
-import { Check, Copy, Gift, Lock, Sparkles, Users } from "lucide-react";
+import { Check, Copy, Gift, Sparkles, Users } from "lucide-react";
 import { Fragment } from "react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { COSMETICS, COSMETIC_KIND_LABELS } from "@/lib/cosmetics";
 import { credits } from "@/lib/rules";
 import {
   REFERRAL_WELCOME_BONUS,
@@ -30,7 +28,12 @@ const dayFormat = new Intl.DateTimeFormat("fr-FR", {
  * The parrainage section of a player's own profile: the code they hand out,
  * the state of their filleuls and the five tiers.
  */
-export function ReferralPanel() {
+export function ReferralPanel({
+  onOpenCollection,
+}: {
+  /** Leads to the collection, where the parrainage rewards are worn. */
+  onOpenCollection?: () => void;
+}) {
   const social = useSocial();
   const { overview, error, reload } = useReferralOverview(
     true,
@@ -53,7 +56,9 @@ export function ReferralPanel() {
         <Skeleton className="mt-2 h-24" />
       </Section>
     );
-  return <ReferralBody overview={overview} />;
+  return (
+    <ReferralBody overview={overview} onOpenCollection={onOpenCollection} />
+  );
 }
 
 function Section({ children }: { children: React.ReactNode }) {
@@ -75,7 +80,13 @@ function Section({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ReferralBody({ overview }: { overview: ReferralOverview }) {
+function ReferralBody({
+  overview,
+  onOpenCollection,
+}: {
+  overview: ReferralOverview;
+  onOpenCollection?: () => void;
+}) {
   const social = useSocial();
   const count = overview.filleuls.length;
   const copyCode = async () => {
@@ -197,16 +208,12 @@ function ReferralBody({ overview }: { overview: ReferralOverview }) {
         </p>
       )}
 
-      <Cosmetics overview={overview} />
+      {onOpenCollection && <CollectionLink onOpen={onOpenCollection} />}
     </Section>
   );
 }
 
-function TierLadder({
-  filleul,
-}: {
-  filleul: Filleul;
-}) {
+function TierLadder({ filleul }: { filleul: Filleul }) {
   const next = filleul.nextTier;
   const previous = [...filleul.tiers]
     .reverse()
@@ -297,57 +304,28 @@ function TierRow({ tier }: { tier: ReferralTierState }) {
   );
 }
 
-function Cosmetics({ overview }: { overview: ReferralOverview }) {
-  const owned = new Map(overview.cosmetics.map((item) => [item.id, item]));
+/** The rewards now live in the collection, next to every other skin. */
+function CollectionLink({ onOpen }: { onOpen: () => void }) {
   return (
-    <div className="mt-4">
-      <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        <Sparkles className="size-3.5" />
-        Récompenses du parrainage
-      </div>
-      <ul className="space-y-1.5">
-        {Object.values(COSMETICS).map((cosmetic) => {
-          const unlocked = owned.get(cosmetic.id);
-          return (
-            <li
-              key={cosmetic.id}
-              className={cn(
-                "flex items-center gap-2.5 rounded-md border border-white/[0.06] px-2.5 py-2",
-                unlocked ? "bg-white/[0.03]" : "opacity-60",
-              )}
-            >
-              <span
-                className="grid size-7 shrink-0 place-items-center rounded-md bg-white/[0.05] text-muted-foreground"
-                aria-hidden="true"
-              >
-                {unlocked ? (
-                  <Sparkles className="size-3.5 text-minuit-purple" />
-                ) : (
-                  <Lock className="size-3.5" />
-                )}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold">
-                  {cosmetic.name}
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  {COSMETIC_KIND_LABELS[cosmetic.kind]} ·{" "}
-                  {unlocked
-                    ? unlocked.source === "parrainage-filleul"
-                      ? "Reçu en tant que filleul"
-                      : "Reçu au premier palier"
-                    : cosmetic.description}
-                </span>
-              </span>
-              {unlocked && !cosmetic.wearable && (
-                <Badge variant="secondary" className="shrink-0 text-[10px]">
-                  Bientôt
-                </Badge>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <button
+      type="button"
+      onClick={onOpen}
+      className="mt-4 flex w-full items-center gap-2.5 rounded-md border border-white/[0.06] bg-white/[0.03] px-2.5 py-2 text-left transition-colors hover:bg-white/[0.06]"
+    >
+      <span
+        className="grid size-7 shrink-0 place-items-center rounded-md bg-white/[0.05]"
+        aria-hidden="true"
+      >
+        <Sparkles className="size-3.5 text-minuit-purple" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold">
+          Récompenses du parrainage
+        </span>
+        <span className="block text-xs text-muted-foreground">
+          Dos de carte et icône de profil, dans votre collection
+        </span>
+      </span>
+    </button>
   );
 }

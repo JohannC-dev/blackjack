@@ -71,6 +71,13 @@
       "when": 1790233061233,
       "tag": "0009_player_game_stats_won",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790246298870,
+      "tag": "0010_skins",
+      "breakpoints": true
     }
   ]
 }

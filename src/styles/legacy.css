@@ -2149,6 +2149,12 @@ button:disabled:active {
   font-weight: 700;
   cursor: pointer;
 }
+.profile-avatar-skin {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
 .profile-avatar:disabled {
   cursor: default;
 }
@@ -2498,6 +2504,17 @@ h1 > span:not(.live-tag) {
   justify-content: center;
   flex-direction: column;
   color: #bfa0dd;
+}
+.back-pattern.skinned {
+  position: relative;
+  overflow: hidden;
+}
+.back-pattern > .back-skin {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .back-pattern > span {
   font-size: 25px;

@@ -298,13 +298,13 @@
   transition: left 470ms cubic-bezier(0.16, 0.78, 0.24, 1);
   pointer-events: none;
 }
-.player svg,
-.ghost svg {
+.player .sprite,
+.ghost .sprite {
   width: 65px;
   height: 65px;
   filter: drop-shadow(1px 5px 2px #26263877);
 }
-.player svg {
+.player .sprite {
   position: relative;
   z-index: 1;
 }
@@ -334,7 +334,7 @@
 .ghost span {
   background: #d3c7e6;
 }
-.player[data-hop="true"] svg {
+.player[data-hop="true"] .sprite {
   animation: chickenHop 520ms cubic-bezier(0.22, 0.7, 0.25, 1) both;
 }
 .landing {
@@ -350,7 +350,7 @@
   animation: landingRing 520ms ease-out both;
   pointer-events: none;
 }
-.crashed svg {
+.crashed .sprite {
   animation: chickenImpact 300ms ease-out 450ms both;
 }
 .roadTap {
@@ -820,9 +820,9 @@
   .barrier,
   .recentLane .lanePayout,
   .recentLane .carTrack svg,
-  .player[data-hop="true"] svg,
+  .player[data-hop="true"] .sprite,
   .landing,
-  .crashed svg,
+  .crashed .sprite,
   .loss,
   .fatalLane::after {
     animation: none;
@@ -853,8 +853,8 @@
   .stage {
     height: 380px;
   }
-  .player svg,
-  .ghost svg {
+  .player .sprite,
+  .ghost .sprite {
     width: 58px;
     height: 58px;
   }

@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatFriendCode } from "@/lib/social";
 import { PlayerAvatar } from "./player-avatar";
+import { SkinImage } from "@/components/ui/skin-image";
+import { useEquippedSkins } from "@/lib/cosmetics-api";
 import { useOptionalSocial } from "./social-provider";
 
 /** The avatar of the club header, opening the player's own menu. */
@@ -27,6 +29,7 @@ export function ProfileMenu({
   const me = social?.overview?.me;
   const pending = social?.pendingCount ?? 0;
   const initial = (name || "M").slice(0, 1).toUpperCase();
+  const icon = useEquippedSkins(me?.id)?.["profile-icon"];
 
   if (!social && !onSignOut)
     return (
@@ -48,7 +51,11 @@ export function ProfileMenu({
           }
           title={name || "Votre profil"}
         >
-          {initial}
+          <SkinImage
+            src={icon}
+            fallback={initial}
+            className="profile-avatar-skin"
+          />
           {!!pending && (
             <span
               className="absolute -top-1 -right-1 grid h-4 min-w-4 place-items-center rounded-full bg-minuit-purple px-1 text-[9px] leading-none font-bold text-[#1a1426] ring-2 ring-[#100e18]"
