@@ -114,7 +114,7 @@ bun run build
 PORT=3000 bun run start
 ```
 
-Définir `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` et `BETTER_AUTH_TRUSTED_ORIGINS` dans l’environnement de production. Pour protéger la connexion avec Turnstile, définir aussi `TURNSTILE_SECRET_KEY` dans l’environnement d’exécution et fournir `NEXT_PUBLIC_TURNSTILE_SITE_KEY` au build. Exécuter les migrations une seule fois avant de démarrer la nouvelle version.
+Définir `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` et `BETTER_AUTH_TRUSTED_ORIGINS` dans l’environnement de production. Pour protéger la connexion et la création de compte avec Turnstile, définir aussi `TURNSTILE_SECRET_KEY` dans l’environnement d’exécution et fournir `NEXT_PUBLIC_TURNSTILE_SITE_KEY` au build. Exécuter les migrations une seule fois avant de démarrer la nouvelle version.
 
 Héberger ce processus Node.js persistant sur un serveur ou un service supportant les WebSockets. Le point de contrôle `GET /api/health` renvoie `{ "ok": true }`. Un proxy doit transmettre les en-têtes `Host`, `Upgrade` et `Connection`, et permettre les connexions persistantes. Utiliser HTTPS pour une adresse publique. Le serveur personnalisé ne peut pas être remplacé par un simple export statique ni par des fonctions serverless éphémères.
 
