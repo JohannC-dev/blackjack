@@ -40,6 +40,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const session = authClient.useSession();
   const [balance, setBalance] = useState<number | null>(null);
   const user = session.data?.user;
+  /**
+   * The session is refetched whenever the window regains focus, and pends
+   * again while it does. Once the answer is known it stays known: otherwise
+   * an alt-tab unmounts the welcome modal and wipes the form being filled —
+   * exactly what someone does to go and copy a parrainage code.
+   */
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    if (!session.isPending) setLoaded(true);
+  }, [session.isPending]);
 
   useEffect(() => {
     if (!user) {
@@ -118,7 +128,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     <ProfileContext.Provider
       value={{
         profile,
-        loaded: !session.isPending,
+        loaded,
         balance,
         authenticate,
         signOut,
