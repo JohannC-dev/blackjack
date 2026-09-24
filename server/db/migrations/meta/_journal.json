@@ -85,6 +85,13 @@
       "when": 1790249887319,
       "tag": "0011_exclusive_rarity",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790270246637,
+      "tag": "0012_daily_streak",
+      "breakpoints": true
     }
   ]
 }

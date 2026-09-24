@@ -11,6 +11,7 @@ import {
   boolean,
   check,
   customType,
+  date,
   foreignKey,
   index,
   integer,
@@ -494,6 +495,33 @@ export const playerEquippedCosmetic = pgTable(
   ],
 );
 
+/**
+ * The daily streak of a player and their Lucky Wheel of the day. Club days
+ * run from 08:00 to 08:00 in Paris; a missed day is only noticed on read.
+ */
+export const dailyStreak = pgTable(
+  "daily_streak",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => user.id, { onDelete: "cascade" }),
+    current: integer("current").default(0).notNull(),
+    best: integer("best").default(0).notNull(),
+    /** Last club day counted, null before the first one. */
+    lastDay: date("last_day", { mode: "string" }),
+    /** First day of the current run: milestones pay once per run. */
+    runStartedDay: date("run_started_day", { mode: "string" }),
+    lastSpinDay: date("last_spin_day", { mode: "string" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    check("daily_streak_current_nonnegative", sql`${table.current} >= 0`),
+    check("daily_streak_best_covers_current", sql`${table.best} >= ${table.current}`),
+  ],
+);
+
 /** The release currently advertised to connected browsers. */
 export const deploymentVersion = pgTable(
   "deployment_version",
@@ -520,5 +548,6 @@ export const schema = {
   cosmeticAsset,
   playerCosmetic,
   playerEquippedCosmetic,
+  dailyStreak,
   deploymentVersion,
 };

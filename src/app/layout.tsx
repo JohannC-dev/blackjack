@@ -11,6 +11,7 @@ import "../styles/legacy.css";
 import "../styles/roulette.css";
 import "../styles/plinko.css";
 import "../styles/table-center.css";
+import "../styles/daily.css";
 import { VersionNotice } from "@/components/version-notice";
 
 export const metadata: Metadata = {

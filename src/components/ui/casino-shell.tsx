@@ -18,6 +18,7 @@ import { BlackjackIcon } from "./blackjack-icon";
 import { MineBomb } from "../games/mines/mine-art";
 import { ChickenArt } from "../games/chicken/chicken-art";
 import { ProfileMenu } from "../social/profile-menu";
+import { StreakBadge } from "../daily/streak-badge";
 
 type Navigate = (view: CasinoView) => void;
 
@@ -185,6 +186,7 @@ export const ClubHeader = memo(function ClubHeader({
         >
           {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
         </button>
+        <StreakBadge />
         <div className="wallet">
           <Wallet size={17} />
           <b key={balance}>{credits(balance)}</b>
