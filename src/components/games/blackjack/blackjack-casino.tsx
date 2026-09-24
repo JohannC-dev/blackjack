@@ -1106,17 +1106,15 @@ export function WelcomeAuthModal({
   const [referralCode, setReferralCode] = useState("");
   const [authPending, setAuthPending] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaError, setCaptchaError] = useState(false);
   const turnstileRef = useRef<TurnstileInstance | undefined>(undefined);
   const handleCaptchaError = useCallback(() => {
     setCaptchaToken(null);
-    setCaptchaError(true);
   }, []);
   const turnstileScriptOptions = useMemo(
     () => ({ onError: handleCaptchaError }),
     [handleCaptchaError],
   );
-  const captchaRequired = authMode === "sign-in" && !!turnstileSiteKey;
+  const captchaRequired = !!turnstileSiteKey;
 
   return (
     <Modal
@@ -1277,27 +1275,20 @@ export function WelcomeAuthModal({
                 ref={turnstileRef}
                 siteKey={turnstileSiteKey ?? ""}
                 options={{
-                  action: "login",
+                  action: "auth",
                   language: "fr",
-                  size: "flexible",
+                  size: "invisible",
                   theme: "dark",
                 }}
                 onSuccess={(token) => {
                   setCaptchaToken(token);
-                  setCaptchaError(false);
                 }}
                 onExpire={() => setCaptchaToken(null)}
                 onError={handleCaptchaError}
                 scriptOptions={turnstileScriptOptions}
                 role="group"
                 aria-label="Vérification anti-robot"
-                className="welcome-turnstile"
               />
-              <p className="welcome-captcha-hint" role="status">
-                {captchaError
-                  ? "La vérification ne se charge pas. Rechargez la page pour réessayer."
-                  : "Validez la vérification pour vous connecter."}
-              </p>
             </>
           )}
           <button
@@ -1332,7 +1323,7 @@ export function WelcomeAuthModal({
           onClick={() => {
             game.setError("");
             setCaptchaToken(null);
-            setCaptchaError(false);
+            turnstileRef.current?.reset();
             setAuthMode((mode) =>
               mode === "sign-up" ? "sign-in" : "sign-up",
             );

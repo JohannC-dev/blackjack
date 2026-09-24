@@ -26,8 +26,8 @@ export const auth = betterAuth({
         captcha({
           provider: "cloudflare-turnstile",
           secretKey: turnstileSecretKey,
-          endpoints: ["/sign-in/email"],
-          expectedAction: "login",
+          endpoints: ["/sign-in/email", "/sign-up/email"],
+          expectedAction: "auth",
         }),
       ]
     : [],
