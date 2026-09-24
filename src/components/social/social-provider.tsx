@@ -207,6 +207,13 @@ export function SocialProvider({
       });
       setReferralVersion((version) => version + 1);
     };
+    const onTier = (event: { tiers?: ReferralTier[] }) => {
+      for (const tier of event?.tiers ?? [])
+        toast.success(`Palier « ${tier.label} » atteint`, {
+          description: `${credits(tier.reward)} crédits de parrainage.`,
+        });
+      setReferralVersion((version) => version + 1);
+    };
     const onReply = (reply: GameInviteReply) => {
       if (!reply?.by) return;
       if (reply.accepted) toast.success(`${reply.by.name} vous rejoint.`);
@@ -214,6 +221,7 @@ export function SocialProvider({
     };
     socket.on("friends:changed", onChanged);
     socket.on("referral:filleul", onFilleul);
+    socket.on("referral:tier", onTier);
     socket.on("friends:invite", onInvite);
     socket.on("friends:invite:reply", onReply);
     // Presence may have changed while disconnected.
@@ -221,6 +229,7 @@ export function SocialProvider({
     return () => {
       socket.off("friends:changed", onChanged);
       socket.off("referral:filleul", onFilleul);
+      socket.off("referral:tier", onTier);
       socket.off("friends:invite", onInvite);
       socket.off("friends:invite:reply", onReply);
       socket.off("connect", onChanged);

@@ -29,7 +29,8 @@ import { handleSocialRequest } from "./social/http";
 import { areFriends, friendIdsOf } from "./social/repository";
 import { handleReferralRequest } from "./referral/http";
 import { handleCosmeticRequest } from "./cosmetics/http";
-import { onReferralCompleted } from "./referral/events";
+import { onReferralCompleted, onTiersGranted } from "./referral/events";
+import { settleFilleulTiers } from "./referral/repository";
 import {
   GameError,
   ServerClock,
@@ -217,6 +218,44 @@ onReferralCompleted((event) => {
     tiers: event.tiers,
   });
 });
+
+/**
+ * A filleul crossed a threshold: the credits are already in the database, so
+ * the parrain only needs their wallet pushed again and their panel reloaded.
+ */
+onTiersGranted((event) => {
+  const parrain = playersById.get(event.parrainId);
+  if (parrain)
+    Effect.runPromise(refreshWalletEffect(parrain)).catch((error: unknown) =>
+      console.error("Parrainage · portefeuille", error),
+    );
+  emitToPlayer(event.parrainId, "referral:tier", {
+    filleulId: event.filleulId,
+    tiers: event.tiers,
+  });
+});
+
+/** Filleuls whose tiers were checked recently, with the time of that check. */
+const tiersCheckedAt = new Map<string, number>();
+const TIER_CHECK_INTERVAL = 60_000;
+
+/**
+ * Settles the parrainage tiers of the players who just wagered. The check is
+ * throttled: a tier is worth a few queries a minute, not a few per round.
+ */
+function settleReferralTiers(userIds: Iterable<string>) {
+  const now = Date.now();
+  for (const [userId, at] of tiersCheckedAt)
+    if (now - at >= TIER_CHECK_INTERVAL) tiersCheckedAt.delete(userId);
+  for (const userId of new Set(userIds)) {
+    const checked = tiersCheckedAt.get(userId) ?? 0;
+    if (now - checked < TIER_CHECK_INTERVAL) continue;
+    tiersCheckedAt.set(userId, now);
+    runDatabase(settleFilleulTiers(userId)).catch((error: unknown) =>
+      console.error("Parrainage · paliers", error),
+    );
+  }
+}
 
 /** A player came online or left: their friends refresh their list. */
 function notifyPresence(userId: string) {
@@ -429,6 +468,13 @@ function commitWalletOperationsEffect() {
         }
         gameWallet.complete();
         for (const result of results) publishWallet(result.userId);
+        settleReferralTiers(
+          operations
+            .filter((operation) =>
+              ["wager", "additional-wager", "buy-in"].includes(operation.kind),
+            )
+            .map((operation) => operation.userId),
+        );
       }),
     ),
     Effect.asVoid,

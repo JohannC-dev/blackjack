@@ -15,6 +15,7 @@ import {
   type ReferralTierState,
 } from "../../src/lib/referral";
 import { normalizeFriendCode, type SocialPlayer } from "../../src/lib/social";
+import { announceTiers } from "./events";
 import { applyWalletOperations } from "../db/wallet";
 import type { WalletOperation } from "../game-wallet";
 import { grantCosmetics } from "../cosmetics/repository";
@@ -124,6 +125,7 @@ const settleTiers = (parrainId: string, filleulId: string, wagered: number) =>
         PARRAINAGE_COSMETICS,
         "parrainage-parrain",
       );
+    announceTiers({ parrainId, filleulId, tiers: missing });
     return missing;
   });
 
@@ -240,6 +242,28 @@ const activityOf = (ids: readonly string[]) =>
       });
     return activity;
   });
+
+/**
+ * Settles the tiers one filleul just unlocked by playing. The club calls this
+ * after the filleul's wagers are committed, so the parrain is paid while they
+ * play instead of waiting for someone to open the parrainage panel.
+ */
+export const settleFilleulTiers = (filleulId: string) =>
+  Effect.gen(function* () {
+    const db = yield* PgDrizzle;
+    const [row] = yield* db
+      .select({ parrainId: referral.parrainId })
+      .from(referral)
+      .where(eq(referral.filleulId, filleulId))
+      .limit(1);
+    if (!row) return [] as readonly ReferralTier[];
+    const activity = yield* activityOf([filleulId]);
+    return yield* settleTiers(
+      row.parrainId,
+      filleulId,
+      activity.get(filleulId)?.wagered ?? 0,
+    );
+  }).pipe(mapDatabaseError);
 
 export type ReferralDeps = {
   /** Whether the player has at least one live connection to the club. */

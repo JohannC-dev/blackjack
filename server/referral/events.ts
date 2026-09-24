@@ -26,3 +26,29 @@ export function announceReferral(event: ReferralCompleted) {
     console.error("Parrainage · annonce", error);
   }
 }
+
+/**
+ * Tiers just granted to a parrain because one of their filleuls kept playing.
+ * The credits are already in the database; the club refreshes the parrain's
+ * wallet so the balance moves without waiting for a reconnection.
+ */
+export type TiersGranted = {
+  readonly parrainId: string;
+  readonly filleulId: string;
+  readonly tiers: readonly ReferralTier[];
+};
+
+let tierListener: ((event: TiersGranted) => void) | null = null;
+
+/** The club listens once, at start-up. */
+export function onTiersGranted(next: (event: TiersGranted) => void) {
+  tierListener = next;
+}
+
+export function announceTiers(event: TiersGranted) {
+  try {
+    tierListener?.(event);
+  } catch (error) {
+    console.error("Parrainage · paliers", error);
+  }
+}
