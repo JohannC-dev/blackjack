@@ -219,36 +219,92 @@
   font-size: 12px;
 }
 
-/* Club home poster. */
+/* Club home poster: the board in miniature — a ball above a pin pyramid that
+   fans out onto the payout slots, in the same palette as the other posters. */
 .plinko-art {
   position: relative;
   display: grid;
   place-items: center;
+  overflow: hidden;
+}
+.plinko-art::after {
+  position: absolute;
+  right: 0;
+  bottom: -46px;
+  left: 0;
+  width: 210px;
+  height: 210px;
+  margin-inline: auto;
+  border-radius: 50%;
+  background: radial-gradient(circle, #b79afa26, transparent 68%);
+  content: "";
 }
 .plinko-poster-pins {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 14px;
   align-items: center;
+  margin-top: 6px;
 }
 .plinko-poster-pins span {
   display: flex;
-  gap: 9px;
+  gap: 16px;
 }
 .plinko-poster-pins i {
-  width: 5px;
-  height: 5px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: #efe9ff;
+  box-shadow: 0 0 9px #b79afa7a;
+}
+.plinko-poster-slots {
+  position: absolute;
+  right: 0;
+  bottom: 26px;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+}
+.plinko-poster-slots i {
+  width: 16px;
+  height: 8px;
+  border-radius: 4px;
+  background: #b79afa33;
+}
+.plinko-poster-slots i:nth-child(2),
+.plinko-poster-slots i:nth-child(6) {
+  background: #b79afa7a;
+}
+.plinko-poster-slots i:first-child,
+.plinko-poster-slots i:last-child {
+  background: #f3c969;
+  box-shadow: 0 0 12px #f3c96966;
 }
 .plinko-poster-ball {
   position: absolute;
-  top: 6px;
-  left: 30%;
-  width: 13px;
-  height: 13px;
+  top: 30px;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  width: 15px;
+  height: 15px;
+  margin-inline: auto;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #fff, #cbb0ff 45%, #8d6ae0);
+  box-shadow: 0 0 18px #b79afa80;
+  transition: transform 350ms var(--ease);
+}
+.plinko-poster:hover .plinko-poster-ball {
+  transform: translateY(6px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .plinko-poster-ball {
+    transition: none;
+  }
 }
 
 @media (max-width: 1240px) {

@@ -253,8 +253,9 @@ export function CasinoHome({
               artClassName="plinko-art"
               art={
                 <>
+                  <span className="plinko-poster-ball" aria-hidden="true" />
                   <div className="plinko-poster-pins" aria-hidden="true">
-                    {[3, 4, 5].map((count) => (
+                    {[3, 4, 5, 6, 7].map((count) => (
                       <span key={count}>
                         {Array.from({ length: count }, (_, index) => (
                           <i key={index} />
@@ -262,7 +263,11 @@ export function CasinoHome({
                       </span>
                     ))}
                   </div>
-                  <span className="plinko-poster-ball" aria-hidden="true" />
+                  <div className="plinko-poster-slots" aria-hidden="true">
+                    {Array.from({ length: 7 }, (_, index) => (
+                      <i key={index} />
+                    ))}
+                  </div>
                 </>
               }
               eyebrow="NOUVEAU · JEU SOLO"

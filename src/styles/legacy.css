@@ -8717,7 +8717,9 @@ h1 > span:not(.live-tag) {
   padding: 26px 26px 24px;
 }
 .game-poster .poster-copy h2 {
-  font-size: clamp(30px, 2.6vw, 42px);
+  font-size: clamp(28px, 2.2vw, 36px);
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 @media (max-width: 1100px) {
   .game-selection {
@@ -9505,31 +9507,26 @@ h1 > span:not(.live-tag) {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   max-width: 1410px;
 }
-.mines-poster {
-  background: #111210;
-}
-.chicken-poster {
-  background: #17131b;
-}
-.chicken-poster:hover {
-  border-color: #e5b97880;
-}
 .chicken-poster-art {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at 72% 25%, #e2ba7550, transparent 22%),
-    linear-gradient(#30233d 0 52%, #454049 52% 100%);
+    radial-gradient(circle at 72% 25%, #b79afa3d, transparent 26%),
+    linear-gradient(#543069 0 52%, #3a3151 52% 100%);
 }
 .chicken-poster-road {
   position: absolute;
   inset: 62% 0 0;
-  background: repeating-linear-gradient(
-    90deg,
-    #39353e 0 44px,
-    #e8d3a44d 45px 49px,
-    #39353e 50px 100px
-  );
+  /* One dashed centre line instead of full-height bars: it reads as a road. */
+  background:
+    repeating-linear-gradient(
+        90deg,
+        transparent 0 24px,
+        #d9c9ff66 24px 44px,
+        transparent 44px 68px
+      )
+      center / 100% 7px no-repeat,
+    linear-gradient(#332c4a, #272138);
   transform: skewY(-8deg);
 }
 .chicken-poster-art svg {
@@ -9543,13 +9540,6 @@ h1 > span:not(.live-tag) {
 .chicken-poster:hover .chicken-poster-art svg {
   transform: translateY(-9px) rotate(-4deg);
   transition: transform 0.25s;
-}
-.chicken-poster .poster-copy > span,
-.chicken-poster .poster-copy strong {
-  color: #e5b978;
-}
-.mines-poster:hover {
-  border-color: #b79afa70;
 }
 .mines-art {
   position: relative;
@@ -9583,9 +9573,9 @@ h1 > span:not(.live-tag) {
   width: 37px;
   height: 37px;
   place-items: center;
-  border: 1px solid #b79afa31;
+  border: 1px solid #b79afa4d;
   border-radius: 7px;
-  background: #2c20442b;
+  background: #b79afa14;
   color: #b79afaaa;
 }
 .mines-poster-grid > span.is-gem {
@@ -9611,10 +9601,6 @@ h1 > span:not(.live-tag) {
   object-fit: contain;
   filter: drop-shadow(0 7px 10px #0008);
   transform: rotate(12deg);
-}
-.mines-poster .poster-copy > span,
-.mines-poster .poster-copy strong {
-  color: #b79afa;
 }
 
 @media (max-width: 1250px) {
@@ -9659,9 +9645,6 @@ h1 > span:not(.live-tag) {
   }
   .game-selection {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .mines-poster {
-    grid-column: span 2;
   }
 }
 @media (max-width: 900px) {
@@ -9808,9 +9791,6 @@ h1 > span:not(.live-tag) {
   }
   .game-selection {
     grid-template-columns: 1fr;
-  }
-  .mines-poster {
-    grid-column: auto;
   }
 }
 @media (prefers-reduced-motion: reduce) {
