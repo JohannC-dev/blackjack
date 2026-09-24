@@ -36,10 +36,14 @@ export function PlayingCard({
   highlighted?: boolean;
   dimmed?: boolean;
   /** Back worn by the player holding the card, over the viewer's. */
-  backSkin?: string;
+  /**
+   * Back of this card, resolved by the table (frozen for the hand); null for
+   * the Classique. Left out, the viewer's live back from the context shows.
+   */
+  backSkin?: string | null;
 }) {
   const viewerBack = useContext(CardBackSkin);
-  const skin = backSkin ?? viewerBack;
+  const skin = backSkin === undefined ? viewerBack : (backSkin ?? undefined);
   const concealed = back || card?.hidden;
   return (
     <div

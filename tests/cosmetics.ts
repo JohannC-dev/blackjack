@@ -2,6 +2,8 @@ import { strict as assert } from "node:assert";
 import pg from "pg";
 import { createTestSession, type TestSession } from "./auth-session";
 import { assetHash } from "../server/cosmetics/assets";
+import { grantCosmetics } from "../server/cosmetics/repository";
+import { closeDatabase, runDatabase } from "../server/db/client";
 import { databaseConnectionUrl, databaseSsl } from "../server/db/url";
 import type { Collection, EquippedLookup } from "../src/lib/cosmetics";
 
@@ -9,6 +11,7 @@ const url = process.env.TEST_URL ?? "http://localhost:3000";
 const suffix = Math.random().toString(36).slice(2, 7);
 const back = `test-back:${suffix}`;
 const draft = `test-draft:${suffix}`;
+const retired = `test-retired:${suffix}`;
 const picture = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350"><rect width="250" height="350" fill="#123"/></svg>',
 );
@@ -53,6 +56,7 @@ try {
   for (const [id, status] of [
     [back, "active"],
     [draft, "draft"],
+    [retired, "retired"],
   ] as const) {
     await db.query(
       `insert into cosmetic (id, kind, name, rarity, status, unlock_hint)
@@ -150,6 +154,19 @@ try {
   assert.equal(hidden.status, 404);
   await hidden.arrayBuffer();
 
+  // Rewards only hand out what can still be obtained.
+  await runDatabase(
+    grantCosmetics(bob.userId, [back, draft, retired], "grant"),
+  );
+  const granted = await db.query<{ cosmetic_id: string }>(
+    `select cosmetic_id from player_cosmetic where user_id = $1`,
+    [bob.userId],
+  );
+  assert.deepEqual(
+    granted.rows.map((row) => row.cosmetic_id),
+    [back],
+  );
+
   // Back to the Classique.
   const classic = await equip(alice, "card-back", null);
   assert.equal(classic.status, 200);
@@ -158,13 +175,18 @@ try {
   console.log("Skins · tous les scénarios passent.");
 } finally {
   await db.query(
-    `delete from player_equipped_cosmetic where cosmetic_id in ($1, $2)`,
-    [back, draft],
+    `delete from player_equipped_cosmetic where cosmetic_id in ($1, $2, $3)`,
+    [back, draft, retired],
   );
-  await db.query(`delete from player_cosmetic where cosmetic_id in ($1, $2)`, [
+  await db.query(
+    `delete from player_cosmetic where cosmetic_id in ($1, $2, $3)`,
+    [back, draft, retired],
+  );
+  await db.query(`delete from cosmetic where id in ($1, $2, $3)`, [
     back,
     draft,
+    retired,
   ]);
-  await db.query(`delete from cosmetic where id in ($1, $2)`, [back, draft]);
   await db.end();
+  await closeDatabase();
 }

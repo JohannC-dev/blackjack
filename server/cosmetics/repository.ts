@@ -25,8 +25,9 @@ export class CosmeticError extends Data.TaggedError("CosmeticError")<{
 }> {}
 
 /**
- * Gives skins to a player. Ids missing from the catalogue are skipped, so a
- * reward never fails the operation it belongs to; owning twice is a no-op.
+ * Gives skins to a player. Only active items can still be obtained: drafts
+ * and retired ones are skipped, like ids missing from the catalogue, so a
+ * reward never fails the operation it belongs to. Owning twice is a no-op.
  */
 export const grantCosmetics = (
   userId: string,
@@ -39,7 +40,9 @@ export const grantCosmetics = (
     const known = yield* db
       .select({ id: cosmetic.id })
       .from(cosmetic)
-      .where(inArray(cosmetic.id, [...ids]));
+      .where(
+        and(inArray(cosmetic.id, [...ids]), eq(cosmetic.status, "active")),
+      );
     if (!known.length) return;
     yield* db
       .insert(playerCosmetic)

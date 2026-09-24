@@ -49,6 +49,7 @@ import type { CasinoView } from "@/lib/navigation";
 import { BlackjackIcon } from "../../ui/blackjack-icon";
 import { useCountdownSeconds, useServerClockNow } from "../../ui/countdown";
 import { PlayingCard } from "../../ui/playing-card";
+import { tableCardBack } from "@/lib/cosmetics";
 import { useTableSkins } from "@/lib/cosmetics-api";
 import { PokerLobby } from "./poker-lobby";
 import { PokerShuffleAnimation } from "../../ui/poker-shuffle";
@@ -514,7 +515,7 @@ function PokerTable({ game }: { game: Game }) {
   const me = table.seats.find((seat) => seat.id === game.playerId);
   // Each player's hole cards wear their own back, frozen for the hand.
   const seatSkins = useTableSkins(
-    table.seats.map((seat) => seat.id),
+    [...table.seats.map((seat) => seat.id), game.playerId],
     table.hand,
   );
   const [raiseTo, setRaiseTo] = useState(0);
@@ -793,7 +794,7 @@ function PokerTable({ game }: { game: Game }) {
                 showdown={showdownCards.hasCombination}
                 collectingBet={collectingBets && !!seat?.bet}
                 maximumBet={pokerMaximumBet}
-                backSkin={seat ? seatSkins[seat.id]?.["card-back"] : undefined}
+                backSkin={tableCardBack(seatSkins, seat?.id, game.playerId)}
               />
             ))}
             {collectingBets &&
@@ -1274,8 +1275,8 @@ function PokerSeatView({
   showdown: boolean;
   collectingBet: boolean;
   maximumBet: number;
-  /** Back worn by the seated player; the viewer's otherwise. */
-  backSkin?: string;
+  /** Back of the seated player's cards, frozen for the hand. */
+  backSkin: string | null;
 }) {
   const active = !!seat && table.activePlayerId === seat.id;
   const turnSeconds = useCountdownSeconds(active ? table.deadline : null);

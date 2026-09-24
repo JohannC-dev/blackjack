@@ -108,3 +108,22 @@ export function skinOf(
 ) {
   return owner?.[kind] ?? viewer?.[kind];
 }
+
+/**
+ * The back of a card at a table, from the round's snapshot: the holder's,
+ * else the viewer's, else the Classique (null). Never the viewer's live
+ * choice, which may change mid-hand.
+ */
+export function tableCardBack(
+  skins: EquippedLookup,
+  holderId: string | null | undefined,
+  viewerId: string,
+) {
+  return (
+    skinOf(
+      holderId ? skins[holderId] : undefined,
+      skins[viewerId],
+      "card-back",
+    ) ?? null
+  );
+}

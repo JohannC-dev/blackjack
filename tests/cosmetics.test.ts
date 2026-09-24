@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { skinOf } from "../src/lib/cosmetics";
+import { skinOf, tableCardBack } from "../src/lib/cosmetics";
 import {
   AssetError,
   MAX_ASSET_BYTES,
@@ -63,6 +63,15 @@ describe("validateAsset", () => {
       ).toThrow(AssetError);
   });
 
+  test("refuses a raster picture with a zero side", () => {
+    expect(() => validateAsset("chicken", "c.png", png(0, 0))).toThrow(
+      /illisibles/,
+    );
+    expect(() =>
+      validateAsset("mine-gem", "g.svg", svg('width="0" height="0"')),
+    ).toThrow(/illisibles/);
+  });
+
   test("refuses unknown formats, oversized and unreadable files", () => {
     expect(() => validateAsset("chicken", "c.gif", png(10, 10))).toThrow(
       /SVG, PNG ou WebP/,
@@ -78,6 +87,28 @@ describe("validateAsset", () => {
   test("the hash follows the content", () => {
     expect(assetHash(png(1, 1))).toBe(assetHash(png(1, 1)));
     expect(assetHash(png(1, 1))).not.toBe(assetHash(png(2, 2)));
+  });
+});
+
+describe("tableCardBack", () => {
+  const skins = {
+    holder: { "card-back": "holder" },
+    viewer: { "card-back": "viewer" },
+    plain: {},
+  };
+
+  test("a held card wears its holder's back, else the viewer's", () => {
+    expect(tableCardBack(skins, "holder", "viewer")).toBe("holder");
+    expect(tableCardBack(skins, "plain", "viewer")).toBe("viewer");
+  });
+
+  test("the house wears the viewer's back", () => {
+    expect(tableCardBack(skins, null, "viewer")).toBe("viewer");
+  });
+
+  test("with nothing in the snapshot, the Classique, never undefined", () => {
+    expect(tableCardBack(skins, "plain", "plain")).toBeNull();
+    expect(tableCardBack({}, "someone", "viewer")).toBeNull();
   });
 });
 

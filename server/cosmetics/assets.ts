@@ -108,7 +108,12 @@ export function validateAsset(
       );
     size = svgSize(text);
   } else size = contentType === "image/png" ? pngSize(data) : webpSize(data);
-  if (!size)
+  // A zero side would make the ratio NaN, which slips through the check.
+  if (
+    !size ||
+    !(Number.isFinite(size.width) && size.width > 0) ||
+    !(Number.isFinite(size.height) && size.height > 0)
+  )
     throw new AssetError(
       `${fileName} : dimensions illisibles ou fichier invalide.`,
     );
