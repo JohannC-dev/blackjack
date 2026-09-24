@@ -11067,6 +11067,7 @@ h1 > span:not(.live-tag) {
   z-index: 30;
   right: 0;
   bottom: calc(100% + 12px);
+  box-sizing: border-box;
   width: min(360px, calc(100vw - 32px));
   padding: 17px;
   border: 1px solid #8ee8c43d;
