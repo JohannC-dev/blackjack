@@ -26,7 +26,7 @@ import {
   user,
   walletEntry,
 } from "../db/schema";
-import { ensurePlayerProfile } from "../social/repository";
+import { befriendParrain, ensurePlayerProfile } from "../social/repository";
 
 const MINOR_PER_CREDIT = 100;
 
@@ -153,8 +153,8 @@ export type ReferralRegistration = {
 
 /**
  * Binds a new player to the parrain owning the code: the filleul gets their
- * welcome credits and cosmetics, the parrain every tier they now reach.
- * Everything commits together, or nothing does.
+ * welcome credits and cosmetics, the two become friends, and the parrain gets
+ * every tier they now reach. Everything commits together, or nothing does.
  */
 export const registerReferral = (filleulId: string, input: string) =>
   Effect.gen(function* () {
@@ -200,6 +200,8 @@ export const registerReferral = (filleulId: string, input: string) =>
           PARRAINAGE_COSMETICS,
           "parrainage-filleul",
         );
+        // A parrain and their filleul already know each other: no request.
+        yield* befriendParrain(parrain.id, filleulId);
         return {
           parrain: { id: parrain.id, name: parrain.name },
           welcomeBonus: REFERRAL_WELCOME_BONUS,

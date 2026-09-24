@@ -383,6 +383,44 @@ export const sendFriendRequest = (userId: string, target: RequestTarget) =>
     return { targetId, accepted: false };
   }).pipe(mapDatabaseError);
 
+/**
+ * Makes a parrain and their filleul friends outright, no request to accept:
+ * they already know each other. Called from the parrainage registration, in
+ * its transaction. Does nothing when the parrain has no room left, and never
+ * touches an existing row — a brand new filleul cannot have one anyway.
+ */
+export const befriendParrain = (parrainId: string, filleulId: string) =>
+  Effect.gen(function* () {
+    const db = yield* PgDrizzle;
+    const [counts] = yield* db
+      .select({
+        friends:
+          sql<number>`count(*) filter (where ${friendship.status} = 'accepted')`.mapWith(
+            Number,
+          ),
+      })
+      .from(friendship)
+      .where(
+        or(
+          eq(friendship.requesterId, parrainId),
+          eq(friendship.addresseeId, parrainId),
+        ),
+      );
+    if ((counts?.friends ?? 0) >= MAX_FRIENDS) return false;
+    const inserted = yield* db
+      .insert(friendship)
+      .values({
+        id: randomUUID(),
+        requesterId: parrainId,
+        addresseeId: filleulId,
+        status: "accepted",
+        respondedAt: new Date(),
+      })
+      .onConflictDoNothing()
+      .returning({ id: friendship.id });
+    return inserted.length > 0;
+  }).pipe(mapDatabaseError);
+
 /** Accepts or declines a request received by the player. */
 export const respondToFriendRequest = (
   userId: string,

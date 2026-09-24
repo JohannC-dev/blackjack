@@ -217,6 +217,8 @@ onReferralCompleted((event) => {
     filleul: event.filleul,
     tiers: event.tiers,
   });
+  // The registration made them friends: both lists are now stale.
+  notifySocial([event.parrainId, event.filleul.id]);
 });
 
 /**
