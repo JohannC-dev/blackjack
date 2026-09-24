@@ -432,6 +432,16 @@ function publicTableFor(playerId?: string) {
   const currentRoom = playerId ? blackjackRooms.roomOf(playerId) : undefined;
   if (currentRoom && blackjackRooms.get(currentRoom)?.visibility === "public")
     return currentRoom;
+  // A wagered hand survives leaving the view. Returning to Blackjack must
+  // resume that hand instead of trying to move the player to another table.
+  const previousRoom = playerId ? profiles.get(playerId)?.roomId : undefined;
+  const previousTable = previousRoom ? tables.get(previousRoom) : undefined;
+  if (
+    previousRoom &&
+    previousTable?.state.phase !== "betting" &&
+    previousTable?.state.seats.some((seat) => seat.playerId === playerId)
+  )
+    return previousRoom;
   return blackjackRooms.publicRoom((room) => {
     const table = tables.get(room.id);
     return (
@@ -458,6 +468,32 @@ function getTable(id: string) {
     tables.set(id, table);
   }
   return table;
+}
+function leaveBlackjackRoom(
+  playerId: string,
+  roomId: string,
+  socketId?: string,
+) {
+  if (!roomId) return;
+  if (socketId) io.sockets.sockets.get(socketId)?.leave(blackjackRoom(roomId));
+  const otherSocketAtTable = [...(playerSockets.get(playerId) ?? [])].some(
+    (id) =>
+      id !== socketId &&
+      io.sockets.sockets.get(id)?.rooms.has(blackjackRoom(roomId)),
+  );
+  if (otherSocketAtTable) return;
+  blackjackRooms.leave(playerId);
+  const player = playersById.get(playerId);
+  if (player) player.ready = false;
+  const table = tables.get(roomId);
+  if (
+    !table ||
+    table.state.phase === "betting" ||
+    !table.state.seats.some((seat) => seat.playerId === playerId)
+  ) {
+    table?.remove(playerId);
+    if (player?.roomId === roomId) player.roomId = "";
+  }
 }
 /** Financial commands are serialized around one explicit wallet batch. */
 let financialQueue: Promise<unknown> = Promise.resolve();
@@ -766,15 +802,21 @@ io.on("connection", (socket) => {
           catch: toGameError,
         });
         let known = profiles.get(session.user.id);
-        const tableId = safeData.createPrivate
-          ? blackjackRooms.create("private").id
-          : safeData.tableId
-            ? // A friend's invitation may name a public table.
-              blackjackRooms.get(safeData.tableId)?.visibility === "public"
-              ? safeData.tableId
-              : blackjackRooms.privateRoom(safeData.tableId).id
-            : publicTableFor(known?.id);
-        if (known && known.roomId !== tableId) {
+        const enterBlackjack =
+          safeData.createPrivate || safeData.tableId !== undefined;
+        if (known && !enterBlackjack)
+          leaveBlackjackRoom(known.id, known.roomId, socket.id);
+        const tableId = !enterBlackjack
+          ? undefined
+          : safeData.createPrivate
+            ? blackjackRooms.create("private").id
+            : safeData.tableId
+              ? // A friend's invitation may name a public table.
+                blackjackRooms.get(safeData.tableId)?.visibility === "public"
+                ? safeData.tableId
+                : blackjackRooms.privateRoom(safeData.tableId).id
+              : publicTableFor(known?.id);
+        if (known && tableId && known.roomId && known.roomId !== tableId) {
           const connections = playerSockets.get(known.id);
           if (
             connections &&
@@ -792,7 +834,7 @@ io.on("connection", (socket) => {
           known.ready = false;
         }
 
-        const table = getTable(tableId);
+        const table = tableId ? getTable(tableId) : undefined;
         if (!known) {
           known = {
             id: session.user.id,
@@ -801,7 +843,7 @@ io.on("connection", (socket) => {
             balance: wallet.balance,
             ready: false,
             connected: true,
-            roomId: tableId,
+            roomId: tableId ?? "",
             lastSeen: clock.now(),
           };
           profiles.set(session.user.id, known);
@@ -812,15 +854,19 @@ io.on("connection", (socket) => {
         player = known;
         player.connected = true;
         player.lastSeen = clock.now();
-        player.roomId = tableId;
-        blackjackRooms.join(player.id, tableId);
+        if (tableId) {
+          player.roomId = tableId;
+          blackjackRooms.join(player.id, tableId);
+        }
         const connections = playerSockets.get(player.id) ?? new Set();
         const cameOnline = !connections.size;
         connections.add(socket.id);
         playerSockets.set(player.id, connections);
         if (cameOnline) notifyPresence(player.id);
-        socket.join(blackjackRoom(tableId));
-        runOrThrow(table.observeEffect(player));
+        if (tableId) {
+          socket.join(blackjackRoom(tableId));
+          runOrThrow(table!.observeEffect(player));
+        }
         runOrThrow(poker.connectEffect(player));
         publishWallet(player.id, socket.id);
         publishMines(player.id);
@@ -885,10 +931,26 @@ io.on("connection", (socket) => {
         const currentPlayer = yield* gameEffect((clock) => {
           throttle(clock.now());
           if (!player) throw new Error("Vous n’êtes pas connecté à la table.");
+          if (!socket.rooms.has(blackjackRoom(player.roomId)))
+            throw new Error("Rejoignez une table pour jouer.");
           return player;
         });
         yield* tables.get(currentPlayer.roomId)!.addEffect(currentPlayer);
       }),
+    );
+  });
+  socket.on("blackjack:leave", (ack: (value: Ack) => void) => {
+    void serializeFinancial(() =>
+      executeReply(
+        ack,
+        gameEffect((clock) => {
+          throttle(clock.now());
+          if (!player) throw new Error("Connectez-vous au club.");
+          if (socket.rooms.has(blackjackRoom(player.roomId)))
+            leaveBlackjackRoom(player.id, player.roomId, socket.id);
+        }),
+        () => ({ ok: true }) satisfies Ack,
+      ),
     );
   });
   socket.on("wallet:refill", (ack: (value: Ack) => void) => {
@@ -918,7 +980,12 @@ io.on("connection", (socket) => {
               throttle(clock.now());
               if (!player)
                 throw new Error("Vous n’êtes pas connecté à la table.");
-              const blackjackTable = tables.get(player.roomId)!;
+              const blackjackTable = tables.get(player.roomId);
+              if (
+                !blackjackTable ||
+                !socket.rooms.has(blackjackRoom(player.roomId))
+              )
+                throw new Error("Rejoignez une table pour jouer.");
               const blackjackPlayerId = player.id;
               if (
                 !blackjackTable.players.has(blackjackPlayerId) ||
@@ -1446,6 +1513,13 @@ const maintenanceEffect = Effect.provide(
     const now = clock.now();
     for (const [id, table] of tables) {
       yield* Effect.either(walletTransactionEffect(table.tickEffect(now)));
+      if (table.state.phase === "betting")
+        for (const playerId of table.players.keys())
+          if (blackjackRooms.roomOf(playerId) !== id) {
+            yield* Effect.either(table.removeEffect(playerId));
+            const player = playersById.get(playerId);
+            if (player?.roomId === id) player.roomId = "";
+          }
       for (const memberId of blackjackRooms.get(id)?.members ?? [])
         if (!table.players.has(memberId)) blackjackRooms.leave(memberId);
       if (!table.players.size && now - table.lastUsed > 30 * 60_000) {

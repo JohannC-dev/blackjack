@@ -1377,6 +1377,8 @@ export function BlackjackCasino({
     profile,
     command,
     joinBlackjack,
+    enterBlackjack,
+    leaveBlackjack,
     pending,
   } = game;
   // Backs frozen for the round: each seat's hidden doubled card wears its
@@ -1543,6 +1545,11 @@ export function BlackjackCasino({
       if (affordable !== undefined) setChip(affordable);
     }
   }, [chip, chipBalance]);
+
+  useEffect(() => {
+    enterBlackjack();
+    return leaveBlackjack;
+  }, [enterBlackjack, leaveBlackjack]);
 
   useEffect(() => {
     if (profile && connected && state?.id) void joinBlackjack();

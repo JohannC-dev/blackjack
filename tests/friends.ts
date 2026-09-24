@@ -69,6 +69,8 @@ async function connect(name: string): Promise<Client> {
     invites: [],
     replies: [],
   };
+  let blackjackSnapshots = 0;
+  socket.on("state", () => blackjackSnapshots++);
   socket.on("friends:changed", () => client.changes++);
   socket.on("friends:invite", (invite: GameInvite) =>
     client.invites.push(invite),
@@ -79,7 +81,13 @@ async function connect(name: string): Promise<Client> {
   await until(() => socket.connected, "WebSocket did not connect");
   const ack: Ack = await socket.timeout(5000).emitWithAck("join", {});
   assert.equal(ack.ok, true, JSON.stringify(ack));
-  client.tableId = (ack as { tableId: string }).tableId;
+  assert.equal(ack.tableId, undefined, "Club entry must not join Blackjack");
+  assert.equal(blackjackSnapshots, 0, "Club entry must not receive a table");
+  const tableAck: Ack = await socket
+    .timeout(5000)
+    .emitWithAck("join", { tableId: null });
+  assert.equal(tableAck.ok, true, JSON.stringify(tableAck));
+  client.tableId = tableAck.tableId!;
   return client;
 }
 

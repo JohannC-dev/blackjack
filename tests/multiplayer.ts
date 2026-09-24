@@ -136,8 +136,17 @@ try {
     );
   }
   await until(() => bob.state?.phase === "betting", "Betting did not reopen");
+  const left: Ack = await rejoined.socket
+    .timeout(5000)
+    .emitWithAck("blackjack:leave");
+  assert.equal(left.ok, true, JSON.stringify(left));
+  await until(
+    () => !bob.state?.players.some((entry) => entry.id === rejoined.id),
+    "Leaving Blackjack did not release the table",
+  );
+  await command(rejoined, { type: "claim", seat: 3 }, false);
   console.log(
-    "PASS: two real WebSocket clients, three seats, side bets, ownership checks, reconnect, accounting, synchronized settlement and next round.",
+    "PASS: two real WebSocket clients, three seats, side bets, ownership checks, reconnect, accounting, synchronized settlement, and leaving the table.",
   );
 } finally {
   sockets.forEach((socket) => socket.disconnect());
