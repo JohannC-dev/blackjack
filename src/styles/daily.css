@@ -86,11 +86,14 @@
 
 /* The spin cannot be skipped: the wheel gets most of the screen. */
 .modal.daily-wheel-modal {
-  --wheel: min(58dvh, 70vw);
+  /* What the title, the result and the button leave to the wheel. */
+  --wheel: max(180px, min(calc(85dvh - 300px), 70vw));
   width: 85vw;
   height: 85dvh;
   max-width: none;
   max-height: none;
+  padding: 28px;
+  overflow: hidden;
   text-align: center;
 }
 .modal.daily-wheel-modal[open] {
@@ -107,7 +110,7 @@
   flex: none;
   width: var(--wheel);
   height: var(--wheel);
-  margin: 3dvh auto 1dvh;
+  margin: 22px auto 0;
 }
 .daily-wheel-pointer {
   position: absolute;
@@ -177,7 +180,7 @@
 }
 .daily-wheel-result {
   min-height: 1.6em;
-  margin: 2dvh 0;
+  margin: 18px 0 16px;
   color: #eadbb8;
   font-size: clamp(16px, 3dvh, 28px);
   font-weight: 700;
