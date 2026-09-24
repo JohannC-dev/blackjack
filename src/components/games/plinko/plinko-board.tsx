@@ -18,7 +18,6 @@ export type PlinkoBoardHandle = {
   drop: (drop: PlinkoDrop, delay?: number) => void;
   /** Balls not yet in their slot, queued ones included: how busy the board is. */
   falling: () => number;
-  clear: () => void;
 };
 
 /**
@@ -457,11 +456,6 @@ export function PlinkoBoard({
         if (!frame.current) frame.current = requestAnimationFrame(step);
       },
       falling: () => ballsRef.current.filter((item) => !item.landed).length,
-      clear: () => {
-        ballsRef.current = [];
-        pendingRef.current.clear();
-        stop();
-      },
     }),
     [step, stop],
   );

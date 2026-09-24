@@ -259,15 +259,8 @@ export type PlinkoDrop = {
   net: number;
 };
 export type PlinkoState = {
-  risk: PlinkoRisk;
-  rows: number;
-  bet: number;
   /** Last drops settled by the server, newest last. */
   drops: PlinkoDrop[];
-  round: number;
-  /** Credits won minus credits staked since the player opened the board. */
-  sessionNet: number;
-  message: string;
 };
 export type PlinkoCommand = {
   type: "drop";

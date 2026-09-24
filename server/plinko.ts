@@ -41,13 +41,7 @@ function validBet(value: number, limits: PlinkoBetLimits) {
  * transaction has committed, and puts back a `checkpoint` if it failed.
  */
 export class PlinkoGame {
-  private risk: PlinkoRisk = "medium";
-  private rows = 16;
-  private bet: number = PLINKO_MIN_BET;
   private drops: PlinkoDrop[] = [];
-  private round = 0;
-  private sessionNet = 0;
-  private message = "Choisissez un risque et lâchez une bille.";
 
   constructor(
     private readonly wallet: GameWallet = inMemoryGameWallet,
@@ -60,13 +54,7 @@ export class PlinkoGame {
 
   snapshot(): PlinkoState {
     return {
-      risk: this.risk,
-      rows: this.rows,
-      bet: this.bet,
       drops: this.drops.map((drop) => ({ ...drop, path: [...drop.path] })),
-      round: this.round,
-      sessionNet: this.sessionNet,
-      message: this.message,
     };
   }
 
@@ -75,16 +63,9 @@ export class PlinkoGame {
    * command fails: its balls were never paid, so they never fell.
    */
   checkpoint() {
-    const { risk, rows, bet, round, sessionNet, message } = this;
     const drops = [...this.drops];
     return () => {
-      this.risk = risk;
-      this.rows = rows;
-      this.bet = bet;
       this.drops = drops;
-      this.round = round;
-      this.sessionNet = sessionNet;
-      this.message = message;
     };
   }
 
@@ -106,16 +87,6 @@ export class PlinkoGame {
 
   commandEffect(player: PlinkoPlayer, command: PlinkoCommand) {
     return gameEffect(() => this.command(player, command));
-  }
-
-  dropEffect(
-    player: PlinkoPlayer,
-    bet: number,
-    risk: unknown,
-    rows: unknown,
-    balls = 1,
-  ) {
-    return gameEffect(() => this.drop(player, bet, risk, rows, balls));
   }
 
   drop(
@@ -142,15 +113,7 @@ export class PlinkoGame {
     if (!Number.isFinite(balance) || balance < bet * count)
       throw new Error("Votre solde est insuffisant pour cette mise.");
 
-    this.risk = risk;
-    this.rows = rows;
-    this.bet = bet;
-    const multipliers = plinkoMultipliers(risk, rows);
-    this.settle(player, bet, multipliers, count);
-    this.message =
-      count === 1
-        ? "La bille est tombée. Le serveur a tiré son chemin."
-        : `${count} billes lâchées.`;
+    this.settle(player, bet, risk, rows, count);
   }
 
   /**
@@ -163,9 +126,11 @@ export class PlinkoGame {
   private settle(
     player: PlinkoPlayer,
     bet: number,
-    multipliers: readonly number[],
+    risk: PlinkoRisk,
+    rows: number,
     count: number,
   ) {
+    const multipliers = plinkoMultipliers(risk, rows);
     const salvoId = randomUUID();
     this.wallet.debit(player, {
       operationId: `plinko:${salvoId}:wager`,
@@ -174,20 +139,19 @@ export class PlinkoGame {
       reason: "drop",
       referenceId: salvoId,
       amount: bet * count,
-      metadata: { risk: this.risk, rows: this.rows, bet, balls: count },
+      metadata: { risk, rows, bet, balls: count },
     });
 
     const drops: PlinkoDrop[] = [];
     for (let ball = 0; ball < count; ball++) {
-      this.round += 1;
-      const path = Array.from({ length: this.rows }, () => randomInt(2));
+      const path = Array.from({ length: rows }, () => randomInt(2));
       const slot = plinkoSlot(path);
       const multiplier = multipliers[slot];
       const payout = plinkoPayout(bet, multiplier);
       drops.push({
         id: randomUUID(),
-        risk: this.risk,
-        rows: this.rows,
+        risk,
+        rows,
         bet,
         path,
         slot,
@@ -198,7 +162,6 @@ export class PlinkoGame {
     }
 
     const payout = drops.reduce((total, drop) => total + drop.payout, 0);
-    const net = payout - bet * count;
     if (payout > 0)
       this.wallet.credit(player, {
         operationId: `plinko:${salvoId}:payout`,
@@ -210,18 +173,16 @@ export class PlinkoGame {
         metadata: {
           slots: drops.map((drop) => drop.slot),
           multipliers: drops.map((drop) => drop.multiplier),
-          round: this.round,
         },
       });
     this.wallet.recordGameResult({
       userId: player.id,
       game: "plinko",
       playId: salvoId,
-      net,
+      net: payout - bet * count,
       plays: drops.map((drop) => drop.net),
     });
 
-    this.sessionNet += net;
     this.drops.push(...drops);
     if (this.drops.length > PLINKO_HISTORY_SIZE)
       this.drops.splice(0, this.drops.length - PLINKO_HISTORY_SIZE);

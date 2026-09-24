@@ -7,17 +7,11 @@ export const PLINKO_BET_STEP = CASINO_CHIP_DENOMINATIONS[0];
 /** Ceiling the published tables must stay under once rounded. */
 export const PLINKO_MAX_RETURN = 0.99;
 
-/** Share of the stakes returned to the players over an infinite number of drops. */
-export const PLINKO_RETURN = 0.985;
-
 export const PLINKO_RISKS = ["low", "medium", "high"] as const;
 export type PlinkoRisk = (typeof PLINKO_RISKS)[number];
 
 export const PLINKO_ROW_OPTIONS = [8, 9, 10, 11, 12, 13, 14, 15, 16] as const;
 export type PlinkoRows = (typeof PLINKO_ROW_OPTIONS)[number];
-export const PLINKO_MIN_ROWS = PLINKO_ROW_OPTIONS[0];
-export const PLINKO_MAX_ROWS =
-  PLINKO_ROW_OPTIONS[PLINKO_ROW_OPTIONS.length - 1];
 
 /** Balls a single drop command may launch, so the auto mode stays one round trip. */
 export const PLINKO_MAX_BALLS = 10;

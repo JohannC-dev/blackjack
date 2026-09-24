@@ -213,9 +213,6 @@
   text-overflow: clip;
   white-space: normal;
 }
-.plinko-actions .game-action {
-  flex: 1 1 0;
-}
 .plinko-global-error {
   margin-top: 12px;
   color: #e2564f;
@@ -276,10 +273,6 @@
   }
   .plinko-board-stage {
     padding: 14px 12px 12px;
-  }
-  .plinko-board-footer {
-    flex-direction: column;
-    align-items: flex-start;
   }
   .plinko-history {
     flex-wrap: wrap;

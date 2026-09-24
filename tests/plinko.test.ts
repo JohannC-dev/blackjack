@@ -93,16 +93,26 @@ describe("Plinko", () => {
     expect(drop.multiplier).toBe(plinkoMultipliers("medium", 16)[drop.slot]);
     expect(drop.payout).toBe(Math.round(100 * drop.multiplier));
     expect(player.balance).toBe(1_000 - 100 + drop.payout);
-    expect(state.sessionNet).toBe(drop.net);
+    expect(drop.net).toBe(drop.payout - 100);
   });
 
   test("une salve règle chaque bille et garde l'historique borné", () => {
-    const game = plinkoGame();
+    const results: GameResult[] = [];
+    class CountingWallet extends InMemoryGameWallet {
+      override recordGameResult(result: GameResult) {
+        results.push(result);
+      }
+    }
+    const game = new PlinkoGame(new CountingWallet(), {
+      min: 5,
+      max: 500,
+      step: 5,
+    });
     const player = { id: randomUUID(), balance: 100_000 };
     for (let batch = 0; batch < 3; batch++) game.drop(player, 5, "high", 8, 10);
     const state = game.snapshot();
 
-    expect(state.round).toBe(30);
+    expect(results.flatMap((result) => result.plays ?? [])).toHaveLength(30);
     expect(state.drops.length).toBeLessThanOrEqual(12);
     expect(new Set(state.drops.map((drop) => drop.id)).size).toBe(
       state.drops.length,
