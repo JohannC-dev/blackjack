@@ -244,9 +244,13 @@ function paintPegs(
   }
 }
 
-/** One pre-rendered ball, so a hundred of them cost a hundred `drawImage`. */
+/**
+ * One pre-rendered ball, so a hundred of them cost a hundred `drawImage`.
+ * A plain ball with a light shading, no halo: dozens of them share the board.
+ */
 function makeBallSprite(radius: number, dpr: number) {
-  const size = Math.ceil(radius * 4 * dpr);
+  // A pixel of margin keeps the antialiased edge inside the sprite.
+  const size = Math.ceil((radius + 1) * 2 * dpr);
   const sprite = document.createElement("canvas");
   sprite.width = size;
   sprite.height = size;
@@ -254,29 +258,16 @@ function makeBallSprite(radius: number, dpr: number) {
   if (!context) return sprite;
   const centre = size / 2;
   const scaled = radius * dpr;
-  const glow = context.createRadialGradient(
-    centre,
-    centre,
-    scaled * 0.2,
-    centre,
-    centre,
-    scaled * 2,
-  );
-  glow.addColorStop(0, "rgba(199, 169, 255, 0.5)");
-  glow.addColorStop(1, "rgba(199, 169, 255, 0)");
-  context.fillStyle = glow;
-  context.fillRect(0, 0, size, size);
   const body = context.createRadialGradient(
-    centre - scaled * 0.35,
-    centre - scaled * 0.4,
-    scaled * 0.15,
+    centre - scaled * 0.3,
+    centre - scaled * 0.3,
+    scaled * 0.1,
     centre,
     centre,
     scaled,
   );
-  body.addColorStop(0, "#ffffff");
-  body.addColorStop(0.45, "#cbb0ff");
-  body.addColorStop(1, "#8d6ae0");
+  body.addColorStop(0, "#e6dbff");
+  body.addColorStop(1, "#a88af0");
   context.beginPath();
   context.arc(centre, centre, scaled, 0, Math.PI * 2);
   context.fillStyle = body;
