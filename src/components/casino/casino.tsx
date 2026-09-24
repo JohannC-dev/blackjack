@@ -62,7 +62,12 @@ export function Casino() {
     ) : view === "mines" ? (
       <MinesCasino game={game} onNavigate={navigate} />
     ) : view === "plinko" ? (
-      <PlinkoCasino game={game} onNavigate={navigate} />
+      // Another account gets a fresh board: history, balls in flight, series.
+      <PlinkoCasino
+        key={game.profile?.token ?? ""}
+        game={game}
+        onNavigate={navigate}
+      />
     ) : view === "roulette" ? (
       <RouletteCasino game={game} onNavigate={navigate} />
     ) : (

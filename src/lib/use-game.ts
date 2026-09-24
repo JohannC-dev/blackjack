@@ -47,6 +47,13 @@ export function useGame() {
   const [minesState, setMinesState] = useState<MinesState | null>(null);
   /** `undefined` until the server has answered, `null` when it has no board. */
   const [plinkoState, setPlinkoState] = useState<PlinkoState | null>();
+  // A new token is a new player: none of the last board belongs to them. Reset
+  // while rendering, so a fresh Plinko view never sees the previous snapshot.
+  const [plinkoToken, setPlinkoToken] = useState(profile?.token);
+  if (plinkoToken !== profile?.token) {
+    setPlinkoToken(profile?.token);
+    setPlinkoState(undefined);
+  }
   const [rouletteState, setRouletteState] = useState<RouletteTableState | null>(
     null,
   );

@@ -68,6 +68,8 @@ export function PlinkoCasino({
   const [autoLeft, setAutoLeft] = useState(0);
   /** Winnings of the balls still falling, held back from the wallet on screen. */
   const [inFlight, setInFlight] = useState(0);
+  /** Balls launched and not yet landed, queued ones included. */
+  const [airborne, setAirborne] = useState(0);
   const [highlight, setHighlight] = useState<{
     slot: number;
     key: number;
@@ -116,6 +118,7 @@ export function PlinkoCasino({
       setHighlight({ slot: drop.slot, key: flashKey.current });
       setHistory((current) => [drop, ...current].slice(0, HISTORY_SIZE));
       setInFlight((current) => Math.max(0, current - drop.payout));
+      setAirborne((current) => Math.max(0, current - 1));
       // A series or a salvo is a crowd: only its notable landings are heard.
       const crowded = autoRef.current || (board.current?.falling() ?? 0) > 0;
       play((context) => playPlinkoLanding(context, drop.multiplier, crowded));
@@ -150,6 +153,7 @@ export function PlinkoCasino({
     setInFlight((current) =>
       fresh.reduce((total, drop) => total + drop.payout, current),
     );
+    setAirborne((current) => current + fresh.length);
     const now = performance.now();
     const first = Math.max(now, releaseAt.current);
     fresh.forEach((drop, index) =>
@@ -253,8 +257,11 @@ export function PlinkoCasino({
 
   useEffect(() => () => void (autoRun.current.id += 1), []);
 
-  /** A board that changes shape mid-series would mislabel the landings. */
-  const locked = auto;
+  /**
+   * A ball pays on the table it was launched with: while one falls, a new risk
+   * or row count would relabel the slots under it and light the wrong value.
+   */
+  const boardLocked = auto || airborne > 0;
   const changeAutoCount = (delta: number) =>
     setAutoCount((current) => Math.min(AUTO_MAX, Math.max(1, current + delta)));
 
@@ -311,7 +318,7 @@ export function PlinkoCasino({
                       key={option}
                       compact
                       selected={risk === option}
-                      disabled={locked}
+                      disabled={boardLocked}
                       onClick={() => setRisk(option)}
                     >
                       {PLINKO_RISK_LABELS[option]}
@@ -331,7 +338,7 @@ export function PlinkoCasino({
                 <GameStepSlider
                   values={PLINKO_ROW_OPTIONS}
                   value={rows}
-                  disabled={locked}
+                  disabled={boardLocked}
                   ariaLabel="Nombre de rangées"
                   summary={`${rows} rangées`}
                   format={(value) => String(value)}
@@ -345,7 +352,7 @@ export function PlinkoCasino({
                   bet={bet}
                   maxBet={maxBet}
                   balance={settledBalance}
-                  disabled={locked}
+                  disabled={auto}
                   onSelect={setBet}
                 />
               </GameControlGroup>
