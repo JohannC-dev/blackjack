@@ -3,7 +3,6 @@
 import { CircleDot, Minus, Plus, Repeat2, Square, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGameAudio } from "@/lib/audio-context";
-import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
 import type { CasinoView } from "@/lib/navigation";
 import {
   plinkoMultiplierLabel,
@@ -19,11 +18,10 @@ import {
   type PlinkoRows,
 } from "@/lib/plinko";
 import {
-  playTowerCashout,
-  playTowerJackpot,
-  playTowerStep,
-  preloadTowerSounds,
-} from "@/lib/tower-audio";
+  playPlinkoLanding,
+  playPlinkoPeg,
+  playPlinkoRelease,
+} from "@/lib/plinko-audio";
 import { credits } from "@/lib/rules";
 import type { PlinkoDrop } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
@@ -76,10 +74,7 @@ export function PlinkoCasino({
   } | null>(null);
   const [history, setHistory] = useState<PlinkoDrop[]>([]);
   const [message, setMessage] = useState("");
-  const { enabled: sound, contextRef: audioRef } = useGameAudio(
-    preloadCasinoSounds,
-    preloadTowerSounds,
-  );
+  const { enabled: sound, contextRef: audioRef } = useGameAudio();
 
   const board = useRef<PlinkoBoardHandle>(null);
   const seen = useRef(new Set<string>());
@@ -88,6 +83,8 @@ export function PlinkoCasino({
   const autoRun = useRef({ id: 0, running: false });
   const soundRef = useRef(sound);
   soundRef.current = sound;
+  const autoRef = useRef(auto);
+  autoRef.current = auto;
   const flashKey = useRef(0);
   /**
    * When the next ball may leave the top of the board. Balls queue behind it,
@@ -114,11 +111,16 @@ export function PlinkoCasino({
       setHighlight({ slot: drop.slot, key: flashKey.current });
       setHistory((current) => [drop, ...current].slice(0, HISTORY_SIZE));
       setInFlight((current) => Math.max(0, current - drop.payout));
-      if (drop.multiplier >= 10) play(playTowerJackpot);
-      else if (drop.multiplier >= 1)
-        play((context) => playTowerCashout(context, 4));
-      else play((context) => playTowerStep(context, 2));
+      // A series or a salvo is a crowd: only its notable landings are heard.
+      const crowded = autoRef.current || (board.current?.falling() ?? 0) > 0;
+      play((context) => playPlinkoLanding(context, drop.multiplier, crowded));
     },
+    [play],
+  );
+
+  const onPeg = useCallback(
+    (row: number, rows: number, live: number) =>
+      play((context) => playPlinkoPeg(context, row, rows, live)),
     [play],
   );
 
@@ -151,7 +153,7 @@ export function PlinkoCasino({
       (fresh.length > 1 ? WAVE_GAP_MS : 0);
     window.setTimeout(() => {
       if (soundRef.current && audioRef.current)
-        playCasinoSound(audioRef.current, "chips");
+        playPlinkoRelease(audioRef.current);
     }, first - now);
   }, [state]);
 
@@ -252,6 +254,7 @@ export function PlinkoCasino({
                 highlight={highlight}
                 handle={board}
                 onLand={onLand}
+                onPeg={onPeg}
               />
               <ul className="plinko-history" aria-label="Dernières billes">
                 {history.map((drop) => (

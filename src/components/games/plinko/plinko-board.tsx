@@ -16,8 +16,8 @@ import type { PlinkoDrop } from "@/lib/types";
 export type PlinkoBoardHandle = {
   /** Replays a settled drop; `delay` staggers the balls of a same batch. */
   drop: (drop: PlinkoDrop, delay?: number) => void;
-  /** Whether balls are still falling, for a caller waiting on a quiet board. */
-  busy: () => boolean;
+  /** Balls not yet in their slot, queued ones included: how busy the board is. */
+  falling: () => number;
   clear: () => void;
 };
 
@@ -307,6 +307,7 @@ export function PlinkoBoard({
   highlight,
   handle,
   onLand,
+  onPeg,
 }: {
   rows: number;
   risk: PlinkoRisk;
@@ -315,6 +316,8 @@ export function PlinkoBoard({
   highlight: { slot: number; key: number } | null;
   handle: Ref<PlinkoBoardHandle>;
   onLand: (drop: PlinkoDrop) => void;
+  /** A ball strikes a peg of `row`, with `live` balls on the board. */
+  onPeg?: (row: number, rows: number, live: number) => void;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const pegCanvas = useRef<HTMLCanvasElement>(null);
@@ -330,6 +333,8 @@ export function PlinkoBoard({
   const reducedRef = useRef(false);
   const onLandRef = useRef(onLand);
   onLandRef.current = onLand;
+  const onPegRef = useRef(onPeg);
+  onPegRef.current = onPeg;
   const [size, setSize] = useState({ width: 0, spacing: 0 });
   const labels = useMemo(() => multipliers.map(plinkoSlotLabel), [multipliers]);
 
@@ -363,6 +368,9 @@ export function PlinkoBoard({
     const ballSize = ball.width / dpr;
     const flashSize = flash.width / dpr;
     const alive: Ball[] = [];
+    const live = ballsRef.current.filter(
+      (item) => !item.landed && item.start <= now,
+    ).length;
 
     for (const item of ballsRef.current) {
       const elapsed = now - item.start;
@@ -378,6 +386,7 @@ export function PlinkoBoard({
           y: pegY(layout, item.struck),
           at: now,
         });
+        onPegRef.current?.(item.struck, item.rows, live);
         item.struck += 1;
       }
 
@@ -447,7 +456,7 @@ export function PlinkoBoard({
         });
         if (!frame.current) frame.current = requestAnimationFrame(step);
       },
-      busy: () => ballsRef.current.length > 0,
+      falling: () => ballsRef.current.filter((item) => !item.landed).length,
       clear: () => {
         ballsRef.current = [];
         pendingRef.current.clear();
