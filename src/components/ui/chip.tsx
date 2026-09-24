@@ -8,18 +8,38 @@ export const Chip = memo(function Chip({
   onClick,
   disabled = false,
   label,
+  displayOnly = false,
+  className = "",
 }: {
   amount: number;
   selected?: boolean;
   onClick?: (amount: number) => void;
   disabled?: boolean;
   label?: string;
+  displayOnly?: boolean;
+  className?: string;
 }) {
+  const classes = `chip chip-${amount} ${selected ? "selected" : ""} ${className}`;
+  const style = chipColors(amount) as CSSProperties;
+  const contents = <span>{chipLabel(amount)}</span>;
+
+  if (displayOnly) {
+    return (
+      <span
+        className={`${classes} display-only`}
+        style={style}
+        aria-hidden="true"
+      >
+        {contents}
+      </span>
+    );
+  }
+
   return (
     <button
       type="button"
-      className={`chip chip-${amount} ${selected ? "selected" : ""}`}
-      style={chipColors(amount) as CSSProperties}
+      className={classes}
+      style={style}
       onClick={() => onClick?.(amount)}
       disabled={disabled}
       aria-label={
@@ -27,7 +47,7 @@ export const Chip = memo(function Chip({
       }
       aria-pressed={selected}
     >
-      <span>{chipLabel(amount)}</span>
+      {contents}
     </button>
   );
 });

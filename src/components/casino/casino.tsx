@@ -20,6 +20,7 @@ import { RouletteCasino } from "../games/roulette/roulette-casino";
 import { TowerCasino } from "../games/tower/tower-casino";
 import { ChickenCasino } from "../games/chicken/chicken-casino";
 import { SocialProvider } from "../social/social-provider";
+import { DailyProvider } from "../daily/daily-provider";
 import { CardBackSkin } from "../ui/playing-card";
 import { useMySkins } from "@/lib/cosmetics-api";
 
@@ -97,134 +98,136 @@ export function Casino() {
   return (
     <ServerClockProvider offset={game.serverTimeOffset}>
       <SocialProvider game={game} view={view} onNavigate={navigate}>
-        <CardBackSkin.Provider value={mySkins?.["card-back"]}>
-          {content}
-        </CardBackSkin.Provider>
-        {game.loaded && !game.profile && <WelcomeAuthModal game={game} />}
-        {canRefill && refillDismissed && !showRefill && (
-          <button
-            type="button"
-            className="button primary refill-reminder"
-            onClick={() => {
-              setRefillDismissed(false);
-              setShowRefill(true);
-            }}
-          >
-            <Coins size={16} />
-            Recaver
-          </button>
-        )}
-        {canRefill && showRefill && (
-          <Modal
-            title="Recaver"
-            onClose={() => {
-              setShowRefill(false);
-              setRefillDismissed(true);
-            }}
-          >
-            <span className="modal-emblem">
-              <Coins size={26} />
-            </span>
-            <span className="section-kicker">SOLDE INSUFFISANT</span>
-            <h2>Reprenez la partie.</h2>
-            <p className="modal-intro">
-              Votre solde est sous {credits(REFILL_THRESHOLD)} crédits. Vous
-              pouvez le remettre à {credits(REFILL_BALANCE)} crédits.
-            </p>
-            <div className="leave-poker-actions">
-              <button
-                type="button"
-                className="button secondary"
-                disabled={game.pending}
-                onClick={() => {
-                  setShowRefill(false);
-                  setRefillDismissed(true);
-                }}
-              >
-                Plus tard
-              </button>
-              <button
-                type="button"
-                className="button primary"
-                disabled={!game.connected || game.pending}
-                onClick={async () => {
-                  if (await game.refill()) {
+        <DailyProvider socket={game.socket} view={view}>
+          <CardBackSkin.Provider value={mySkins?.["card-back"]}>
+            {content}
+          </CardBackSkin.Provider>
+          {game.loaded && !game.profile && <WelcomeAuthModal game={game} />}
+          {canRefill && refillDismissed && !showRefill && (
+            <button
+              type="button"
+              className="button primary refill-reminder"
+              onClick={() => {
+                setRefillDismissed(false);
+                setShowRefill(true);
+              }}
+            >
+              <Coins size={16} />
+              Recaver
+            </button>
+          )}
+          {canRefill && showRefill && (
+            <Modal
+              title="Recaver"
+              onClose={() => {
+                setShowRefill(false);
+                setRefillDismissed(true);
+              }}
+            >
+              <span className="modal-emblem">
+                <Coins size={26} />
+              </span>
+              <span className="section-kicker">SOLDE INSUFFISANT</span>
+              <h2>Reprenez la partie.</h2>
+              <p className="modal-intro">
+                Votre solde est sous {credits(REFILL_THRESHOLD)} crédits. Vous
+                pouvez le remettre à {credits(REFILL_BALANCE)} crédits.
+              </p>
+              <div className="leave-poker-actions">
+                <button
+                  type="button"
+                  className="button secondary"
+                  disabled={game.pending}
+                  onClick={() => {
                     setShowRefill(false);
                     setRefillDismissed(true);
-                  }
-                }}
-              >
-                {game.pending ? (
-                  <LoaderCircle size={16} className="spinner" />
-                ) : (
-                  <Coins size={16} />
-                )}
-                Recaver à {credits(REFILL_BALANCE)} cr.
-              </button>
-            </div>
-          </Modal>
-        )}
-        {confirmPokerLeave && (
-          <Modal
-            title="Quitter la partie de poker ?"
-            className="leave-poker-modal"
-            onClose={
-              leavingPoker
-                ? undefined
-                : () => {
+                  }}
+                >
+                  Plus tard
+                </button>
+                <button
+                  type="button"
+                  className="button primary"
+                  disabled={!game.connected || game.pending}
+                  onClick={async () => {
+                    if (await game.refill()) {
+                      setShowRefill(false);
+                      setRefillDismissed(true);
+                    }
+                  }}
+                >
+                  {game.pending ? (
+                    <LoaderCircle size={16} className="spinner" />
+                  ) : (
+                    <Coins size={16} />
+                  )}
+                  Recaver à {credits(REFILL_BALANCE)} cr.
+                </button>
+              </div>
+            </Modal>
+          )}
+          {confirmPokerLeave && (
+            <Modal
+              title="Quitter la partie de poker ?"
+              className="leave-poker-modal"
+              onClose={
+                leavingPoker
+                  ? undefined
+                  : () => {
+                      setConfirmPokerLeave(false);
+                      setPendingView(null);
+                    }
+              }
+            >
+              <span className="modal-emblem">
+                <Spade size={26} fill="currentColor" />
+              </span>
+              <span className="section-kicker">PARTIE EN COURS</span>
+              <h2>Quitter la partie de poker ?</h2>
+              <p className="modal-intro">
+                {pokerExitMessage} Voulez-vous vraiment rejoindre{" "}
+                {pokerExitDestination} ?
+              </p>
+              <div className="leave-poker-actions">
+                <button
+                  type="button"
+                  className="button secondary"
+                  autoFocus
+                  disabled={leavingPoker}
+                  onClick={() => {
                     setConfirmPokerLeave(false);
                     setPendingView(null);
-                  }
-            }
-          >
-            <span className="modal-emblem">
-              <Spade size={26} fill="currentColor" />
-            </span>
-            <span className="section-kicker">PARTIE EN COURS</span>
-            <h2>Quitter la partie de poker ?</h2>
-            <p className="modal-intro">
-              {pokerExitMessage} Voulez-vous vraiment rejoindre{" "}
-              {pokerExitDestination} ?
-            </p>
-            <div className="leave-poker-actions">
-              <button
-                type="button"
-                className="button secondary"
-                autoFocus
-                disabled={leavingPoker}
-                onClick={() => {
-                  setConfirmPokerLeave(false);
-                  setPendingView(null);
-                }}
-              >
-                Rester au poker
-              </button>
-              <button
-                type="button"
-                className="button primary"
-                disabled={leavingPoker}
-                onClick={async () => {
-                  setLeavingPoker(true);
-                  const left = await game.pokerCommand({ type: "leave" });
-                  setLeavingPoker(false);
-                  if (!left) return;
-                  setConfirmPokerLeave(false);
-                  setView(pendingView ?? "blackjack");
-                  setPendingView(null);
-                }}
-              >
-                {leavingPoker ? (
-                  <LoaderCircle size={16} className="spinner" />
-                ) : (
-                  <BlackjackIcon />
-                )}
-                {pendingView === "blackjack"
-                  ? "Quitter et jouer au Blackjack"
-                  : "Quitter et rejoindre " + pokerExitDestination}
-              </button>
-            </div>
-          </Modal>
-        )}
+                  }}
+                >
+                  Rester au poker
+                </button>
+                <button
+                  type="button"
+                  className="button primary"
+                  disabled={leavingPoker}
+                  onClick={async () => {
+                    setLeavingPoker(true);
+                    const left = await game.pokerCommand({ type: "leave" });
+                    setLeavingPoker(false);
+                    if (!left) return;
+                    setConfirmPokerLeave(false);
+                    setView(pendingView ?? "blackjack");
+                    setPendingView(null);
+                  }}
+                >
+                  {leavingPoker ? (
+                    <LoaderCircle size={16} className="spinner" />
+                  ) : (
+                    <BlackjackIcon />
+                  )}
+                  {pendingView === "blackjack"
+                    ? "Quitter et jouer au Blackjack"
+                    : "Quitter et rejoindre " + pokerExitDestination}
+                </button>
+              </div>
+            </Modal>
+          )}
+        </DailyProvider>
       </SocialProvider>
     </ServerClockProvider>
   );
