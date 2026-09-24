@@ -830,10 +830,9 @@
     transition: none;
   }
 }
-/* Seven games: four posters per row, then the rest, so the grid stays even. */
+/* Seven games: the posters fill the row, as wide as the space allows. */
 .game-selection {
   grid-template-columns: repeat(auto-fit, minmax(265px, 1fr));
-  max-width: 1200px;
 }
 
 @media (max-width: 1280px) {
