@@ -1,6 +1,22 @@
-import type { CSSProperties } from "react";
+"use client";
+
+import { createContext, useContext, type CSSProperties } from "react";
 import type { Card } from "@/lib/types";
 import { isRed, rankLabel, SUITS } from "@/lib/rules";
+import { SkinImage } from "./skin-image";
+
+/**
+ * Back worn by the viewer, for the cards of the house and of players without
+ * one. Outside a game (posters, icons) there is none: the Classique shows.
+ */
+export const CardBackSkin = createContext<string | undefined>(undefined);
+
+const CLASSIC_BACK = (
+  <>
+    <span>♠</span>
+    <small>M</small>
+  </>
+);
 
 export function PlayingCard({
   card,
@@ -10,6 +26,7 @@ export function PlayingCard({
   decorative = false,
   highlighted = false,
   dimmed = false,
+  backSkin,
 }: {
   card?: Card;
   back?: boolean;
@@ -18,7 +35,15 @@ export function PlayingCard({
   decorative?: boolean;
   highlighted?: boolean;
   dimmed?: boolean;
+  /** Back worn by the player holding the card, over the viewer's. */
+  /**
+   * Back of this card, resolved by the table (frozen for the hand); null for
+   * the Classique. Left out, the viewer's live back from the context shows.
+   */
+  backSkin?: string | null;
 }) {
+  const viewerBack = useContext(CardBackSkin);
+  const skin = backSkin === undefined ? viewerBack : (backSkin ?? undefined);
   const concealed = back || card?.hidden;
   return (
     <div
@@ -41,9 +66,8 @@ export function PlayingCard({
       }
     >
       {concealed || !card ? (
-        <div className="back-pattern">
-          <span>♠</span>
-          <small>M</small>
+        <div className={`back-pattern ${skin ? "skinned" : ""}`}>
+          <SkinImage src={skin} fallback={CLASSIC_BACK} className="back-skin" />
         </div>
       ) : (
         <>

@@ -2,13 +2,7 @@ import { PgDrizzle } from "@effect/sql-drizzle/Pg";
 import { SqlClient } from "@effect/sql/SqlClient";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { Data, Effect } from "effect";
-import {
-  PARRAINAGE_COSMETICS,
-  isCosmeticId,
-  type CosmeticId,
-  type CosmeticSource,
-  type OwnedCosmetic,
-} from "../../src/lib/cosmetics";
+import { PARRAINAGE_COSMETICS } from "../../src/lib/cosmetics";
 import {
   REFERRAL_COSMETIC_TIER,
   REFERRAL_TIERS,
@@ -23,8 +17,8 @@ import {
 import { normalizeFriendCode, type SocialPlayer } from "../../src/lib/social";
 import { applyWalletOperations } from "../db/wallet";
 import type { WalletOperation } from "../game-wallet";
+import { grantCosmetics } from "../cosmetics/repository";
 import {
-  playerCosmetic,
   playerProfile,
   referral,
   referralReward,
@@ -77,49 +71,11 @@ function grant(
   };
 }
 
-const unlockCosmetics = (
-  userId: string,
-  ids: readonly CosmeticId[],
-  source: CosmeticSource,
-) =>
-  Effect.gen(function* () {
-    if (!ids.length) return;
-    const db = yield* PgDrizzle;
-    yield* db
-      .insert(playerCosmetic)
-      .values(ids.map((cosmeticId) => ({ userId, cosmeticId, source })))
-      .onConflictDoNothing();
-  });
-
-const ownedCosmetics = (userId: string) =>
-  Effect.gen(function* () {
-    const db = yield* PgDrizzle;
-    const rows = yield* db
-      .select()
-      .from(playerCosmetic)
-      .where(eq(playerCosmetic.userId, userId));
-    return rows.flatMap((row): OwnedCosmetic[] =>
-      isCosmeticId(row.cosmeticId)
-        ? [
-            {
-              id: row.cosmeticId,
-              source: row.source as CosmeticSource,
-              unlockedAt: row.createdAt.toISOString(),
-            },
-          ]
-        : [],
-    );
-  });
-
 /**
  * Grants every tier reached by one filleul and not paid for yet. The wallet
  * operation ids are stable, so retries never credit the same tier twice.
  */
-const settleTiers = (
-  parrainId: string,
-  filleulId: string,
-  wagered: number,
-) =>
+const settleTiers = (parrainId: string, filleulId: string, wagered: number) =>
   Effect.gen(function* () {
     const db = yield* PgDrizzle;
     const reached = tiersReachedBy(wagered);
@@ -163,7 +119,7 @@ const settleTiers = (
       )
       .onConflictDoNothing();
     if (missing.some((tier) => tier.tier === REFERRAL_COSMETIC_TIER))
-      yield* unlockCosmetics(
+      yield* grantCosmetics(
         parrainId,
         PARRAINAGE_COSMETICS,
         "parrainage-parrain",
@@ -237,7 +193,7 @@ export const registerReferral = (filleulId: string, input: string) =>
             { code: parrain.code },
           ),
         ]);
-        yield* unlockCosmetics(
+        yield* grantCosmetics(
           filleulId,
           PARRAINAGE_COSMETICS,
           "parrainage-filleul",
@@ -328,11 +284,7 @@ export const referralOverview = (userId: string, deps: ReferralDeps) =>
 
     const activity = yield* activityOf(filleulRows.map((row) => row.id));
     for (const row of filleulRows)
-      yield* settleTiers(
-        userId,
-        row.id,
-        activity.get(row.id)?.wagered ?? 0,
-      );
+      yield* settleTiers(userId, row.id, activity.get(row.id)?.wagered ?? 0);
 
     const rewards = yield* db
       .select()
@@ -357,13 +309,11 @@ export const referralOverview = (userId: string, deps: ReferralDeps) =>
         online: deps.isOnline(row.id),
         played: activity.get(row.id)?.played ?? 0,
         wagered,
-        tiers: REFERRAL_TIERS.map(
-          (tier): ReferralTierState => ({
-            ...tier,
-            reached: paid.has(tier.tier),
-            grantedAt: paid.get(tier.tier)?.createdAt.toISOString() ?? null,
-          }),
-        ),
+        tiers: REFERRAL_TIERS.map((tier): ReferralTierState => ({
+          ...tier,
+          reached: paid.has(tier.tier),
+          grantedAt: paid.get(tier.tier)?.createdAt.toISOString() ?? null,
+        })),
         nextTier: nextTierAfter(wagered),
       };
     });
@@ -380,6 +330,5 @@ export const referralOverview = (userId: string, deps: ReferralDeps) =>
         : null,
       filleuls,
       earned: rewards.reduce((total, row) => total + row.amount, 0),
-      cosmetics: yield* ownedCosmetics(userId),
     } satisfies ReferralOverview;
   }).pipe(mapDatabaseError);

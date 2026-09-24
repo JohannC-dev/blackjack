@@ -1,11 +1,27 @@
-export function MineDiamond({ className = "" }: { className?: string }) {
+import { SkinImage } from "../../ui/skin-image";
+
+/** The Classique gem, or the skin the player wears in their own game. */
+export function MineDiamond({
+  className = "",
+  skin,
+}: {
+  className?: string;
+  skin?: string;
+}) {
+  const classes = `mines-poster-gem ${className}`.trim();
   return (
-    <img
-      src="/art/mine-diamond.svg"
-      alt=""
-      className={`mines-poster-gem ${className}`.trim()}
-      aria-hidden="true"
-      draggable={false}
+    <SkinImage
+      src={skin}
+      className={classes}
+      fallback={
+        <img
+          src="/art/mine-diamond.svg"
+          alt=""
+          className={classes}
+          aria-hidden="true"
+          draggable={false}
+        />
+      }
     />
   );
 }

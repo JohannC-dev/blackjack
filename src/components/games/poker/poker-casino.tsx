@@ -49,6 +49,8 @@ import type { CasinoView } from "@/lib/navigation";
 import { BlackjackIcon } from "../../ui/blackjack-icon";
 import { useCountdownSeconds, useServerClockNow } from "../../ui/countdown";
 import { PlayingCard } from "../../ui/playing-card";
+import { tableCardBack } from "@/lib/cosmetics";
+import { useTableSkins } from "@/lib/cosmetics-api";
 import { PokerLobby } from "./poker-lobby";
 import { PokerShuffleAnimation } from "../../ui/poker-shuffle";
 import { RoomArt } from "./room-art";
@@ -511,6 +513,11 @@ const PokerTableHeading = memo(function PokerTableHeading({
 function PokerTable({ game }: { game: Game }) {
   const table = game.pokerState!.table!;
   const me = table.seats.find((seat) => seat.id === game.playerId);
+  // Each player's hole cards wear their own back, frozen for the hand.
+  const seatSkins = useTableSkins(
+    [...table.seats.map((seat) => seat.id), game.playerId],
+    table.hand,
+  );
   const [raiseTo, setRaiseTo] = useState(0);
   const [raiseOpen, setRaiseOpen] = useState(false);
   const [chat, setChat] = useState("");
@@ -787,6 +794,7 @@ function PokerTable({ game }: { game: Game }) {
                 showdown={showdownCards.hasCombination}
                 collectingBet={collectingBets && !!seat?.bet}
                 maximumBet={pokerMaximumBet}
+                backSkin={tableCardBack(seatSkins, seat?.id, game.playerId)}
               />
             ))}
             {collectingBets &&
@@ -1255,6 +1263,7 @@ function PokerSeatView({
   showdown,
   collectingBet,
   maximumBet,
+  backSkin,
 }: {
   seat?: PokerSeat;
   position: { x: number; y: number };
@@ -1266,6 +1275,8 @@ function PokerSeatView({
   showdown: boolean;
   collectingBet: boolean;
   maximumBet: number;
+  /** Back of the seated player's cards, frozen for the hand. */
+  backSkin: string | null;
 }) {
   const active = !!seat && table.activePlayerId === seat.id;
   const turnSeconds = useCountdownSeconds(active ? table.deadline : null);
@@ -1309,6 +1320,7 @@ function PokerSeatView({
             dealDelay={dealDelays.get(card.id)}
             highlighted={winningCardIds.has(card.id)}
             dimmed={showdown && !winningCardIds.has(card.id)}
+            backSkin={backSkin}
           />
         ))}
       </div>

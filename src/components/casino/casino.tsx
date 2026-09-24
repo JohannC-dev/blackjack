@@ -20,9 +20,12 @@ import { RouletteCasino } from "../games/roulette/roulette-casino";
 import { TowerCasino } from "../games/tower/tower-casino";
 import { ChickenCasino } from "../games/chicken/chicken-casino";
 import { SocialProvider } from "../social/social-provider";
+import { CardBackSkin } from "../ui/playing-card";
+import { useMySkins } from "@/lib/cosmetics-api";
 
 export function Casino() {
   const game = useGame();
+  const mySkins = useMySkins();
   const [view, setView] = useState<CasinoView>("home");
   const [confirmPokerLeave, setConfirmPokerLeave] = useState(false);
   const [leavingPoker, setLeavingPoker] = useState(false);
@@ -94,7 +97,9 @@ export function Casino() {
   return (
     <ServerClockProvider offset={game.serverTimeOffset}>
       <SocialProvider game={game} view={view} onNavigate={navigate}>
-        {content}
+        <CardBackSkin.Provider value={mySkins?.["card-back"]}>
+          {content}
+        </CardBackSkin.Provider>
         {game.loaded && !game.profile && <WelcomeAuthModal game={game} />}
         {canRefill && refillDismissed && !showRefill && (
           <button

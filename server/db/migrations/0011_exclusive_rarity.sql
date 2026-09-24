@@ -1,0 +1,2 @@
+ALTER TABLE "cosmetic" DROP CONSTRAINT "cosmetic_rarity_values";--> statement-breakpoint
+ALTER TABLE "cosmetic" ADD CONSTRAINT "cosmetic_rarity_values" CHECK ("cosmetic"."rarity" in ('common', 'rare', 'epic', 'legendary', 'exclusive'));

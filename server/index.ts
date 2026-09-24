@@ -28,6 +28,7 @@ import { refillWallet } from "./refill";
 import { handleSocialRequest } from "./social/http";
 import { areFriends, friendIdsOf } from "./social/repository";
 import { handleReferralRequest } from "./referral/http";
+import { handleCosmeticRequest } from "./cosmetics/http";
 import { onReferralCompleted } from "./referral/events";
 import {
   GameError,
@@ -146,6 +147,7 @@ const http = createServer(async (req, res) => {
     })
   )
     return;
+  if (await handleCosmeticRequest(req, res)) return;
   handler(req, res);
 });
 const io = new Server(http, {

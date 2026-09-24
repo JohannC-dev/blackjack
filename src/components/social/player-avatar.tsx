@@ -1,6 +1,7 @@
 "use client";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useEquippedSkins } from "@/lib/cosmetics-api";
 import { cn } from "@/lib/utils";
 
 /** Stable hue per player, so a friend is recognisable at a glance. */
@@ -16,6 +17,7 @@ export function PlayerAvatar({
   online,
   size = "default",
   className,
+  icon: shownIcon,
 }: {
   id: string;
   name: string;
@@ -23,8 +25,14 @@ export function PlayerAvatar({
   online?: boolean;
   size?: "sm" | "default" | "lg" | "xl" | "2xl";
   className?: string;
+  /** Forces an icon, null for the Classique; by default the one worn. */
+  icon?: string | null;
 }) {
   const hue = hueOf(id);
+  // The profile icon the player wears; the initial stays as the Classique.
+  const worn = useEquippedSkins(shownIcon === undefined ? id : null);
+  const icon =
+    shownIcon === undefined ? worn?.["profile-icon"] : (shownIcon ?? undefined);
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
       <Avatar
@@ -36,6 +44,7 @@ export function PlayerAvatar({
           size === "2xl" && "size-20 sm:size-24",
         )}
       >
+        {icon && <AvatarImage src={icon} alt="" draggable={false} />}
         <AvatarFallback
           className={cn(
             "font-bold text-white/90",

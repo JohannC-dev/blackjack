@@ -28,3 +28,8 @@
 - **Demande d’ami** : proposition d’amitié en attente, envoyée par un joueur à un autre, que le destinataire accepte ou refuse.
 - **Invitation de jeu** : proposition éphémère faite à un ami connecté de rejoindre un jeu, et la table de l’expéditeur quand le jeu en a une. Elle n’est jamais enregistrée.
 - **Profil de joueur** : identité publique d’un joueur (pseudo, code ami, ancienneté, statistiques de jeu).
+- **Skin** : visuel débloquable qui remplace un élément du jeu : dos de carte, icône de profil, poulet du Chicken ou diamant de la Mine. Un skin appartient à un seul type.
+- **Classique** : rendu d’origine d’un type, affiché quand le joueur n’a rien équipé. Tout le monde le possède.
+- **Collection** : ensemble des skins visibles par un joueur : ceux qu’il possède et ceux, encore actifs, qu’il peut débloquer.
+- **Équiper** : choisir, parmi les skins possédés, celui qui s’affiche pour un type. Un seul skin équipé par type.
+- **Octroi** : attribution d’un skin à un joueur, par le parrainage, un geste manuel ou, plus tard, un achat.

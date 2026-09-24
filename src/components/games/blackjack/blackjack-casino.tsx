@@ -92,6 +92,8 @@ import {
 import { Modal } from "../../ui/modal";
 import { motionDuration } from "../../ui/motion";
 import { PlayingCard } from "../../ui/playing-card";
+import { tableCardBack } from "@/lib/cosmetics";
+import { useTableSkins } from "@/lib/cosmetics-api";
 import {
   AnimatedTableChip,
   SettlementChipAnimation,
@@ -298,7 +300,15 @@ function AnimatedMenu({
   );
 }
 
-function HandView({ hand, active }: { hand: Hand; active: boolean }) {
+function HandView({
+  hand,
+  active,
+  backSkin,
+}: {
+  hand: Hand;
+  active: boolean;
+  backSkin: string | null;
+}) {
   const concealed = hand.cards.some((card) => card.hidden);
   const value = score(hand.cards.filter((card) => !card.hidden));
   return (
@@ -307,7 +317,12 @@ function HandView({ hand, active }: { hand: Hand; active: boolean }) {
     >
       <div className="hand-cards">
         {hand.cards.map((card, index) => (
-          <PlayingCard key={card.id} card={card} index={index} />
+          <PlayingCard
+            key={card.id}
+            card={card}
+            index={index}
+            backSkin={backSkin}
+          />
         ))}
       </div>
       {!!hand.cards.length && (
@@ -417,6 +432,8 @@ type SeatViewProps = {
   onRelease: (seat: Seat) => void;
   chip: number;
   disabled: boolean;
+  /** Back of this seat's hidden (doubled) cards, frozen for the round. */
+  backSkin: string | null;
 };
 
 function sameHand(left: Hand, right: Hand) {
@@ -493,7 +510,8 @@ function areSeatViewPropsEqual(left: SeatViewProps, right: SeatViewProps) {
     left.onBet === right.onBet &&
     left.onRelease === right.onRelease &&
     left.chip === right.chip &&
-    left.disabled === right.disabled
+    left.disabled === right.disabled &&
+    left.backSkin === right.backSkin
   );
 }
 
@@ -510,6 +528,7 @@ const SeatView = memo(function SeatView({
   onRelease,
   chip,
   disabled,
+  backSkin,
 }: SeatViewProps) {
   const mine = !!owner && owner.id === playerId;
   const active = seat.hands.some((h) => h.id === activeHandId);
@@ -538,6 +557,7 @@ const SeatView = memo(function SeatView({
               key={hand.id}
               hand={hand}
               active={hand.id === activeHandId}
+              backSkin={backSkin}
             />
           ))}
         </div>
@@ -1356,6 +1376,18 @@ export function BlackjackCasino({
     joinBlackjack,
     pending,
   } = game;
+  // Backs frozen for the round: each seat's hidden doubled card wears its
+  // player's, the dealer and the shoe the viewer's.
+  const tableSkins = useTableSkins(
+    [
+      ...(state?.seats ?? EMPTY_SEATS).flatMap((seat) =>
+        seat.playerId ? [seat.playerId] : [],
+      ),
+      playerId,
+    ],
+    state?.round,
+  );
+  const viewerBack = tableCardBack(tableSkins, null, playerId);
   const [modal, setModal] = useState<
     "rules" | "tables" | "history" | "invite" | null
   >(null);
@@ -1913,7 +1945,12 @@ export function BlackjackCasino({
                     <div className="dealer-cards">
                       {state?.dealer.length ? (
                         state.dealer.map((card, i) => (
-                          <PlayingCard key={card.id} card={card} index={i} />
+                          <PlayingCard
+                            key={card.id}
+                            card={card}
+                            index={i}
+                            backSkin={viewerBack}
+                          />
                         ))
                       ) : (
                         <>
@@ -1936,7 +1973,7 @@ export function BlackjackCasino({
                   <div className="card-shoe">
                     <div />
                     <div />
-                    <PlayingCard back decorative />
+                    <PlayingCard back decorative backSkin={viewerBack} />
                     <span>8 JEUX</span>
                   </div>
                   {state?.phase === "shuffling" && (
@@ -1999,6 +2036,7 @@ export function BlackjackCasino({
                       onRelease={releaseSeat}
                       chip={s.playerId === playerId ? chip : 0}
                       disabled={s.playerId === playerId && disabled}
+                      backSkin={tableCardBack(tableSkins, s.playerId, playerId)}
                     />
                   ))}
                   {((roundResult && roundResult.net > 0) ||

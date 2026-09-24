@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" fill="#1b1726"/>
+  <circle cx="64" cy="64" r="50" fill="#7a4fd0"/>
+  <g fill="#f4efe6">
+    <path d="M58 14h12v14H58z"/>
+    <path d="M58 100h12v14H58z"/>
+    <path d="M14 58h14v12H14z"/>
+    <path d="M100 58h14v12h-14z"/>
+    <path d="M24.6 33.1l8.5-8.5 9.9 9.9-8.5 8.5z"/>
+    <path d="M85 93.5l8.5-8.5 9.9 9.9-8.5 8.5z"/>
+    <path d="M94.9 24.6l8.5 8.5-9.9 9.9-8.5-8.5z"/>
+    <path d="M34.5 85l8.5 8.5-9.9 9.9-8.5-8.5z"/>
+  </g>
+  <circle cx="64" cy="64" r="50" fill="none" stroke="#2f1d57" stroke-opacity=".5" stroke-width="2"/>
+  <circle cx="64" cy="64" r="33" fill="#5d38a8" stroke="#f4efe6" stroke-width="2.5" stroke-dasharray="4 4"/>
+  <circle cx="64" cy="64" r="26" fill="#6b43bd"/>
+  <text x="64" y="75" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="30" fill="#f4efe6">M</text>
+</svg>

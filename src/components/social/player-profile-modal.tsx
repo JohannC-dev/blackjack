@@ -9,6 +9,7 @@ import {
   Gift,
   LoaderCircle,
   Medal,
+  Palette,
   Send,
   ShieldCheck,
   Trophy,
@@ -32,6 +33,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatFriendCode, type PlayerProfile } from "@/lib/social";
 import { usePlayerProfile } from "@/lib/social-api";
+import { CollectionPanel } from "./collection-panel";
 import { PlayerAvatar } from "./player-avatar";
 import { Balance, ProfileStats } from "./profile-stats";
 import { ReferralPanel } from "./referral-panel";
@@ -263,6 +265,7 @@ function IdentityFact({
  */
 function ProfileSections({ profile }: { profile: PlayerProfile }) {
   const self = profile.relation === "self";
+  const [tab, setTab] = useState("stats");
 
   if (!profile.stats)
     return (
@@ -291,11 +294,15 @@ function ProfileSections({ profile }: { profile: PlayerProfile }) {
   if (!self) return stats;
 
   return (
-    <Tabs defaultValue="stats" className="gap-0">
+    <Tabs value={tab} onValueChange={setTab} className="gap-0">
       <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-white/[0.03] p-1">
         <TabsTrigger value="stats" className="h-8 px-4">
           <Medal />
           Profil
+        </TabsTrigger>
+        <TabsTrigger value="collection" className="h-8 px-4">
+          <Palette />
+          Collection
         </TabsTrigger>
         <TabsTrigger value="referral" className="h-8 px-4">
           <Gift />
@@ -309,8 +316,11 @@ function ProfileSections({ profile }: { profile: PlayerProfile }) {
       <TabsContent value="stats" className="pt-6">
         {stats}
       </TabsContent>
+      <TabsContent value="collection" className="pt-6">
+        <CollectionPanel />
+      </TabsContent>
       <TabsContent value="referral" className="max-w-xl pt-6">
-        <ReferralPanel />
+        <ReferralPanel onOpenCollection={() => setTab("collection")} />
       </TabsContent>
       <TabsContent value="privacy" className="max-w-xl pt-6">
         {profile.visibility && (
