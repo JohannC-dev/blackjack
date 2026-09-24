@@ -343,6 +343,12 @@ const chicken = new ChickenManager(
   undefined,
   gameWallet,
 );
+// Development only: DAILY_UNLIMITED_SPINS=1 offers the wheel on every connection.
+const dailyOptions = {
+  unlimitedSpins: dev && process.env.DAILY_UNLIMITED_SPINS === "1",
+};
+if (dailyOptions.unlimitedSpins)
+  console.log("Roue quotidienne · mode test, un tour à chaque connexion");
 if (dev && process.env.TOWER_NO_TRAPS === "1")
   console.log("La Tower · mode test sans pièges activé");
 
@@ -431,7 +437,7 @@ async function runDaily<A, E>(effect: Parameters<typeof runDatabase<A, E>>[0]) {
 function syncDaily(playerId: string) {
   void serializeFinancial(async () => {
     const update: DailyUpdate = await runDaily(
-      checkInDaily(playerId, Date.now()),
+      checkInDaily(playerId, Date.now(), dailyOptions),
     );
     const player = playersById.get(playerId);
     if (player && update.checkIn?.milestone)
@@ -710,7 +716,7 @@ io.on("connection", (socket) => {
       if (!currentPlayer) throw new Error("Connectez-vous au club.");
       throttle(Date.now());
       const { spin, checkIn } = await runDaily(
-        spinDailyWheel(currentPlayer.id, Date.now()),
+        spinDailyWheel(currentPlayer.id, Date.now(), dailyOptions),
       );
       const wallet = await runDatabase(readWallet(currentPlayer.id));
       currentPlayer.balance = wallet.balance;

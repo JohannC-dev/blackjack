@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { PgDrizzle } from "@effect/sql-drizzle/Pg";
 import { SqlClient } from "@effect/sql/SqlClient";
 import { and, eq, sql } from "drizzle-orm";
@@ -22,6 +22,14 @@ import { cosmetic, dailyStreak, playerCosmetic } from "../db/schema";
 import { applyWalletOperations } from "../db/wallet";
 import type { WalletOperation } from "../game-wallet";
 import { advanceStreak, statusOf, type StreakRow } from "./streak";
+
+export type DailyOptions = {
+  /**
+   * Development only: the wheel is offered on every connection and may be
+   * spun again. The streak itself is unchanged.
+   */
+  readonly unlimitedSpins?: boolean;
+};
 
 /** A refusal the player can act on. */
 export class DailyError extends Data.TaggedError("DailyError")<{
@@ -47,8 +55,7 @@ const mapDatabaseError = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
  * Days are read as text: the driver would turn a `date` into a local
  * midnight, which Drizzle then shifts to the day before in UTC.
  */
-const dayText = (column: AnyPgColumn) =>
-  sql<string | null>`${column}::text`;
+const dayText = (column: AnyPgColumn) => sql<string | null>`${column}::text`;
 
 const columns = {
   current: dailyStreak.current,
@@ -182,8 +189,16 @@ const saveStreak = (userId: string, row: StreakRow) =>
  * Counts the club day for a connecting player. Once the day is counted, a
  * reconnection costs one read and no transaction.
  */
-export const checkInDaily = (userId: string, now: number) =>
+export const checkInDaily = (
+  userId: string,
+  now: number,
+  options: DailyOptions = {},
+) =>
   Effect.gen(function* () {
+    const offered = (update: DailyUpdate): DailyUpdate =>
+      options.unlimitedSpins
+        ? { ...update, status: { ...update.status, spinAvailable: true } }
+        : update;
     const db = yield* PgDrizzle;
     const client = yield* SqlClient;
     const [known] = yield* db
@@ -191,19 +206,19 @@ export const checkInDaily = (userId: string, now: number) =>
       .from(dailyStreak)
       .where(eq(dailyStreak.userId, userId));
     if (known?.lastDay === dayKeyAt(now))
-      return {
+      return offered({
         status: statusOf(known as StreakRow, now),
         checkIn: null,
-      } satisfies DailyUpdate;
+      });
 
     return yield* client.withTransaction(
       Effect.gen(function* () {
         const counted = yield* countDay(userId, yield* lockStreak(userId), now);
         if (counted.checkIn) yield* saveStreak(userId, counted.row);
-        return {
+        return offered({
           status: statusOf(counted.row, now),
           checkIn: counted.checkIn,
-        } satisfies DailyUpdate;
+        });
       }),
     );
   }).pipe(mapDatabaseError);
@@ -212,7 +227,11 @@ export const checkInDaily = (userId: string, now: number) =>
  * The free spin of the club day. The prize is drawn and credited before the
  * reply: the client only turns the wheel to it.
  */
-export const spinDailyWheel = (userId: string, now: number) =>
+export const spinDailyWheel = (
+  userId: string,
+  now: number,
+  options: DailyOptions = {},
+) =>
   Effect.gen(function* () {
     const client = yield* SqlClient;
     return yield* client.withTransaction(
@@ -220,7 +239,7 @@ export const spinDailyWheel = (userId: string, now: number) =>
         const day = dayKeyAt(now);
         // A player connected across 08:00 spins on a day not counted yet.
         const counted = yield* countDay(userId, yield* lockStreak(userId), now);
-        if (counted.row.lastSpinDay === day)
+        if (counted.row.lastSpinDay === day && !options.unlimitedSpins)
           return yield* new DailyError({
             message: "La roue a déjà tourné aujourd’hui. Revenez à 8 h.",
           });
@@ -228,11 +247,19 @@ export const spinDailyWheel = (userId: string, now: number) =>
         const segment = wheelSegmentFor(randomInt(WHEEL_TOTAL_WEIGHT));
         const amount = Math.round(WHEEL_SEGMENTS[segment]!.amount * multiplier);
         yield* applyWalletOperations([
-          grant(userId, `daily:wheel:${userId}:${day}`, "daily-wheel", amount, {
-            day,
-            segment,
-            multiplier,
-          }),
+          grant(
+            userId,
+            options.unlimitedSpins
+              ? `daily:wheel:${userId}:${day}:${randomUUID()}`
+              : `daily:wheel:${userId}:${day}`,
+            "daily-wheel",
+            amount,
+            {
+              day,
+              segment,
+              multiplier,
+            },
+          ),
         ]);
         const row = { ...counted.row, lastSpinDay: day };
         yield* saveStreak(userId, row);
