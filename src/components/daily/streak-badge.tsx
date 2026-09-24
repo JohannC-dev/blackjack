@@ -28,7 +28,7 @@ function milestoneLabel(milestone: StreakMilestone) {
 
 /** The flame next to the balance, opening the streak panel. */
 export function StreakBadge() {
-  const status = useDaily();
+  const { status, openWheel } = useDaily();
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -93,11 +93,23 @@ export function StreakBadge() {
           </ul>
           <p className="streak-reset">
             {status.spinAvailable
-              ? "La roue du jour vous attend dans le lobby."
+              ? "Votre tour gratuit est prêt. Vous pouvez le lancer quand vous voulez."
               : `Prochaine roue dans ${untilReset(status.nextResetAt, now)}.`}
             {status.wheelMultiplier > 1 &&
               ` Roue actuelle : ×${status.wheelMultiplier.toLocaleString("fr-FR")}.`}
           </p>
+          {status.spinAvailable && (
+            <button
+              type="button"
+              className="button primary streak-wheel-open"
+              onClick={() => {
+                setOpen(false);
+                openWheel();
+              }}
+            >
+              Ouvrir la roue
+            </button>
+          )}
         </Modal>
       )}
     </>

@@ -450,19 +450,56 @@ async function runDaily<A, E>(effect: Parameters<typeof runDatabase<A, E>>[0]) {
  * the financial queue: a milestone credits the wallet outside a game batch.
  */
 function syncDaily(playerId: string) {
+  clearDailySyncRetry(playerId);
   void serializeFinancial(async () => {
     const update: DailyUpdate = await runDaily(
       checkInDaily(playerId, Date.now(), dailyOptions),
     );
+    if (update.checkIn?.milestone)
+      dailyRewardWalletRefreshPending.add(playerId);
     const player = playersById.get(playerId);
-    if (player && update.checkIn?.milestone)
+    if (player && dailyRewardWalletRefreshPending.has(playerId)) {
       await Effect.runPromise(refreshWalletEffect(player));
+      dailyRewardWalletRefreshPending.delete(playerId);
+    }
     emitToPlayer(playerId, "daily:status", update);
-  }).catch((error: unknown) => console.error("Série quotidienne", error));
+  }).then(
+    () => {
+      clearDailySyncRetry(playerId);
+      dailySyncRetryAttempts.delete(playerId);
+    },
+    (error: unknown) => {
+      console.error("Série quotidienne", error);
+      if (!playerSockets.has(playerId)) {
+        dailySyncRetryAttempts.delete(playerId);
+        return;
+      }
+      if (dailySyncRetryTimers.has(playerId)) return;
+      const attempt = (dailySyncRetryAttempts.get(playerId) ?? 0) + 1;
+      dailySyncRetryAttempts.set(playerId, attempt);
+      const delay = Math.min(30_000, 1_000 * 2 ** (attempt - 1));
+      const timer = setTimeout(() => {
+        dailySyncRetryTimers.delete(playerId);
+        if (playerSockets.has(playerId)) syncDaily(playerId);
+        else dailySyncRetryAttempts.delete(playerId);
+      }, delay);
+      timer.unref();
+      dailySyncRetryTimers.set(playerId, timer);
+    },
+  );
 }
 
 /** Club day seen by the last maintenance tick, to notice 08:00. */
 let dailyDay = dayKeyAt(Date.now());
+const dailySyncRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const dailySyncRetryAttempts = new Map<string, number>();
+const dailyRewardWalletRefreshPending = new Set<string>();
+
+function clearDailySyncRetry(playerId: string) {
+  const timer = dailySyncRetryTimers.get(playerId);
+  if (timer) clearTimeout(timer);
+  dailySyncRetryTimers.delete(playerId);
+}
 
 function commitWalletOperationsEffect() {
   const operations = gameWallet.operations();
@@ -733,8 +770,18 @@ io.on("connection", (socket) => {
       const { spin, checkIn } = await runDaily(
         spinDailyWheel(currentPlayer.id, Date.now(), dailyOptions),
       );
-      const wallet = await runDatabase(readWallet(currentPlayer.id));
-      currentPlayer.balance = wallet.balance;
+      const reward =
+        spin.amount +
+        (checkIn?.milestone
+          ? checkIn.milestone.credits + checkIn.milestone.converted
+          : 0);
+      const wallet = await runDatabase(readWallet(currentPlayer.id)).catch(
+        (error: unknown) => {
+          console.error("Solde après la roue", error);
+          return null;
+        },
+      );
+      currentPlayer.balance = wallet?.balance ?? currentPlayer.balance + reward;
       return { spin, checkIn };
     }).then(
       ({ spin, checkIn }) => {

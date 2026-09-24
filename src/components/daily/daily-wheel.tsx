@@ -11,28 +11,46 @@ import {
   type DailyStatus,
 } from "@/lib/daily";
 import { credits } from "@/lib/rules";
+import { Chip } from "../ui/chip";
 import { Modal } from "../ui/modal";
 import { motionDuration } from "../ui/motion";
 
 const SLICE = 360 / WHEEL_SEGMENTS.length;
-
-function shortCredits(amount: number) {
-  if (amount >= 1_000_000)
-    return `${(amount / 1_000_000).toLocaleString("fr-FR")} M`;
-  return `${(amount / 1_000).toLocaleString("fr-FR")} k`;
-}
+const WHEEL_COLORS = [
+  "#44334f",
+  "#55364a",
+  "#3d3855",
+  "#5a3c43",
+  "#48324f",
+  "#583746",
+  "#403953",
+  "#604a35",
+];
+const wheelPrizeGradient = `conic-gradient(${WHEEL_SEGMENTS.map(
+  (_, index) =>
+    `${WHEEL_COLORS[index % WHEEL_COLORS.length]} ${index * SLICE}deg ${(index + 1) * SLICE}deg`,
+).join(", ")})`;
+const wheelBackground = `radial-gradient(circle at 50% 32%, rgba(255, 255, 255, .12), transparent 58%), ${wheelPrizeGradient}`;
+const wheelDividers = WHEEL_SEGMENTS.map((_, index) => {
+  const angle = ((index * SLICE - 90) * Math.PI) / 180;
+  const x = Math.cos(angle);
+  const y = Math.sin(angle);
+  return {
+    x1: 50 + x * 11,
+    y1: 50 + y * 11,
+    x2: 50 + x * 44,
+    y2: 50 + y * 44,
+  };
+});
 
 type Phase =
   | { kind: "ready" }
   | { kind: "waiting" }
   | { kind: "spinning"; spin: DailySpin }
   | { kind: "done"; spin: DailySpin }
-  | { kind: "failed"; error: string; retry: boolean };
+  | { kind: "failed"; error: string };
 
-/**
- * The free spin of the club day. It cannot be dismissed before it turned:
- * the server has drawn the prize, the wheel only lands on it.
- */
+/** The daily spin can be postponed; once started, the server picks its prize. */
 export function DailyWheel({
   socket,
   multiplier,
@@ -54,6 +72,13 @@ export function DailyWheel({
     [],
   );
 
+  const finishSpin = (spin: DailySpin) => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    setPhase({ kind: "done", spin });
+    toast.success(`Roue : +${credits(spin.amount)} crédits`);
+  };
+
   const spin = () => {
     setPhase({ kind: "waiting" });
     socket
@@ -69,21 +94,20 @@ export function DailyWheel({
               kind: "failed",
               error: timeout
                 ? "La roue ne répond pas."
-                : (ack as { error: string }).error,
-              retry: !!timeout,
+                : ack && !ack.ok
+                  ? ack.error
+                  : "La roue est temporairement indisponible.",
             });
             return;
           }
           const { spin } = ack;
           onSpun(spin.status);
-          // Six turns, then the drawn slice stops under the pointer.
-          setRotation(6 * 360 - (spin.segment + 0.5) * SLICE);
+          // Spin counter-clockwise, then land the drawn slice under the pointer.
+          setRotation(-(6 * 360 + (spin.segment + 0.5) * SLICE));
           setPhase({ kind: "spinning", spin });
           timer.current = window.setTimeout(
             () => {
-              timer.current = null;
-              setPhase({ kind: "done", spin });
-              toast.success(`Roue : +${credits(spin.amount)} crédits`);
+              finishSpin(spin);
             },
             motionDuration(WHEEL_SPIN_MS, 300),
           );
@@ -92,13 +116,14 @@ export function DailyWheel({
   };
 
   const closable =
-    phase.kind === "done" || (phase.kind === "failed" && !phase.retry);
+    phase.kind === "ready" || phase.kind === "done" || phase.kind === "failed";
   const boosted = multiplier > 1;
 
   return (
     <Modal
       title="Roue de la fortune"
       className="daily-wheel-modal"
+      showCloseButton={false}
       onClose={closable ? onClose : undefined}
     >
       <span className="section-kicker">
@@ -113,21 +138,43 @@ export function DailyWheel({
           style={{
             transform: `rotate(${rotation}deg)`,
             transitionDuration: `${motionDuration(WHEEL_SPIN_MS, 300)}ms`,
+            backgroundImage: wheelBackground,
           }}
           aria-hidden="true"
         >
+          <svg
+            className="daily-wheel-dividers"
+            viewBox="0 0 100 100"
+            aria-hidden="true"
+          >
+            {wheelDividers.map((line, index) => (
+              <line
+                key={index}
+                x1={line.x1}
+                y1={line.y1}
+                x2={line.x2}
+                y2={line.y2}
+              />
+            ))}
+          </svg>
           {WHEEL_SEGMENTS.map((segment, index) => (
             <span
               key={index}
+              className="daily-wheel-prize"
               style={
                 {
                   "--angle": `${(index + 0.5) * SLICE}deg`,
                 } as CSSProperties
               }
             >
-              {shortCredits(Math.round(segment.amount * multiplier))}
+              <Chip
+                amount={Math.round(segment.amount * multiplier)}
+                displayOnly
+                className="daily-wheel-token"
+              />
             </span>
           ))}
+          <div className="daily-wheel-hub" />
         </div>
       </div>
       <p className="modal-intro daily-wheel-result" role="status">
@@ -139,25 +186,44 @@ export function DailyWheel({
               ? "La roue tourne…"
               : "Un tour gratuit par jour, jusqu’à 8 h demain."}
       </p>
-      {phase.kind === "done" || (phase.kind === "failed" && !phase.retry) ? (
+      {phase.kind === "done" ? (
         <button type="button" className="button primary" onClick={onClose}>
-          {phase.kind === "done" ? "Récupérer" : "Fermer"}
+          Récupérer
         </button>
-      ) : (
-        <button
-          type="button"
-          className="button primary"
-          autoFocus
-          disabled={phase.kind === "waiting" || phase.kind === "spinning"}
-          onClick={spin}
-        >
-          {phase.kind === "waiting" ? (
-            <LoaderCircle size={16} className="spinner" />
-          ) : (
+      ) : phase.kind === "waiting" ? (
+        <button type="button" className="button primary" disabled>
+          <LoaderCircle size={16} className="spinner" />
+          Préparation…
+        </button>
+      ) : phase.kind === "spinning" ? (
+        <div className="daily-wheel-actions">
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => finishSpin(phase.spin)}
+          >
+            Passer l’animation
+          </button>
+          <button type="button" className="button primary" disabled>
             <Gift size={16} />
-          )}
-          {phase.kind === "failed" ? "Réessayer" : "Tourner la roue"}
-        </button>
+            La roue tourne…
+          </button>
+        </div>
+      ) : (
+        <div className="daily-wheel-actions">
+          <button type="button" className="button secondary" onClick={onClose}>
+            Plus tard
+          </button>
+          <button
+            type="button"
+            className="button primary"
+            autoFocus
+            onClick={spin}
+          >
+            <Gift size={16} />
+            {phase.kind === "failed" ? "Réessayer" : "Tourner la roue"}
+          </button>
+        </div>
       )}
     </Modal>
   );

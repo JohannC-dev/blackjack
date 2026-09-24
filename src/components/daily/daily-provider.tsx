@@ -2,8 +2,10 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -14,7 +16,15 @@ import type { CasinoView } from "@/lib/navigation";
 import { credits } from "@/lib/rules";
 import { DailyWheel } from "./daily-wheel";
 
-const DailyContext = createContext<DailyStatus | null>(null);
+type DailyContextValue = {
+  status: DailyStatus | null;
+  openWheel: () => void;
+};
+
+const DailyContext = createContext<DailyContextValue>({
+  status: null,
+  openWheel: () => {},
+});
 
 /** The player's streak, or null before the server has counted the day. */
 export function useDaily() {
@@ -70,37 +80,57 @@ export function DailyProvider({
   const [status, setStatus] = useState<DailyStatus | null>(null);
   /** The day whose wheel is on screen, kept until the player closes it. */
   const [wheelDay, setWheelDay] = useState<string | null>(null);
+  /** A skipped wheel stays available from the streak panel, without reopening. */
+  const [dismissedWheelDay, setDismissedWheelDay] = useState<string | null>(
+    null,
+  );
+  const statusRef = useRef<DailyStatus | null>(null);
+
+  const applyStatus = useCallback((next: DailyStatus) => {
+    const current = statusRef.current;
+    // A spin can finish just after 08:00 and deliver yesterday's snapshot.
+    if (current && next.day < current.day) return false;
+    statusRef.current = next;
+    setStatus(next);
+    return true;
+  }, []);
+
+  const openWheel = useCallback(() => {
+    const current = statusRef.current;
+    if (current?.spinAvailable) setWheelDay(current.day);
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
     const onStatus = (update: DailyUpdate) => {
-      if (!update?.status) return;
-      setStatus(update.status);
+      if (!update?.status || !applyStatus(update.status)) return;
       announce(update);
     };
     socket.on("daily:status", onStatus);
     return () => {
       socket.off("daily:status", onStatus);
     };
-  }, [socket]);
+  }, [applyStatus, socket]);
 
-  // Opened while rendering: the wheel shows up with the lobby, no flash.
-  if (status?.spinAvailable && view === "home" && wheelDay !== status.day)
+  // Open on the first lobby visit, but keep a skipped popup dismissed today.
+  if (
+    status?.spinAvailable &&
+    view === "home" &&
+    wheelDay === null &&
+    dismissedWheelDay !== status.day
+  )
     setWheelDay(status.day);
 
   return (
-    <DailyContext.Provider value={status}>
+    <DailyContext.Provider value={{ status, openWheel }}>
       {children}
-      {socket && status && wheelDay === status.day && (
+      {socket && status && wheelDay !== null && (
         <DailyWheel
           socket={socket}
           multiplier={status.wheelMultiplier}
-          onSpun={setStatus}
+          onSpun={applyStatus}
           onClose={() => {
-            // Closing is only offered once the day's spin is used up.
-            setStatus((current) =>
-              current ? { ...current, spinAvailable: false } : current,
-            );
+            setDismissedWheelDay(wheelDay);
             setWheelDay(null);
           }}
         />

@@ -2992,6 +2992,14 @@ h1 > span:not(.live-tag) {
 .chip:disabled {
   filter: grayscale(1);
 }
+.chip.display-only {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  cursor: default;
+  pointer-events: none;
+  transition: none;
+}
 .chip > span {
   height: 100%;
   width: 100%;
