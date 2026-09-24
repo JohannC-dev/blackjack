@@ -10,6 +10,8 @@ export {
   GameControlGroup,
   GameControlsBar,
   GameOption,
+  GamePopoverControl,
+  GameStepSlider,
 } from "./game-controls";
 export { GamePoster } from "./game-poster";
 export { PlayingCard } from "./playing-card";

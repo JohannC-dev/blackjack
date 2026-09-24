@@ -1,5 +1,11 @@
 export type WalletGame =
-  "blackjack" | "poker" | "tower" | "mines" | "roulette" | (string & {});
+  | "blackjack"
+  | "poker"
+  | "tower"
+  | "mines"
+  | "roulette"
+  | "plinko"
+  | (string & {});
 
 export type WalletOperationKind =
   | "wager"

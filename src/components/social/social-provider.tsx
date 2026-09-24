@@ -255,7 +255,12 @@ export function SocialProvider({
           !!privateRouletteId && game.rouletteState?.id === privateRouletteId,
         canBePrivate: true,
       };
-    if (view === "poker" || view === "tower" || view === "mines")
+    if (
+      view === "poker" ||
+      view === "tower" ||
+      view === "mines" ||
+      view === "plinko"
+    )
       return {
         game: view,
         tableId: null,

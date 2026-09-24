@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="ball" x2="0" y2="1">
+      <stop stop-color="#ffffff"/>
+      <stop offset="0.5" stop-color="#cbb0ff"/>
+      <stop offset="1" stop-color="#8d6ae0"/>
+    </linearGradient>
+  </defs>
+  <g fill="#efe9ff">
+    <circle cx="32" cy="22" r="2.6"/>
+    <circle cx="24" cy="31" r="2.6"/>
+    <circle cx="40" cy="31" r="2.6"/>
+    <circle cx="16" cy="40" r="2.6"/>
+    <circle cx="32" cy="40" r="2.6"/>
+    <circle cx="48" cy="40" r="2.6"/>
+  </g>
+  <circle cx="24" cy="11" r="5.5" fill="url(#ball)" stroke="#c7a9ff" stroke-width="1.2"/>
+  <g stroke-width="2" rx="2">
+    <rect x="7" y="49" width="15" height="9" rx="2.5" fill="#3b2a4d" stroke="#e2564f"/>
+    <rect x="24.5" y="49" width="15" height="9" rx="2.5" fill="#3b2a4d" stroke="#7de0b4"/>
+    <rect x="42" y="49" width="15" height="9" rx="2.5" fill="#3b2a4d" stroke="#e2564f"/>
+  </g>
+</svg>

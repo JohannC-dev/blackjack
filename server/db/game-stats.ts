@@ -12,6 +12,7 @@ const GAMES = new Set([
   "tower",
   "mines",
   "chicken",
+  "plinko",
 ]);
 
 /** Called only after the corresponding wallet entry has been inserted. */

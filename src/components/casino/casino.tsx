@@ -14,6 +14,7 @@ import {
   WelcomeAuthModal,
 } from "../games/blackjack/blackjack-casino";
 import { MinesCasino } from "../games/mines/mines-casino";
+import { PlinkoCasino } from "../games/plinko/plinko-casino";
 import { CasinoHome, PokerCasino } from "../games/poker/poker-casino";
 import { RouletteCasino } from "../games/roulette/roulette-casino";
 import { TowerCasino } from "../games/tower/tower-casino";
@@ -60,6 +61,8 @@ export function Casino() {
       <ChickenCasino game={game} onNavigate={navigate} />
     ) : view === "mines" ? (
       <MinesCasino game={game} onNavigate={navigate} />
+    ) : view === "plinko" ? (
+      <PlinkoCasino game={game} onNavigate={navigate} />
     ) : view === "roulette" ? (
       <RouletteCasino game={game} onNavigate={navigate} />
     ) : (
@@ -75,11 +78,13 @@ export function Casino() {
       ? "le jeu de la Mine"
       : pendingView === "chicken"
         ? "Chicken"
-        : pendingView === "roulette"
-          ? "la Roulette"
-          : pendingView === "home"
-            ? "l\u2019accueil du club"
-            : "le Blackjack";
+        : pendingView === "plinko"
+          ? "le Plinko"
+          : pendingView === "roulette"
+            ? "la Roulette"
+            : pendingView === "home"
+              ? "l\u2019accueil du club"
+              : "le Blackjack";
 
   return (
     <ServerClockProvider offset={game.serverTimeOffset}>

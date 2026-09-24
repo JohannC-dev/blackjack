@@ -21,6 +21,7 @@ import { makeRoomRuntime, roomChannel } from "./rooms";
 import { TowerManager } from "./tower";
 import { ChickenManager } from "./chicken";
 import { MinesGame } from "./mines";
+import { PlinkoGame } from "./plinko";
 import { makeRouletteRuntime } from "./roulette";
 import { RecordingGameWallet } from "./game-wallet";
 import { refillWallet } from "./refill";
@@ -46,6 +47,7 @@ import {
   FriendInviteSchema,
   JoinSchema,
   MinesCommandSchema,
+  PlinkoCommandSchema,
   PokerCommandSchema,
   RouletteJoinSchema,
   TowerCommandSchema,
@@ -56,6 +58,7 @@ import type {
   Ack,
   Command,
   MinesCommand,
+  PlinkoCommand,
   PokerCommand,
   TowerCommand,
   ChickenCommand,
@@ -263,6 +266,24 @@ function getMines(playerId: string) {
 
 function getMinesEffect(playerId: string) {
   return gameEffect(() => getMines(playerId));
+}
+const plinko = new Map<string, PlinkoGame>();
+function publishPlinko(playerId: string) {
+  const snapshot = plinko.get(playerId)?.snapshot() ?? null;
+  for (const socketId of playerSockets.get(playerId) ?? [])
+    io.to(socketId).emit("plinko:state", snapshot);
+}
+function getPlinko(playerId: string) {
+  let game = plinko.get(playerId);
+  if (!game) {
+    game = new PlinkoGame(() => publishPlinko(playerId), gameWallet);
+    plinko.set(playerId, game);
+  }
+  return game;
+}
+
+function getPlinkoEffect(playerId: string) {
+  return gameEffect(() => getPlinko(playerId));
 }
 const rouletteRoom = (tableId: string) => roomChannel("roulette", tableId);
 const blackjackRoom = (tableId: string) => blackjackRooms.channel(tableId);
@@ -622,6 +643,7 @@ io.on("connection", (socket) => {
         runOrThrow(poker.connectEffect(player));
         publishWallet(player.id, socket.id);
         publishMines(player.id);
+        publishPlinko(player.id);
         return {
           ok: true,
           playerId: player.id,
@@ -784,6 +806,30 @@ io.on("connection", (socket) => {
             yield* minesGame.commandEffect(
               currentPlayer,
               parsed as MinesCommand,
+            );
+          }),
+      ),
+    );
+  });
+  socket.on("plinko:command", (command: unknown, ack: (value: Ack) => void) => {
+    replyWalletEffect(
+      ack,
+      inputEffect(
+        PlinkoCommandSchema,
+        command,
+        "Action Plinko invalide.",
+        (parsed) =>
+          Effect.gen(function* () {
+            const currentPlayer = yield* gameEffect((clock) => {
+              throttle(clock.now());
+              if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+              return player;
+            });
+            yield* refreshWalletEffect(currentPlayer);
+            const plinkoGame = yield* getPlinkoEffect(currentPlayer.id);
+            yield* plinkoGame.commandEffect(
+              currentPlayer,
+              parsed as PlinkoCommand,
             );
           }),
       ),
@@ -1194,6 +1240,7 @@ const maintenanceEffect = Effect.provide(
             wallets.delete(profile.id);
             playersById.delete(profile.id);
             mines.delete(profile.id);
+            plinko.delete(profile.id);
           }),
         );
       }

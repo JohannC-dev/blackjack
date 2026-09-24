@@ -105,7 +105,7 @@ export function CasinoHome({
                 <em>votre table.</em>
               </h1>
               <p>
-                Six jeux, un seul portefeuille. Entrez sans attendre — les
+                Sept jeux, un seul portefeuille. Entrez sans attendre — les
                 cartes et la grille sont déjà prêtes.
               </p>
               <div className="club-trust">
@@ -246,6 +246,36 @@ export function CasinoHome({
               description="Sautez, encaissez et croisez les autres poulets sur la route."
               action="Traverser la route"
               onClick={() => onNavigate("chicken")}
+            />
+            <GamePoster
+              className="plinko-poster"
+              index="07"
+              artClassName="plinko-art"
+              art={
+                <>
+                  <div className="plinko-poster-pins" aria-hidden="true">
+                    {[3, 4, 5].map((count) => (
+                      <span key={count}>
+                        {Array.from({ length: count }, (_, index) => (
+                          <i key={index} />
+                        ))}
+                      </span>
+                    ))}
+                  </div>
+                  <span className="plinko-poster-ball" aria-hidden="true" />
+                </>
+              }
+              eyebrow="NOUVEAU · JEU SOLO"
+              title={
+                <>
+                  Le
+                  <br />
+                  Plinko
+                </>
+              }
+              description="Une bille, seize rangées, des multiplicateurs jusqu’aux bords."
+              action="Lâcher une bille"
+              onClick={() => onNavigate("plinko")}
             />
           </section>
         </main>
