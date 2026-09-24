@@ -954,6 +954,7 @@ type BlackjackSidebarProps = {
   onTower: () => void;
   onChicken: () => void;
   onRoulette: () => void;
+  onPlinko: () => void;
   onRules: () => void;
   blackjackLabel?: string;
 };
@@ -966,6 +967,7 @@ const BlackjackSidebar = memo(function BlackjackSidebar({
   onTower,
   onChicken,
   onRoulette,
+  onPlinko,
   onRules,
   blackjackLabel,
 }: BlackjackSidebarProps) {
@@ -981,6 +983,7 @@ const BlackjackSidebar = memo(function BlackjackSidebar({
         else if (view === "tower") onTower();
         else if (view === "chicken") onChicken();
         else if (view === "roulette") onRoulette();
+        else if (view === "plinko") onPlinko();
       }}
       onRules={onRules}
     />
@@ -1847,6 +1850,7 @@ export function BlackjackCasino({
   const goTower = useCallback(() => onNavigate("tower"), [onNavigate]);
   const goChicken = useCallback(() => onNavigate("chicken"), [onNavigate]);
   const goRoulette = useCallback(() => onNavigate("roulette"), [onNavigate]);
+  const goPlinko = useCallback(() => onNavigate("plinko"), [onNavigate]);
   const openTables = useCallback(() => setModal("tables"), []);
   const openHistory = useCallback(() => setModal("history"), []);
   const openRules = useCallback(() => setModal("rules"), []);
@@ -1893,6 +1897,7 @@ export function BlackjackCasino({
         onTower={goTower}
         onChicken={goChicken}
         onRoulette={goRoulette}
+        onPlinko={goPlinko}
         onRules={openRules}
         blackjackLabel={profile ? "Blackjack" : "Table de cartes"}
       />
