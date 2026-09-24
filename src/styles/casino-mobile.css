@@ -328,7 +328,7 @@
     display: none;
   }
 
-  .blackjack-casino-shell .seat-name .avatar.tiny {
+  .blackjack-casino-shell .seat-name [data-slot="avatar"] {
     width: 17px;
     min-width: 17px;
     height: 17px;

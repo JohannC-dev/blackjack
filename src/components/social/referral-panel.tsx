@@ -16,6 +16,7 @@ import { claimReferralRewards, useReferralOverview } from "@/lib/referral-api";
 import { formatFriendCode } from "@/lib/social";
 import { cn } from "@/lib/utils";
 import { PlayerAvatar } from "./player-avatar";
+import { PlayerMenu } from "./player-menu";
 import { useSocial } from "./social-provider";
 
 const dayFormat = new Intl.DateTimeFormat("fr-FR", {
@@ -96,7 +97,6 @@ function ReferralBody({
   onReload: () => void;
   onOpenCollection?: () => void;
 }) {
-  const social = useSocial();
   const count = overview.filleuls.length;
   const copyCode = async () => {
     if (!overview.code) return;
@@ -139,26 +139,28 @@ function ReferralBody({
       )}
 
       {overview.parrain && (
-        <button
-          type="button"
-          onClick={() => social.openProfile(overview.parrain!.id)}
-          className="mt-3 flex w-full items-center gap-2.5 rounded-lg px-1 py-2 text-left hover:bg-white/[0.03]"
-        >
-          <PlayerAvatar
-            id={overview.parrain.id}
-            name={overview.parrain.name}
-            size="sm"
-          />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold">
-              {overview.parrain.name}
+        <PlayerMenu id={overview.parrain.id} name={overview.parrain.name}>
+          <button
+            type="button"
+            aria-label={`Actions pour ${overview.parrain.name}`}
+            className="mt-3 flex w-full items-center gap-2.5 rounded-lg px-1 py-2 text-left hover:bg-white/[0.03]"
+          >
+            <PlayerAvatar
+              id={overview.parrain.id}
+              name={overview.parrain.name}
+              size="sm"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">
+                {overview.parrain.name}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Votre parrain depuis le{" "}
+                {dayFormat.format(new Date(overview.parrain.since))}
+              </span>
             </span>
-            <span className="block text-xs text-muted-foreground">
-              Votre parrain depuis le{" "}
-              {dayFormat.format(new Date(overview.parrain.since))}
-            </span>
-          </span>
-        </button>
+          </button>
+        </PlayerMenu>
       )}
 
       <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
@@ -182,41 +184,43 @@ function ReferralBody({
         <div className="divide-y divide-white/[0.05]">
           {overview.filleuls.map((filleul) => (
             <Fragment key={filleul.id}>
-              <button
-                type="button"
-                onClick={() => social.openProfile(filleul.id)}
-                className="flex w-full items-center gap-2.5 py-2.5 text-left hover:bg-white/[0.02]"
-              >
-                <PlayerAvatar
-                  id={filleul.id}
-                  name={filleul.name}
-                  online={filleul.online}
-                  size="sm"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold">
-                    {filleul.name}
-                  </span>
-                  <span className="block text-xs text-muted-foreground">
-                    Depuis le {dayFormat.format(new Date(filleul.joinedAt))}
-                    {filleul.played > 0
-                      ? ` · ${filleul.played.toLocaleString("fr-FR")} partie${
-                          filleul.played > 1 ? "s" : ""
-                        } · ${credits(filleul.wagered)} misés`
-                      : " · n’a pas encore joué"}
-                  </span>
-                </span>
-                <span
-                  className={cn(
-                    "shrink-0 text-xs",
-                    filleul.online
-                      ? "text-minuit-mint"
-                      : "text-muted-foreground",
-                  )}
+              <PlayerMenu id={filleul.id} name={filleul.name}>
+                <button
+                  type="button"
+                  aria-label={`Actions pour ${filleul.name}`}
+                  className="flex w-full items-center gap-2.5 py-2.5 text-left hover:bg-white/[0.02]"
                 >
-                  {filleul.online ? "En ligne" : "Hors ligne"}
-                </span>
-              </button>
+                  <PlayerAvatar
+                    id={filleul.id}
+                    name={filleul.name}
+                    online={filleul.online}
+                    size="sm"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">
+                      {filleul.name}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Depuis le {dayFormat.format(new Date(filleul.joinedAt))}
+                      {filleul.played > 0
+                        ? ` · ${filleul.played.toLocaleString("fr-FR")} partie${
+                            filleul.played > 1 ? "s" : ""
+                          } · ${credits(filleul.wagered)} misés`
+                        : " · n’a pas encore joué"}
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 text-xs",
+                      filleul.online
+                        ? "text-minuit-mint"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {filleul.online ? "En ligne" : "Hors ligne"}
+                  </span>
+                </button>
+              </PlayerMenu>
               <TierLadder filleul={filleul} />
             </Fragment>
           ))}

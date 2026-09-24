@@ -42,6 +42,8 @@ import {
   preloadCasinoSounds,
 } from "@/lib/casino-audio";
 import { useGameAudio } from "@/lib/audio-context";
+import { PlayerAvatar } from "@/components/social/player-avatar";
+import { PlayerMenu } from "@/components/social/player-menu";
 import type { PokerAction, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import type { CasinoView } from "@/lib/navigation";
@@ -1318,31 +1320,35 @@ function PokerSeatView({
           <Trophy size={11} />
         </span>
       )}
-      <div
-        className="poker-player-card"
-        data-emote-player={seat.id}
-        data-turn-seconds={active ? String(turnSeconds ?? 0) + "s" : undefined}
-      >
-        {active && (
-          <PokerTurnIndicator
-            deadline={table.deadline}
-            durationMs={(table.mode === "spin" ? 15 : 25) * 1_000}
-          />
-        )}
-        <span className="avatar tiny">
-          {seat.name.slice(0, 1).toUpperCase()}
-        </span>
-        <div>
-          <b>
-            {seat.name}
-            {mine ? " · Vous" : ""}
-          </b>
-          <strong>
-            <small>Stack</small> {credits(seat.stack)} cr.
-          </strong>
-        </div>
-        {!seat.connected && <i className="offline-dot" />}
-      </div>
+      <PlayerMenu id={seat.id} name={seat.name}>
+        <button
+          type="button"
+          className="poker-player-card"
+          aria-label={`Actions pour ${seat.name}`}
+          data-emote-player={seat.id}
+          data-turn-seconds={
+            active ? String(turnSeconds ?? 0) + "s" : undefined
+          }
+        >
+          {active && (
+            <PokerTurnIndicator
+              deadline={table.deadline}
+              durationMs={(table.mode === "spin" ? 15 : 25) * 1_000}
+            />
+          )}
+          <PlayerAvatar id={seat.id} name={seat.name} size="sm" />
+          <div>
+            <b>
+              {seat.name}
+              {mine ? " · Vous" : ""}
+            </b>
+            <strong>
+              <small>Stack</small> {credits(seat.stack)} cr.
+            </strong>
+          </div>
+          {!seat.connected && <i className="offline-dot" />}
+        </button>
+      </PlayerMenu>
       {seat.lastAction &&
         seat.lastAction !== "Small blind" &&
         seat.lastAction !== "Big blind" && (

@@ -4,13 +4,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useEquippedSkins } from "@/lib/cosmetics-api";
 import { cn } from "@/lib/utils";
 
-/** Stable hue per player, so a friend is recognisable at a glance. */
-function hueOf(id: string) {
-  let hash = 0;
-  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return hash % 360;
-}
-
 export function PlayerAvatar({
   id,
   name,
@@ -18,6 +11,7 @@ export function PlayerAvatar({
   size = "default",
   className,
   icon: shownIcon,
+  tone = "default",
 }: {
   id: string;
   name: string;
@@ -27,8 +21,9 @@ export function PlayerAvatar({
   className?: string;
   /** Forces an icon, null for the Classique; by default the one worn. */
   icon?: string | null;
+  /** Keeps the old Blackjack highlight on your own occupied seat. */
+  tone?: "default" | "blackjack-self";
 }) {
-  const hue = hueOf(id);
   // The profile icon the player wears; the initial stays as the Classique.
   const worn = useEquippedSkins(shownIcon === undefined ? id : null);
   const icon =
@@ -47,18 +42,17 @@ export function PlayerAvatar({
         {icon && <AvatarImage src={icon} alt="" draggable={false} />}
         <AvatarFallback
           className={cn(
-            "font-bold text-white/90",
+            "border border-[#a985c535] bg-[#4f3565] font-bold text-[#d4b4eb]",
+            tone === "blackjack-self" &&
+              "border-[#d6b2ff] bg-[#ab88d9] text-[#211230]",
             size === "2xl"
               ? "text-4xl"
               : size === "xl"
                 ? "text-2xl"
                 : size === "lg"
-                  ? "text-base"
-                  : "text-xs",
+                  ? "text-xs"
+                  : "text-[8px]",
           )}
-          style={{
-            background: `linear-gradient(140deg, hsl(${hue} 42% 38%), hsl(${(hue + 40) % 360} 36% 22%))`,
-          }}
         >
           {(name.trim() || "?").slice(0, 1).toUpperCase()}
         </AvatarFallback>

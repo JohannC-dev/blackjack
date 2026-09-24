@@ -37,6 +37,8 @@ import {
 } from "@/lib/tower";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
 import { useGameAudio } from "@/lib/audio-context";
+import { PlayerAvatar } from "@/components/social/player-avatar";
+import { PlayerMenu } from "@/components/social/player-menu";
 import {
   playTowerCashout,
   playTowerCollapse,
@@ -701,15 +703,26 @@ function TowerView({
             >
               <span className={styles.climbers}>
                 {others.slice(0, MAX_CLIMBERS_SHOWN).map((ghost) => (
-                  <i
+                  <PlayerMenu
                     key={ghost.id}
-                    className={styles.climber}
-                    data-status={ghost.status}
-                    data-lucky={ghost.lucky || undefined}
-                    title={`${ghost.name} · étage ${ghost.floor}`}
+                    id={ghost.playerId}
+                    name={ghost.name}
                   >
-                    {ghost.name.slice(0, 1).toUpperCase()}
-                  </i>
+                    <button
+                      type="button"
+                      className={styles.climber}
+                      data-status={ghost.status}
+                      data-lucky={ghost.lucky || undefined}
+                      title={`${ghost.name} · étage ${ghost.floor}`}
+                      aria-label={`Actions pour ${ghost.name}, étage ${ghost.floor}`}
+                    >
+                      <PlayerAvatar
+                        id={ghost.playerId}
+                        name={ghost.name}
+                        size="sm"
+                      />
+                    </button>
+                  </PlayerMenu>
                 ))}
                 {others.length > MAX_CLIMBERS_SHOWN && (
                   <i className={styles.climber} data-more>

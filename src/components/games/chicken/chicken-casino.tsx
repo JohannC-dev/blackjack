@@ -56,6 +56,8 @@ import {
 } from "../../ui";
 import { ChickenArt, ChickenBarrierArt, ChickenCarArt } from "./chicken-art";
 import { SkinImage } from "../../ui/skin-image";
+import { PlayerAvatar } from "@/components/social/player-avatar";
+import { PlayerMenu } from "@/components/social/player-menu";
 import { skinOf } from "@/lib/cosmetics";
 import { useMySkins, useTableSkins } from "@/lib/cosmetics-api";
 import styles from "./chicken.module.css";
@@ -499,7 +501,20 @@ export function ChickenCasino({ game }: { game: Game }) {
                     } as CSSProperties
                   }
                 >
-                  <span>{ghost.name}</span>
+                  <PlayerMenu id={ghost.playerId} name={ghost.name}>
+                    <button
+                      type="button"
+                      className={styles.ghostName}
+                      aria-label={`Actions pour ${ghost.name}`}
+                    >
+                      <PlayerAvatar
+                        id={ghost.playerId}
+                        name={ghost.name}
+                        size="sm"
+                      />
+                      <span>{ghost.name}</span>
+                    </button>
+                  </PlayerMenu>
                   <SkinImage
                     src={skinOf(ghostSkins[ghost.playerId], mySkins, "chicken")}
                     fallback={<ChickenArt className={styles.sprite} />}

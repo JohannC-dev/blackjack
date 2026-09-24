@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
 import { playRouletteSpin } from "@/lib/roulette-audio";
 import { useGameAudio } from "@/lib/audio-context";
+import { PlayerAvatar } from "@/components/social/player-avatar";
+import { PlayerMenu } from "@/components/social/player-menu";
 import { CASINO_CHIP_DENOMINATIONS, mergeChipCounts } from "@/lib/chips";
 import {
   ROULETTE_MAX_BETS,
@@ -324,12 +326,22 @@ export function RouletteCasino({ game }: { game: Game }) {
                     key={player.id}
                     className={`${player.id === me?.id ? "is-me" : "is-other"} ${player.ready ? "is-ready" : ""} ${player.connected ? "" : "is-away"}`}
                   >
-                    <span className="roulette-player-avatar">
-                      {player.name.slice(0, 1).toUpperCase()}
-                    </span>
-                    <span className="roulette-player-name">
-                      {player.id === me?.id ? "Vous" : player.name}
-                    </span>
+                    <PlayerMenu id={player.id} name={player.name}>
+                      <button
+                        type="button"
+                        className="roulette-player-trigger"
+                        aria-label={`Actions pour ${player.name}`}
+                      >
+                        <PlayerAvatar
+                          id={player.id}
+                          name={player.name}
+                          size="sm"
+                        />
+                        <span className="roulette-player-name">
+                          {player.id === me?.id ? "Vous" : player.name}
+                        </span>
+                      </button>
+                    </PlayerMenu>
                     {phase === "settled" && playerResult ? (
                       <b
                         className={

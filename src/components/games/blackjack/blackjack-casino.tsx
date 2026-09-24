@@ -69,6 +69,8 @@ import {
 import { normalizeFriendCode } from "@/lib/social";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
 import { useGameAudio } from "@/lib/audio-context";
+import { PlayerAvatar } from "@/components/social/player-avatar";
+import { PlayerMenu } from "@/components/social/player-menu";
 import type {
   Bet,
   BetChips,
@@ -658,41 +660,63 @@ const SeatView = memo(function SeatView({
         </div>
       ) : null}
       <div className="seat-name-row">
-        <button
-          className="seat-name"
-          data-emote-player={owner?.id}
-          onClick={() => onSelect(seat)}
-          disabled={!!owner && !mine}
-          aria-label={
-            owner
-              ? `Main ${seat.index + 1} · ${owner.name}`
-              : `Place ${seat.index + 1} libre`
-          }
-        >
-          {owner ? (
-            <>
-              <span className="avatar tiny">
-                {owner.name.slice(0, 1).toUpperCase()}
-              </span>
-              <span>
-                {owner.name}
-                {mine && (
-                  <small>
-                    vous
-                    {playerSeatCount > 1 ? ` · ${seat.index + 1}` : ""}
-                  </small>
-                )}
-              </span>
+        {owner && !mine ? (
+          <PlayerMenu id={owner.id} name={owner.name}>
+            <button
+              type="button"
+              className="seat-name"
+              data-emote-player={owner.id}
+              aria-label={`Actions pour ${owner.name}`}
+            >
+              <PlayerAvatar id={owner.id} name={owner.name} size="sm" />
+              <span>{owner.name}</span>
               {owner.ready && phase === "betting" ? (
                 <Check className="ready-mark" size={13} />
               ) : !owner.connected ? (
                 <span className="offline-dot" />
               ) : null}
-            </>
-          ) : (
-            <span className="empty-seat-label">Installez-vous</span>
-          )}
-        </button>
+            </button>
+          </PlayerMenu>
+        ) : (
+          <button
+            className="seat-name"
+            data-emote-player={owner?.id}
+            onClick={() => onSelect(seat)}
+            disabled={!!owner && !mine}
+            aria-label={
+              owner
+                ? `Main ${seat.index + 1} · ${owner.name}`
+                : `Place ${seat.index + 1} libre`
+            }
+          >
+            {owner ? (
+              <>
+                <PlayerAvatar
+                  id={owner.id}
+                  name={owner.name}
+                  size="sm"
+                  tone={mine ? "blackjack-self" : "default"}
+                />
+                <span>
+                  {owner.name}
+                  {mine && (
+                    <small>
+                      vous
+                      {playerSeatCount > 1 ? ` · ${seat.index + 1}` : ""}
+                    </small>
+                  )}
+                </span>
+                {owner.ready && phase === "betting" ? (
+                  <Check className="ready-mark" size={13} />
+                ) : !owner.connected ? (
+                  <span className="offline-dot" />
+                ) : null}
+              </>
+            ) : (
+              <span className="empty-seat-label">Installez-vous</span>
+            )}
+          </button>
+        )}
         {mine && phase === "betting" && (
           <button
             type="button"
