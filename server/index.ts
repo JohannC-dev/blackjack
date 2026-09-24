@@ -29,7 +29,8 @@ import { handleSocialRequest } from "./social/http";
 import { areFriends, friendIdsOf } from "./social/repository";
 import { handleReferralRequest } from "./referral/http";
 import { handleCosmeticRequest } from "./cosmetics/http";
-import { onReferralCompleted } from "./referral/events";
+import { onReferralCompleted, onTiersGranted } from "./referral/events";
+import { claimableTiersOf } from "./referral/repository";
 import {
   DailyDatabaseError,
   checkInDaily,
@@ -214,20 +215,91 @@ function notifySocial(userIds: readonly string[]) {
 }
 
 /**
- * A filleul just signed up with a parrainage code. A connected parrain sees
- * their new credits and their filleul straight away.
+ * A filleul just signed up with a parrainage code. The parrain is credited
+ * nothing here — a fresh filleul has wagered nothing — but they see them
+ * arrive, and the two are now friends.
  */
 onReferralCompleted((event) => {
+  emitToPlayer(event.parrainId, "referral:filleul", { filleul: event.filleul });
+  notifySocial([event.parrainId, event.filleul.id]);
+});
+
+/**
+ * The parrain just claimed their tiers: the credits are already in the
+ * database, so their wallet only needs pushing again and their panel reloaded.
+ */
+onTiersGranted((event) => {
   const parrain = playersById.get(event.parrainId);
   if (parrain)
     Effect.runPromise(refreshWalletEffect(parrain)).catch((error: unknown) =>
       console.error("Parrainage · portefeuille", error),
     );
-  emitToPlayer(event.parrainId, "referral:filleul", {
-    filleul: event.filleul,
-    tiers: event.tiers,
-  });
+  emitToPlayer(event.parrainId, "referral:claimed", { tiers: event.tiers });
+  // Nothing is left to collect, so nothing is left to remember either.
+  for (const key of tiersAnnounced.keys())
+    if (key.startsWith(`${event.parrainId}\0`)) tiersAnnounced.delete(key);
 });
+
+/** Filleuls whose tiers were checked recently, with the time of that check. */
+const tiersCheckedAt = new Map<string, number>();
+const tierCheckTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const TIER_CHECK_INTERVAL = 60_000;
+/**
+ * Highest tier each parrain was already told about, per filleul. Cleared when
+ * they claim, so it never outgrows what is actually waiting to be collected.
+ */
+const tiersAnnounced = new Map<string, number>();
+
+/**
+ * Tells the parrains of the players who just wagered that a tier is waiting
+ * to be collected — nothing is credited here, only an explicit claim pays.
+ * The check is throttled, and a parrain hears about a tier only once.
+ */
+function announceClaimableTiers(userIds: Iterable<string>) {
+  const now = Date.now();
+  for (const [userId, at] of tiersCheckedAt)
+    if (now - at >= TIER_CHECK_INTERVAL) tiersCheckedAt.delete(userId);
+  for (const userId of new Set(userIds)) {
+    const checked = tiersCheckedAt.get(userId) ?? 0;
+    if (now - checked < TIER_CHECK_INTERVAL) {
+      if (!tierCheckTimers.has(userId)) {
+        const timer = setTimeout(() => {
+          tierCheckTimers.delete(userId);
+          tiersCheckedAt.set(userId, Date.now());
+          checkClaimableTiers(userId);
+        }, TIER_CHECK_INTERVAL - (now - checked));
+        tierCheckTimers.set(userId, timer);
+      }
+      continue;
+    }
+    const timer = tierCheckTimers.get(userId);
+    if (timer) {
+      clearTimeout(timer);
+      tierCheckTimers.delete(userId);
+    }
+    tiersCheckedAt.set(userId, now);
+    checkClaimableTiers(userId);
+  }
+}
+
+function checkClaimableTiers(userId: string) {
+  runDatabase(claimableTiersOf(userId)).then(
+    (progress) => {
+      // Told only to a parrain who is there to hear it: an absent one finds
+      // the credits waiting in their panel anyway.
+      if (!progress || !playerSockets.get(progress.parrainId)?.size) return;
+      const highest = Math.max(...progress.tiers.map((tier) => tier.tier));
+      const key = `${progress.parrainId}\0${userId}`;
+      if ((tiersAnnounced.get(key) ?? 0) >= highest) return;
+      tiersAnnounced.set(key, highest);
+      emitToPlayer(progress.parrainId, "referral:claimable", {
+        filleulId: userId,
+        tiers: progress.tiers,
+      });
+    },
+    (error: unknown) => console.error("Parrainage · paliers", error),
+  );
+}
 
 /** A player came online or left: their friends refresh their list. */
 function notifyPresence(userId: string) {
@@ -520,6 +592,13 @@ function commitWalletOperationsEffect() {
         }
         gameWallet.complete();
         for (const result of results) publishWallet(result.userId);
+        announceClaimableTiers(
+          operations
+            .filter((operation) =>
+              ["wager", "additional-wager", "buy-in"].includes(operation.kind),
+            )
+            .map((operation) => operation.userId),
+        );
       }),
     ),
     Effect.asVoid,

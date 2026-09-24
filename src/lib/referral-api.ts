@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { ReferralOverview } from "./referral";
+import type { ReferralOverview, ReferralTier } from "./referral";
 
 export class ReferralApiError extends Error {}
 
@@ -19,11 +19,36 @@ async function loadOverview(signal?: AbortSignal) {
     throw new ReferralApiError("Le club ne répond pas.");
   }
   const body = (await response.json().catch(() => null)) as
-    | (ReferralOverview & { error?: string })
-    | null;
+    (ReferralOverview & { error?: string }) | null;
   if (!response.ok)
     throw new ReferralApiError(body?.error ?? "Une erreur est survenue.");
   return body as ReferralOverview;
+}
+
+export type ReferralClaim = {
+  readonly tiers: ReferralTier[];
+  readonly credited: number;
+  /** The refreshed panel, or null when only the reload failed. */
+  readonly overview: ReferralOverview | null;
+};
+
+/** Collects every tier the filleuls have unlocked. Nothing is automatic. */
+export async function claimReferralRewards() {
+  let response: Response;
+  try {
+    response = await fetch("/api/referrals/claim", {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+    });
+  } catch {
+    throw new ReferralApiError("Le club ne répond pas.");
+  }
+  const body = (await response.json().catch(() => null)) as
+    (ReferralClaim & { error?: string }) | null;
+  if (!response.ok)
+    throw new ReferralApiError(body?.error ?? "Une erreur est survenue.");
+  return body as ReferralClaim;
 }
 
 /**
@@ -63,5 +88,5 @@ export function useReferralOverview(enabled: boolean, version = 0) {
   }, [enabled, version, reloads]);
 
   const reload = useCallback(() => setReloads((count) => count + 1), []);
-  return { overview, error, reload };
+  return { overview, error, reload, setOverview };
 }

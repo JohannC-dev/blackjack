@@ -8,8 +8,6 @@ import type { ReferralTier } from "../../src/lib/referral";
 export type ReferralCompleted = {
   readonly parrainId: string;
   readonly filleul: { readonly id: string; readonly name: string };
-  /** Tiers the parrain reached with this filleul, possibly none. */
-  readonly tiers: readonly ReferralTier[];
 };
 
 let listener: ((event: ReferralCompleted) => void) | null = null;
@@ -24,5 +22,31 @@ export function announceReferral(event: ReferralCompleted) {
     listener?.(event);
   } catch (error) {
     console.error("Parrainage · annonce", error);
+  }
+}
+
+/**
+ * Tiers a parrain just claimed. The credits are already in the database; the
+ * club refreshes the parrain's wallet so the balance moves without waiting
+ * for a reconnection.
+ */
+export type TiersGranted = {
+  readonly parrainId: string;
+  /** Every tier the claim collected, across all their filleuls. */
+  readonly tiers: readonly ReferralTier[];
+};
+
+let tierListener: ((event: TiersGranted) => void) | null = null;
+
+/** The club listens once, at start-up. */
+export function onTiersGranted(next: (event: TiersGranted) => void) {
+  tierListener = next;
+}
+
+export function announceTiers(event: TiersGranted) {
+  try {
+    tierListener?.(event);
+  } catch (error) {
+    console.error("Parrainage · paliers", error);
   }
 }
