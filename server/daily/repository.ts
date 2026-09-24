@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import { PgDrizzle } from "@effect/sql-drizzle/Pg";
 import { SqlClient } from "@effect/sql/SqlClient";
 import { and, eq, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { Data, Effect } from "effect";
 import {
   SKIN_CONVERSION,
@@ -42,12 +43,19 @@ const mapDatabaseError = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       : new DailyDatabaseError({ cause }),
   );
 
+/**
+ * Days are read as text: the driver would turn a `date` into a local
+ * midnight, which Drizzle then shifts to the day before in UTC.
+ */
+const dayText = (column: AnyPgColumn) =>
+  sql<string | null>`${column}::text`;
+
 const columns = {
   current: dailyStreak.current,
   best: dailyStreak.best,
-  lastDay: dailyStreak.lastDay,
-  runStartedDay: dailyStreak.runStartedDay,
-  lastSpinDay: dailyStreak.lastSpinDay,
+  lastDay: dayText(dailyStreak.lastDay),
+  runStartedDay: dayText(dailyStreak.runStartedDay),
+  lastSpinDay: dayText(dailyStreak.lastSpinDay),
 };
 
 /** Streak credits are a grant: they never count as a wager in the stats. */
