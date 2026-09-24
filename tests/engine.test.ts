@@ -807,6 +807,23 @@ describe("Multiplayer authority and lifecycle", () => {
     expect(ownHand(table, p).status).toBe("stood");
     expect(p.balance).toBe(2025);
   });
+  test("leaving the view cannot erase a losing Blackjack hand", () => {
+    const { table, p } = tableWith([
+      card(9),
+      card(10),
+      card(7),
+      card(10),
+    ]);
+    begin(table, [p]);
+    expect(p.balance).toBe(1975);
+    expect(() => table.remove(p.id)).toThrow("Terminez");
+    p.ready = false; // Leaving the view releases readiness, not the hand.
+    table.tick(Date.now() + 30_000);
+    settle(table);
+    expect(ownHand(table, p).result).toBe("lose");
+    expect(p.balance).toBe(1975);
+    expect(table.state.history[0].net).toBe(-25);
+  });
   test("reconnection keeps active hands and does not charge again", () => {
     const { table, p } = tableWith([card(10), card(10), card(8)]);
     begin(table, [p]);

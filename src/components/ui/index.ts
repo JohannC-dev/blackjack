@@ -1,4 +1,4 @@
-export { CasinoRail, ClubHeader } from "./casino-shell";
+export { CasinoLayout, CasinoRail, ClubHeader } from "./casino-shell";
 export { getClubBalance } from "@/lib/chips";
 export { BlackjackIcon } from "./blackjack-icon";
 export { Chip } from "./chip";

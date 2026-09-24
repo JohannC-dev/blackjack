@@ -271,5 +271,38 @@
     "sortOrder": 30,
     "priceCredits": 5000000,
     "asset": "diamant-rubis.svg"
+  },
+  {
+    "id": "profile-icon:serie-flamme",
+    "kind": "profile-icon",
+    "name": "Flamme",
+    "description": "La flamme de ceux qui reviennent chaque soir.",
+    "rarity": "common",
+    "status": "active",
+    "unlockHint": "Atteignez une série de 20 jours.",
+    "sortOrder": 900,
+    "asset": "icone-serie-flamme.svg"
+  },
+  {
+    "id": "card-back:serie-braise",
+    "kind": "card-back",
+    "name": "Braise",
+    "description": "Un dos rougeoyant, pour quarante nuits d’affilée.",
+    "rarity": "rare",
+    "status": "active",
+    "unlockHint": "Atteignez une série de 40 jours.",
+    "sortOrder": 900,
+    "asset": "dos-serie-braise.svg"
+  },
+  {
+    "id": "mine-gem:serie-brasier",
+    "kind": "mine-gem",
+    "name": "Brasier",
+    "description": "Une gemme en fusion, réservée aux séries de cinquante jours.",
+    "rarity": "epic",
+    "status": "active",
+    "unlockHint": "Atteignez une série de 50 jours.",
+    "sortOrder": 900,
+    "asset": "diamant-serie-brasier.svg"
   }
 ]

@@ -765,20 +765,20 @@
 .roulette-players > li.is-away {
   opacity: 0.45;
 }
-.roulette-player-avatar {
-  display: grid;
+.roulette-player-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.roulette-player-trigger [data-slot="avatar"] {
   width: 20px;
   height: 20px;
-  place-items: center;
-  border-radius: 50%;
-  background: #b79afa;
-  color: #24143e;
-  font-size: 9px;
-  font-weight: 800;
-}
-.is-other .roulette-player-avatar {
-  background: #3f9c86;
-  color: #e3fbf3;
 }
 .roulette-player-name {
   max-width: 90px;

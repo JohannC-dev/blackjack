@@ -67,6 +67,7 @@ export function useGame() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const idRef = useRef("");
   const roomRef = useRef<string | null>(null);
+  const blackjackOpen = useRef(false);
   const walletSeq = useRef(0);
   const clockSyncTimer = useRef<number | null>(null);
   /** Whether the Tower view is open, so a reconnection re-enters its room. */
@@ -123,11 +124,12 @@ export function useGame() {
         window.clearInterval(clockSyncTimer.current);
       synchronizeClock();
       clockSyncTimer.current = window.setInterval(synchronizeClock, 30_000);
+      const rejoinBlackjack = blackjackOpen.current;
       socket
         .timeout(8000)
         .emit(
           "join",
-          { tableId: roomRef.current },
+          rejoinBlackjack ? { tableId: roomRef.current } : {},
           (timeout: Error | null, ack: Ack) => {
             if (timeout || !ack?.ok) {
               setConnected(false);
@@ -139,9 +141,22 @@ export function useGame() {
               return;
             }
             idRef.current = ack.playerId!;
-            roomRef.current = ack.tableId ?? roomRef.current;
             setPlayerId(ack.playerId!);
             setConnected(true);
+            if (rejoinBlackjack) {
+              if (blackjackOpen.current)
+                roomRef.current = ack.tableId ?? roomRef.current;
+            } else if (blackjackOpen.current)
+              socket.emit(
+                "join",
+                { tableId: roomRef.current },
+                (tableAck: Ack) => {
+                  if (!blackjackOpen.current) return;
+                  if (!tableAck?.ok)
+                    setError(tableAck?.error ?? "La table ne répond pas.");
+                  else roomRef.current = tableAck.tableId ?? roomRef.current;
+                },
+              );
             if (towerOpen.current) socket.emit("tower:join");
             if (chickenOpen.current)
               socket.emit("chicken:join", { roomId: chickenRoom.current });
@@ -151,7 +166,7 @@ export function useGame() {
         );
     });
     socket.on("state", (snapshot: TableState) => {
-      if (!snapshot) return;
+      if (!snapshot || !blackjackOpen.current) return;
       setState(snapshot);
     });
     socket.on("wallet", (wallet: Wallet) => {
@@ -202,6 +217,8 @@ export function useGame() {
     socket.on("disconnect", () => {
       setConnected(false);
       setPending(false);
+      idRef.current = "";
+      setState(null);
     });
     socket.on("connect_error", () => setConnected(false));
     return () => {
@@ -275,6 +292,25 @@ export function useGame() {
           resolve(true);
         });
     });
+  }, []);
+  const enterBlackjack = useCallback(() => {
+    blackjackOpen.current = true;
+    const socket = socketRef.current;
+    if (socket?.connected && idRef.current)
+      socket.emit("join", { tableId: roomRef.current }, (ack: Ack) => {
+        if (!blackjackOpen.current) return;
+        if (!ack?.ok) setError(ack?.error ?? "La table ne répond pas.");
+        else roomRef.current = ack.tableId ?? roomRef.current;
+      });
+  }, []);
+  const leaveBlackjack = useCallback(() => {
+    blackjackOpen.current = false;
+    roomRef.current = null;
+    setState(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("table");
+    window.history.replaceState({}, "", url);
+    socketRef.current?.emit("blackjack:leave");
   }, []);
   const pokerCommand = useCallback((action: PokerCommand): Promise<boolean> => {
     const socket = socketRef.current;
@@ -608,6 +644,8 @@ export function useGame() {
     command,
     refill,
     joinBlackjack,
+    enterBlackjack,
+    leaveBlackjack,
     pokerCommand,
     towerCommand,
     enterTower,

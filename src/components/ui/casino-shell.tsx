@@ -10,7 +10,7 @@ import {
   VolumeX,
   Wallet,
 } from "lucide-react";
-import { memo, type ReactNode } from "react";
+import { memo, type ReactNode, type RefObject } from "react";
 import { useAudioSettings } from "@/lib/audio-context";
 import { credits } from "@/lib/rules";
 import type { CasinoView } from "@/lib/navigation";
@@ -18,6 +18,7 @@ import { BlackjackIcon } from "./blackjack-icon";
 import { MineBomb } from "../games/mines/mine-art";
 import { ChickenArt } from "../games/chicken/chicken-art";
 import { ProfileMenu } from "../social/profile-menu";
+import { StreakBadge } from "../daily/streak-badge";
 
 type Navigate = (view: CasinoView) => void;
 
@@ -185,6 +186,7 @@ export const ClubHeader = memo(function ClubHeader({
         >
           {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
         </button>
+        <StreakBadge />
         <div className="wallet">
           <Wallet size={17} />
           <b key={balance}>{credits(balance)}</b>
@@ -194,5 +196,54 @@ export const ClubHeader = memo(function ClubHeader({
         <ProfileMenu name={name} onSignOut={onSignOut} />
       </div>
     </header>
+  );
+});
+
+export const CasinoLayout = memo(function CasinoLayout({
+  active,
+  shellClassName,
+  isFullscreen,
+  shellRef,
+  balance,
+  name,
+  onSignOut,
+  onNavigate,
+  onRules,
+  blackjackLabel,
+  children,
+}: {
+  active: CasinoView;
+  shellClassName: string;
+  isFullscreen: boolean;
+  shellRef: RefObject<HTMLDivElement | null>;
+  balance: number;
+  name: string;
+  onSignOut?: () => void | Promise<void>;
+  onNavigate: Navigate;
+  onRules?: () => void;
+  blackjackLabel?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      ref={shellRef}
+      className={`casino-shell ${shellClassName} ${isFullscreen ? "is-fullscreen" : ""}`}
+    >
+      <CasinoRail
+        active={active}
+        blackjackLabel={blackjackLabel}
+        onNavigate={onNavigate}
+        onRules={onRules}
+      />
+      <div className="workspace">
+        <ClubHeader
+          balance={balance}
+          name={name}
+          href="/"
+          onSignOut={onSignOut}
+        />
+        {children}
+      </div>
+    </div>
   );
 });

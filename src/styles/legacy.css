@@ -2671,6 +2671,16 @@ h1 > span:not(.live-tag) {
   font-size: 8px;
   color: #d4b4eb;
 }
+.seat-name [data-slot="avatar"],
+.poker-player-card [data-slot="avatar"] {
+  width: 20px;
+  height: 20px;
+}
+.poker-player-card {
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .my-seat .avatar {
   background: #ab88d9;
   color: #211230;
@@ -2991,6 +3001,14 @@ h1 > span:not(.live-tag) {
 }
 .chip:disabled {
   filter: grayscale(1);
+}
+.chip.display-only {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  cursor: default;
+  pointer-events: none;
+  transition: none;
 }
 .chip > span {
   height: 100%;

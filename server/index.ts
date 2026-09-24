@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import next from "next";
 import { Server } from "socket.io";
-import { Effect, Exit, Option, Schema } from "effect";
+import { Effect, Either, Exit, Option, Schema } from "effect";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import { Table, type Player } from "./engine";
 import { auth } from "./auth";
@@ -29,7 +29,13 @@ import { handleSocialRequest } from "./social/http";
 import { areFriends, friendIdsOf } from "./social/repository";
 import { handleReferralRequest } from "./referral/http";
 import { handleCosmeticRequest } from "./cosmetics/http";
-import { onReferralCompleted } from "./referral/events";
+import { onReferralCompleted, onTiersGranted } from "./referral/events";
+import { claimableTiersOf } from "./referral/repository";
+import {
+  DailyDatabaseError,
+  checkInDaily,
+  spinDailyWheel,
+} from "./daily/repository";
 import {
   GameError,
   ServerClock,
@@ -71,6 +77,12 @@ import {
   type EmoteRequest,
 } from "../src/lib/emotes";
 import type { GameInvite, GameInviteReply } from "../src/lib/social";
+import {
+  WHEEL_SPIN_MS,
+  dayKeyAt,
+  type DailySpin,
+  type DailyUpdate,
+} from "../src/lib/daily";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number(process.env.PORT ?? 3000);
@@ -203,20 +215,91 @@ function notifySocial(userIds: readonly string[]) {
 }
 
 /**
- * A filleul just signed up with a parrainage code. A connected parrain sees
- * their new credits and their filleul straight away.
+ * A filleul just signed up with a parrainage code. The parrain is credited
+ * nothing here — a fresh filleul has wagered nothing — but they see them
+ * arrive, and the two are now friends.
  */
 onReferralCompleted((event) => {
+  emitToPlayer(event.parrainId, "referral:filleul", { filleul: event.filleul });
+  notifySocial([event.parrainId, event.filleul.id]);
+});
+
+/**
+ * The parrain just claimed their tiers: the credits are already in the
+ * database, so their wallet only needs pushing again and their panel reloaded.
+ */
+onTiersGranted((event) => {
   const parrain = playersById.get(event.parrainId);
   if (parrain)
     Effect.runPromise(refreshWalletEffect(parrain)).catch((error: unknown) =>
       console.error("Parrainage · portefeuille", error),
     );
-  emitToPlayer(event.parrainId, "referral:filleul", {
-    filleul: event.filleul,
-    tiers: event.tiers,
-  });
+  emitToPlayer(event.parrainId, "referral:claimed", { tiers: event.tiers });
+  // Nothing is left to collect, so nothing is left to remember either.
+  for (const key of tiersAnnounced.keys())
+    if (key.startsWith(`${event.parrainId}\0`)) tiersAnnounced.delete(key);
 });
+
+/** Filleuls whose tiers were checked recently, with the time of that check. */
+const tiersCheckedAt = new Map<string, number>();
+const tierCheckTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const TIER_CHECK_INTERVAL = 60_000;
+/**
+ * Highest tier each parrain was already told about, per filleul. Cleared when
+ * they claim, so it never outgrows what is actually waiting to be collected.
+ */
+const tiersAnnounced = new Map<string, number>();
+
+/**
+ * Tells the parrains of the players who just wagered that a tier is waiting
+ * to be collected — nothing is credited here, only an explicit claim pays.
+ * The check is throttled, and a parrain hears about a tier only once.
+ */
+function announceClaimableTiers(userIds: Iterable<string>) {
+  const now = Date.now();
+  for (const [userId, at] of tiersCheckedAt)
+    if (now - at >= TIER_CHECK_INTERVAL) tiersCheckedAt.delete(userId);
+  for (const userId of new Set(userIds)) {
+    const checked = tiersCheckedAt.get(userId) ?? 0;
+    if (now - checked < TIER_CHECK_INTERVAL) {
+      if (!tierCheckTimers.has(userId)) {
+        const timer = setTimeout(() => {
+          tierCheckTimers.delete(userId);
+          tiersCheckedAt.set(userId, Date.now());
+          checkClaimableTiers(userId);
+        }, TIER_CHECK_INTERVAL - (now - checked));
+        tierCheckTimers.set(userId, timer);
+      }
+      continue;
+    }
+    const timer = tierCheckTimers.get(userId);
+    if (timer) {
+      clearTimeout(timer);
+      tierCheckTimers.delete(userId);
+    }
+    tiersCheckedAt.set(userId, now);
+    checkClaimableTiers(userId);
+  }
+}
+
+function checkClaimableTiers(userId: string) {
+  runDatabase(claimableTiersOf(userId)).then(
+    (progress) => {
+      // Told only to a parrain who is there to hear it: an absent one finds
+      // the credits waiting in their panel anyway.
+      if (!progress || !playerSockets.get(progress.parrainId)?.size) return;
+      const highest = Math.max(...progress.tiers.map((tier) => tier.tier));
+      const key = `${progress.parrainId}\0${userId}`;
+      if ((tiersAnnounced.get(key) ?? 0) >= highest) return;
+      tiersAnnounced.set(key, highest);
+      emitToPlayer(progress.parrainId, "referral:claimable", {
+        filleulId: userId,
+        tiers: progress.tiers,
+      });
+    },
+    (error: unknown) => console.error("Parrainage · paliers", error),
+  );
+}
 
 /** A player came online or left: their friends refresh their list. */
 function notifyPresence(userId: string) {
@@ -336,6 +419,12 @@ const chicken = new ChickenManager(
   undefined,
   gameWallet,
 );
+// Development only: DAILY_UNLIMITED_SPINS=1 offers the wheel on every connection.
+const dailyOptions = {
+  unlimitedSpins: dev && process.env.DAILY_UNLIMITED_SPINS === "1",
+};
+if (dailyOptions.unlimitedSpins)
+  console.log("Roue quotidienne · mode test, un tour à chaque connexion");
 if (dev && process.env.TOWER_NO_TRAPS === "1")
   console.log("La Tower · mode test sans pièges activé");
 
@@ -343,6 +432,16 @@ function publicTableFor(playerId?: string) {
   const currentRoom = playerId ? blackjackRooms.roomOf(playerId) : undefined;
   if (currentRoom && blackjackRooms.get(currentRoom)?.visibility === "public")
     return currentRoom;
+  // A wagered hand survives leaving the view. Returning to Blackjack must
+  // resume that hand instead of trying to move the player to another table.
+  const previousRoom = playerId ? profiles.get(playerId)?.roomId : undefined;
+  const previousTable = previousRoom ? tables.get(previousRoom) : undefined;
+  if (
+    previousRoom &&
+    previousTable?.state.phase !== "betting" &&
+    previousTable?.state.seats.some((seat) => seat.playerId === playerId)
+  )
+    return previousRoom;
   return blackjackRooms.publicRoom((room) => {
     const table = tables.get(room.id);
     return (
@@ -369,6 +468,32 @@ function getTable(id: string) {
     tables.set(id, table);
   }
   return table;
+}
+function leaveBlackjackRoom(
+  playerId: string,
+  roomId: string,
+  socketId?: string,
+) {
+  if (!roomId) return;
+  if (socketId) io.sockets.sockets.get(socketId)?.leave(blackjackRoom(roomId));
+  const otherSocketAtTable = [...(playerSockets.get(playerId) ?? [])].some(
+    (id) =>
+      id !== socketId &&
+      io.sockets.sockets.get(id)?.rooms.has(blackjackRoom(roomId)),
+  );
+  if (otherSocketAtTable) return;
+  blackjackRooms.leave(playerId);
+  const player = playersById.get(playerId);
+  if (player) player.ready = false;
+  const table = tables.get(roomId);
+  if (
+    !table ||
+    table.state.phase === "betting" ||
+    !table.state.seats.some((seat) => seat.playerId === playerId)
+  ) {
+    table?.remove(playerId);
+    if (player?.roomId === roomId) player.roomId = "";
+  }
 }
 /** Financial commands are serialized around one explicit wallet batch. */
 let financialQueue: Promise<unknown> = Promise.resolve();
@@ -410,6 +535,80 @@ function publishWallet(playerId: string, socketId?: string) {
   if (socketId) io.to(socketId).emit("wallet", previous);
 }
 
+/**
+ * Runs a streak query, rejecting with its own error and message. A defect
+ * (a broken invariant) is logged and shown as the usual outage message.
+ */
+async function runDaily<A, E>(effect: Parameters<typeof runDatabase<A, E>>[0]) {
+  const result = await runDatabase(
+    Effect.either(
+      effect.pipe(
+        Effect.catchAllDefect((cause) =>
+          Effect.fail(new DailyDatabaseError({ cause })),
+        ),
+      ),
+    ),
+  );
+  if (Either.isLeft(result)) throw result.left;
+  return result.right;
+}
+
+/**
+ * Counts the club day of a connected player and tells their tabs. Runs in
+ * the financial queue: a milestone credits the wallet outside a game batch.
+ */
+function syncDaily(playerId: string) {
+  clearDailySyncRetry(playerId);
+  void serializeFinancial(async () => {
+    const update: DailyUpdate = await runDaily(
+      checkInDaily(playerId, Date.now(), dailyOptions),
+    );
+    if (update.checkIn?.milestone)
+      dailyRewardWalletRefreshPending.add(playerId);
+    const player = playersById.get(playerId);
+    if (player && dailyRewardWalletRefreshPending.has(playerId)) {
+      await Effect.runPromise(refreshWalletEffect(player));
+      dailyRewardWalletRefreshPending.delete(playerId);
+    }
+    emitToPlayer(playerId, "daily:status", update);
+  }).then(
+    () => {
+      clearDailySyncRetry(playerId);
+      dailySyncRetryAttempts.delete(playerId);
+    },
+    (error: unknown) => {
+      console.error("Série quotidienne", error);
+      if (!playerSockets.has(playerId)) {
+        dailySyncRetryAttempts.delete(playerId);
+        return;
+      }
+      if (dailySyncRetryTimers.has(playerId)) return;
+      const attempt = (dailySyncRetryAttempts.get(playerId) ?? 0) + 1;
+      dailySyncRetryAttempts.set(playerId, attempt);
+      const delay = Math.min(30_000, 1_000 * 2 ** (attempt - 1));
+      const timer = setTimeout(() => {
+        dailySyncRetryTimers.delete(playerId);
+        if (playerSockets.has(playerId)) syncDaily(playerId);
+        else dailySyncRetryAttempts.delete(playerId);
+      }, delay);
+      timer.unref();
+      dailySyncRetryTimers.set(playerId, timer);
+    },
+  );
+}
+
+/** Club day seen by the last maintenance tick, to notice 08:00. */
+let dailyDay = dayKeyAt(Date.now());
+const dailySyncRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const dailySyncRetryAttempts = new Map<string, number>();
+const dailyRewardWalletRefreshPending = new Set<string>();
+
+function clearDailySyncRetry(playerId: string) {
+  const timer = dailySyncRetryTimers.get(playerId);
+  if (timer) clearTimeout(timer);
+  dailySyncRetryTimers.delete(playerId);
+}
+
 function commitWalletOperationsEffect() {
   const operations = gameWallet.operations();
   const gameResults = gameWallet.gameResults();
@@ -429,6 +628,13 @@ function commitWalletOperationsEffect() {
         }
         gameWallet.complete();
         for (const result of results) publishWallet(result.userId);
+        announceClaimableTiers(
+          operations
+            .filter((operation) =>
+              ["wager", "additional-wager", "buy-in"].includes(operation.kind),
+            )
+            .map((operation) => operation.userId),
+        );
       }),
     ),
     Effect.asVoid,
@@ -545,6 +751,7 @@ function inputEffect<A, B, E>(
 
 io.on("connection", (socket) => {
   let player: Player | undefined;
+  let dailySynced = false;
   /** Recent emote times, to keep the table readable. */
   let emoteTimes: number[] = [];
   let events = 0;
@@ -595,15 +802,21 @@ io.on("connection", (socket) => {
           catch: toGameError,
         });
         let known = profiles.get(session.user.id);
-        const tableId = safeData.createPrivate
-          ? blackjackRooms.create("private").id
-          : safeData.tableId
-            ? // A friend's invitation may name a public table.
-              blackjackRooms.get(safeData.tableId)?.visibility === "public"
-              ? safeData.tableId
-              : blackjackRooms.privateRoom(safeData.tableId).id
-            : publicTableFor(known?.id);
-        if (known && known.roomId !== tableId) {
+        const enterBlackjack =
+          safeData.createPrivate || safeData.tableId !== undefined;
+        if (known && !enterBlackjack)
+          leaveBlackjackRoom(known.id, known.roomId, socket.id);
+        const tableId = !enterBlackjack
+          ? undefined
+          : safeData.createPrivate
+            ? blackjackRooms.create("private").id
+            : safeData.tableId
+              ? // A friend's invitation may name a public table.
+                blackjackRooms.get(safeData.tableId)?.visibility === "public"
+                ? safeData.tableId
+                : blackjackRooms.privateRoom(safeData.tableId).id
+              : publicTableFor(known?.id);
+        if (known && tableId && known.roomId && known.roomId !== tableId) {
           const connections = playerSockets.get(known.id);
           if (
             connections &&
@@ -621,7 +834,7 @@ io.on("connection", (socket) => {
           known.ready = false;
         }
 
-        const table = getTable(tableId);
+        const table = tableId ? getTable(tableId) : undefined;
         if (!known) {
           known = {
             id: session.user.id,
@@ -630,7 +843,7 @@ io.on("connection", (socket) => {
             balance: wallet.balance,
             ready: false,
             connected: true,
-            roomId: tableId,
+            roomId: tableId ?? "",
             lastSeen: clock.now(),
           };
           profiles.set(session.user.id, known);
@@ -641,15 +854,19 @@ io.on("connection", (socket) => {
         player = known;
         player.connected = true;
         player.lastSeen = clock.now();
-        player.roomId = tableId;
-        blackjackRooms.join(player.id, tableId);
+        if (tableId) {
+          player.roomId = tableId;
+          blackjackRooms.join(player.id, tableId);
+        }
         const connections = playerSockets.get(player.id) ?? new Set();
         const cameOnline = !connections.size;
         connections.add(socket.id);
         playerSockets.set(player.id, connections);
         if (cameOnline) notifyPresence(player.id);
-        socket.join(blackjackRoom(tableId));
-        runOrThrow(table.observeEffect(player));
+        if (tableId) {
+          socket.join(blackjackRoom(tableId));
+          runOrThrow(table!.observeEffect(player));
+        }
         runOrThrow(poker.connectEffect(player));
         publishWallet(player.id, socket.id);
         publishMines(player.id);
@@ -660,7 +877,51 @@ io.on("connection", (socket) => {
           tableId,
         } satisfies Ack;
       }).pipe(Effect.provide(ServerClockLive)),
-      (value) => value,
+      (value) => {
+        // Once per connection: changing table joins again.
+        if (!dailySynced && player) {
+          dailySynced = true;
+          syncDaily(player.id);
+        }
+        return value;
+      },
+    );
+  });
+  socket.on("daily:spin", (ack: unknown) => {
+    const currentPlayer = player;
+    void serializeFinancial(async () => {
+      if (!currentPlayer) throw new Error("Connectez-vous au club.");
+      throttle(Date.now());
+      const { spin, checkIn } = await runDaily(
+        spinDailyWheel(currentPlayer.id, Date.now(), dailyOptions),
+      );
+      const reward =
+        spin.amount +
+        (checkIn?.milestone
+          ? checkIn.milestone.credits + checkIn.milestone.converted
+          : 0);
+      const wallet = await runDatabase(readWallet(currentPlayer.id)).catch(
+        (error: unknown) => {
+          console.error("Solde après la roue", error);
+          return null;
+        },
+      );
+      currentPlayer.balance = wallet?.balance ?? currentPlayer.balance + reward;
+      return { spin, checkIn };
+    }).then(
+      ({ spin, checkIn }) => {
+        if (typeof ack === "function")
+          ack({ ok: true, spin } satisfies { ok: true; spin: DailySpin });
+        // The new balance would give the prize away before the wheel stops.
+        setTimeout(() => {
+          publishWallet(currentPlayer!.id);
+          emitToPlayer(currentPlayer!.id, "daily:status", {
+            status: spin.status,
+            checkIn,
+          } satisfies DailyUpdate);
+        }, WHEEL_SPIN_MS);
+      },
+      (error: unknown) => replyError(ack, error),
     );
   });
   socket.on("blackjack:join", (ack: (value: Ack) => void) => {
@@ -670,10 +931,26 @@ io.on("connection", (socket) => {
         const currentPlayer = yield* gameEffect((clock) => {
           throttle(clock.now());
           if (!player) throw new Error("Vous n’êtes pas connecté à la table.");
+          if (!socket.rooms.has(blackjackRoom(player.roomId)))
+            throw new Error("Rejoignez une table pour jouer.");
           return player;
         });
         yield* tables.get(currentPlayer.roomId)!.addEffect(currentPlayer);
       }),
+    );
+  });
+  socket.on("blackjack:leave", (ack: (value: Ack) => void) => {
+    void serializeFinancial(() =>
+      executeReply(
+        ack,
+        gameEffect((clock) => {
+          throttle(clock.now());
+          if (!player) throw new Error("Connectez-vous au club.");
+          if (socket.rooms.has(blackjackRoom(player.roomId)))
+            leaveBlackjackRoom(player.id, player.roomId, socket.id);
+        }),
+        () => ({ ok: true }) satisfies Ack,
+      ),
     );
   });
   socket.on("wallet:refill", (ack: (value: Ack) => void) => {
@@ -703,7 +980,12 @@ io.on("connection", (socket) => {
               throttle(clock.now());
               if (!player)
                 throw new Error("Vous n’êtes pas connecté à la table.");
-              const blackjackTable = tables.get(player.roomId)!;
+              const blackjackTable = tables.get(player.roomId);
+              if (
+                !blackjackTable ||
+                !socket.rooms.has(blackjackRoom(player.roomId))
+              )
+                throw new Error("Rejoignez une table pour jouer.");
               const blackjackPlayerId = player.id;
               if (
                 !blackjackTable.players.has(blackjackPlayerId) ||
@@ -1231,6 +1513,13 @@ const maintenanceEffect = Effect.provide(
     const now = clock.now();
     for (const [id, table] of tables) {
       yield* Effect.either(walletTransactionEffect(table.tickEffect(now)));
+      if (table.state.phase === "betting")
+        for (const playerId of table.players.keys())
+          if (blackjackRooms.roomOf(playerId) !== id) {
+            yield* Effect.either(table.removeEffect(playerId));
+            const player = playersById.get(playerId);
+            if (player?.roomId === id) player.roomId = "";
+          }
       for (const memberId of blackjackRooms.get(id)?.members ?? [])
         if (!table.players.has(memberId)) blackjackRooms.leave(memberId);
       if (!table.players.size && now - table.lastUsed > 30 * 60_000) {
@@ -1276,6 +1565,12 @@ console.log(
   `MINUIT · http://localhost:${port} · ${dev ? "development" : "production"}`,
 );
 const maintenanceTimer = setInterval(() => {
+  // 08:00 in Paris: players already connected start the new day too.
+  const today = dayKeyAt(Date.now());
+  if (today !== dailyDay) {
+    dailyDay = today;
+    for (const playerId of playerSockets.keys()) syncDaily(playerId);
+  }
   void serializeFinancial(() => Effect.runPromise(maintenanceEffect));
 }, 100);
 maintenanceTimer.unref();

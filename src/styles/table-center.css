@@ -14,7 +14,7 @@
 /* Give the felt a dedicated focus mode. The same class also covers browsers
  * that refuse the native Fullscreen API, so the feature still works as an
  * app-level mode. */
-.casino-shell .rail,
+.casino-shell > aside[aria-label="Navigation principale"],
 .casino-shell .workspace {
   transition:
     transform 360ms var(--ease),
@@ -32,7 +32,7 @@
   display: none;
 }
 
-.casino-shell.is-fullscreen .rail {
+.casino-shell.is-fullscreen > aside[aria-label="Navigation principale"] {
   opacity: 0;
   pointer-events: none;
   transform: translateX(-100%);

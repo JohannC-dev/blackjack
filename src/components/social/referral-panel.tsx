@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy, Gift, Sparkles, Users } from "lucide-react";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,10 +12,11 @@ import {
   type ReferralOverview,
   type ReferralTierState,
 } from "@/lib/referral";
-import { useReferralOverview } from "@/lib/referral-api";
+import { claimReferralRewards, useReferralOverview } from "@/lib/referral-api";
 import { formatFriendCode } from "@/lib/social";
 import { cn } from "@/lib/utils";
 import { PlayerAvatar } from "./player-avatar";
+import { PlayerMenu } from "./player-menu";
 import { useSocial } from "./social-provider";
 
 const dayFormat = new Intl.DateTimeFormat("fr-FR", {
@@ -35,7 +36,7 @@ export function ReferralPanel({
   onOpenCollection?: () => void;
 }) {
   const social = useSocial();
-  const { overview, error, reload } = useReferralOverview(
+  const { overview, error, reload, setOverview } = useReferralOverview(
     true,
     social.referralVersion,
   );
@@ -57,7 +58,12 @@ export function ReferralPanel({
       </Section>
     );
   return (
-    <ReferralBody overview={overview} onOpenCollection={onOpenCollection} />
+    <ReferralBody
+      overview={overview}
+      onClaimed={setOverview}
+      onReload={reload}
+      onOpenCollection={onOpenCollection}
+    />
   );
 }
 
@@ -82,12 +88,15 @@ function Section({ children }: { children: React.ReactNode }) {
 
 function ReferralBody({
   overview,
+  onClaimed,
+  onReload,
   onOpenCollection,
 }: {
   overview: ReferralOverview;
+  onClaimed: (overview: ReferralOverview) => void;
+  onReload: () => void;
   onOpenCollection?: () => void;
 }) {
-  const social = useSocial();
   const count = overview.filleuls.length;
   const copyCode = async () => {
     if (!overview.code) return;
@@ -121,27 +130,37 @@ function ReferralBody({
         </button>
       </div>
 
+      {overview.claimable > 0 && (
+        <ClaimButton
+          claimable={overview.claimable}
+          onClaimed={onClaimed}
+          onReload={onReload}
+        />
+      )}
+
       {overview.parrain && (
-        <button
-          type="button"
-          onClick={() => social.openProfile(overview.parrain!.id)}
-          className="mt-3 flex w-full items-center gap-2.5 rounded-lg px-1 py-2 text-left hover:bg-white/[0.03]"
-        >
-          <PlayerAvatar
-            id={overview.parrain.id}
-            name={overview.parrain.name}
-            size="sm"
-          />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold">
-              {overview.parrain.name}
+        <PlayerMenu id={overview.parrain.id} name={overview.parrain.name}>
+          <button
+            type="button"
+            aria-label={`Actions pour ${overview.parrain.name}`}
+            className="mt-3 flex w-full items-center gap-2.5 rounded-lg px-1 py-2 text-left hover:bg-white/[0.03]"
+          >
+            <PlayerAvatar
+              id={overview.parrain.id}
+              name={overview.parrain.name}
+              size="sm"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">
+                {overview.parrain.name}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Votre parrain depuis le{" "}
+                {dayFormat.format(new Date(overview.parrain.since))}
+              </span>
             </span>
-            <span className="block text-xs text-muted-foreground">
-              Votre parrain depuis le{" "}
-              {dayFormat.format(new Date(overview.parrain.since))}
-            </span>
-          </span>
-        </button>
+          </button>
+        </PlayerMenu>
       )}
 
       <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
@@ -149,9 +168,11 @@ function ReferralBody({
           Progression des filleuls
         </span>
         <span>
-          {overview.earned > 0
-            ? `${credits(overview.earned)} gagnés`
-            : "Aucune récompense"}
+          {overview.claimable > 0
+            ? `${credits(overview.claimable)} à récupérer`
+            : overview.earned > 0
+              ? `${credits(overview.earned)} gagnés`
+              : "Aucune récompense"}
         </span>
       </div>
 
@@ -163,41 +184,43 @@ function ReferralBody({
         <div className="divide-y divide-white/[0.05]">
           {overview.filleuls.map((filleul) => (
             <Fragment key={filleul.id}>
-              <button
-                type="button"
-                onClick={() => social.openProfile(filleul.id)}
-                className="flex w-full items-center gap-2.5 py-2.5 text-left hover:bg-white/[0.02]"
-              >
-                <PlayerAvatar
-                  id={filleul.id}
-                  name={filleul.name}
-                  online={filleul.online}
-                  size="sm"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold">
-                    {filleul.name}
-                  </span>
-                  <span className="block text-xs text-muted-foreground">
-                    Depuis le {dayFormat.format(new Date(filleul.joinedAt))}
-                    {filleul.played > 0
-                      ? ` · ${filleul.played.toLocaleString("fr-FR")} partie${
-                          filleul.played > 1 ? "s" : ""
-                        } · ${credits(filleul.wagered)} misés`
-                      : " · n’a pas encore joué"}
-                  </span>
-                </span>
-                <span
-                  className={cn(
-                    "shrink-0 text-xs",
-                    filleul.online
-                      ? "text-minuit-mint"
-                      : "text-muted-foreground",
-                  )}
+              <PlayerMenu id={filleul.id} name={filleul.name}>
+                <button
+                  type="button"
+                  aria-label={`Actions pour ${filleul.name}`}
+                  className="flex w-full items-center gap-2.5 py-2.5 text-left hover:bg-white/[0.02]"
                 >
-                  {filleul.online ? "En ligne" : "Hors ligne"}
-                </span>
-              </button>
+                  <PlayerAvatar
+                    id={filleul.id}
+                    name={filleul.name}
+                    online={filleul.online}
+                    size="sm"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">
+                      {filleul.name}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Depuis le {dayFormat.format(new Date(filleul.joinedAt))}
+                      {filleul.played > 0
+                        ? ` · ${filleul.played.toLocaleString("fr-FR")} partie${
+                            filleul.played > 1 ? "s" : ""
+                          } · ${credits(filleul.wagered)} misés`
+                        : " · n’a pas encore joué"}
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 text-xs",
+                      filleul.online
+                        ? "text-minuit-mint"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {filleul.online ? "En ligne" : "Hors ligne"}
+                  </span>
+                </button>
+              </PlayerMenu>
               <TierLadder filleul={filleul} />
             </Fragment>
           ))}
@@ -210,6 +233,56 @@ function ReferralBody({
 
       {onOpenCollection && <CollectionLink onOpen={onOpenCollection} />}
     </Section>
+  );
+}
+
+/**
+ * The credits are never handed out on their own: the parrain takes them here.
+ */
+function ClaimButton({
+  claimable,
+  onClaimed,
+  onReload,
+}: {
+  claimable: number;
+  onClaimed: (overview: ReferralOverview) => void;
+  onReload: () => void;
+}) {
+  const [claiming, setClaiming] = useState(false);
+  const claim = async () => {
+    setClaiming(true);
+    try {
+      const result = await claimReferralRewards();
+      if (result.overview) onClaimed(result.overview);
+      else onReload();
+      toast.success(`${credits(result.credited)} crédits récupérés`, {
+        description: `${result.tiers.length} palier${
+          result.tiers.length > 1 ? "s" : ""
+        } encaissé${result.tiers.length > 1 ? "s" : ""}.`,
+      });
+    } catch (failure) {
+      toast.error(
+        failure instanceof Error ? failure.message : "Récupération impossible.",
+      );
+    } finally {
+      setClaiming(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 flex items-center gap-3 rounded-lg border border-minuit-mint/30 bg-minuit-mint/[0.07] px-3.5 py-3">
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-foreground">
+          {credits(claimable)} crédits vous attendent
+        </span>
+        <span className="block text-xs text-muted-foreground">
+          Vos filleuls ont atteint des paliers.
+        </span>
+      </span>
+      <Button size="sm" onClick={claim} disabled={claiming}>
+        {claiming ? "..." : "Récupérer"}
+      </Button>
+    </div>
   );
 }
 
@@ -265,39 +338,45 @@ function TierLadder({ filleul }: { filleul: Filleul }) {
 }
 
 function TierRow({ tier }: { tier: ReferralTierState }) {
+  const waiting = tier.reached && !tier.claimed;
   return (
     <li
       className={cn(
         "flex items-center gap-2.5 rounded-md px-2 py-1.5",
         tier.reached ? "bg-white/[0.03]" : "opacity-60",
+        waiting && "ring-1 ring-minuit-mint/25",
       )}
     >
       <span
         className={cn(
           "grid size-5 shrink-0 place-items-center rounded-full text-[10px] font-bold",
-          tier.reached
+          tier.claimed
             ? "bg-minuit-purple/20 text-minuit-purple"
-            : "bg-white/[0.06] text-muted-foreground",
+            : waiting
+              ? "bg-minuit-mint/20 text-minuit-mint"
+              : "bg-white/[0.06] text-muted-foreground",
         )}
         aria-hidden="true"
       >
-        {tier.reached ? <Check className="size-3" /> : tier.tier}
+        {tier.claimed ? <Check className="size-3" /> : tier.tier}
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold">
           {tier.label}
         </span>
         <span className="block text-xs text-muted-foreground">
-          {credits(tier.wagered)} misés
+          {waiting ? "À récupérer" : `${credits(tier.wagered)} misés`}
         </span>
       </span>
       <span
         className={cn(
           "shrink-0 text-sm font-semibold tabular-nums",
-          tier.grantedAt ? "text-minuit-mint" : "text-muted-foreground",
+          tier.claimed || waiting
+            ? "text-minuit-mint"
+            : "text-muted-foreground",
         )}
       >
-        {tier.grantedAt ? "+" : ""}
+        {tier.claimed ? "+" : ""}
         {credits(tier.reward)}
       </span>
     </li>

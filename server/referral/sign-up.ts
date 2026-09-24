@@ -76,7 +76,6 @@ export const claimReferralCode = createAuthMiddleware(async (ctx) => {
         name:
           typeof returned?.user?.name === "string" ? returned.user.name : "",
       },
-      tiers: result.right.tiers,
     });
   } catch (error) {
     console.error("Parrainage · inscription", error);

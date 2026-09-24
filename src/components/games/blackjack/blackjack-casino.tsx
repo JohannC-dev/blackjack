@@ -69,6 +69,8 @@ import {
 import { normalizeFriendCode } from "@/lib/social";
 import { playCasinoSound, preloadCasinoSounds } from "@/lib/casino-audio";
 import { useGameAudio } from "@/lib/audio-context";
+import { PlayerAvatar } from "@/components/social/player-avatar";
+import { PlayerMenu } from "@/components/social/player-menu";
 import type {
   Bet,
   BetChips,
@@ -80,8 +82,6 @@ import type {
   TableState,
 } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
-import { CasinoRail, ClubHeader } from "../../ui";
-import type { CasinoView } from "@/lib/navigation";
 import { CountdownText } from "../../ui/countdown";
 import { Chip } from "../../ui/chip";
 import {
@@ -660,41 +660,63 @@ const SeatView = memo(function SeatView({
         </div>
       ) : null}
       <div className="seat-name-row">
-        <button
-          className="seat-name"
-          data-emote-player={owner?.id}
-          onClick={() => onSelect(seat)}
-          disabled={!!owner && !mine}
-          aria-label={
-            owner
-              ? `Main ${seat.index + 1} · ${owner.name}`
-              : `Place ${seat.index + 1} libre`
-          }
-        >
-          {owner ? (
-            <>
-              <span className="avatar tiny">
-                {owner.name.slice(0, 1).toUpperCase()}
-              </span>
-              <span>
-                {owner.name}
-                {mine && (
-                  <small>
-                    vous
-                    {playerSeatCount > 1 ? ` · ${seat.index + 1}` : ""}
-                  </small>
-                )}
-              </span>
+        {owner && !mine ? (
+          <PlayerMenu id={owner.id} name={owner.name}>
+            <button
+              type="button"
+              className="seat-name"
+              data-emote-player={owner.id}
+              aria-label={`Actions pour ${owner.name}`}
+            >
+              <PlayerAvatar id={owner.id} name={owner.name} size="sm" />
+              <span>{owner.name}</span>
               {owner.ready && phase === "betting" ? (
                 <Check className="ready-mark" size={13} />
               ) : !owner.connected ? (
                 <span className="offline-dot" />
               ) : null}
-            </>
-          ) : (
-            <span className="empty-seat-label">Installez-vous</span>
-          )}
-        </button>
+            </button>
+          </PlayerMenu>
+        ) : (
+          <button
+            className="seat-name"
+            data-emote-player={owner?.id}
+            onClick={() => onSelect(seat)}
+            disabled={!!owner && !mine}
+            aria-label={
+              owner
+                ? `Main ${seat.index + 1} · ${owner.name}`
+                : `Place ${seat.index + 1} libre`
+            }
+          >
+            {owner ? (
+              <>
+                <PlayerAvatar
+                  id={owner.id}
+                  name={owner.name}
+                  size="sm"
+                  tone={mine ? "blackjack-self" : "default"}
+                />
+                <span>
+                  {owner.name}
+                  {mine && (
+                    <small>
+                      vous
+                      {playerSeatCount > 1 ? ` · ${seat.index + 1}` : ""}
+                    </small>
+                  )}
+                </span>
+                {owner.ready && phase === "betting" ? (
+                  <Check className="ready-mark" size={13} />
+                ) : !owner.connected ? (
+                  <span className="offline-dot" />
+                ) : null}
+              </>
+            ) : (
+              <span className="empty-seat-label">Installez-vous</span>
+            )}
+          </button>
+        )}
         {mine && phase === "betting" && (
           <button
             type="button"
@@ -946,62 +968,6 @@ function GamblePanel({
   );
 }
 
-type BlackjackSidebarProps = {
-  onHome: () => void;
-  onBlackjack: () => void;
-  onMines: () => void;
-  onPoker: () => void;
-  onTower: () => void;
-  onChicken: () => void;
-  onRoulette: () => void;
-  onPlinko: () => void;
-  onRules: () => void;
-  blackjackLabel?: string;
-};
-
-const BlackjackSidebar = memo(function BlackjackSidebar({
-  onHome,
-  onBlackjack,
-  onMines,
-  onPoker,
-  onTower,
-  onChicken,
-  onRoulette,
-  onPlinko,
-  onRules,
-  blackjackLabel,
-}: BlackjackSidebarProps) {
-  return (
-    <CasinoRail
-      active="blackjack"
-      blackjackLabel={blackjackLabel}
-      onNavigate={(view) => {
-        if (view === "home") onHome();
-        else if (view === "blackjack") onBlackjack();
-        else if (view === "mines") onMines();
-        else if (view === "poker") onPoker();
-        else if (view === "tower") onTower();
-        else if (view === "chicken") onChicken();
-        else if (view === "roulette") onRoulette();
-        else if (view === "plinko") onPlinko();
-      }}
-      onRules={onRules}
-    />
-  );
-});
-const BlackjackTopbar = memo(function BlackjackTopbar({
-  balance,
-  name,
-  onSignOut,
-}: {
-  balance: number;
-  name: string;
-  onSignOut: () => Promise<void>;
-}) {
-  return (
-    <ClubHeader balance={balance} name={name} href="/" onSignOut={onSignOut} />
-  );
-});
 const BlackjackPageHeading = memo(function BlackjackPageHeading({
   onInvite,
 }: {
@@ -1209,10 +1175,10 @@ export function WelcomeAuthModal({
                 name: authMode === "sign-up" ? name : undefined,
                 email,
                 password,
-                captchaToken:
-                  captchaRequired ? (captchaToken ?? undefined) : undefined,
-                referralCode:
-                  authMode === "sign-up" ? referralCode : undefined,
+                captchaToken: captchaRequired
+                  ? (captchaToken ?? undefined)
+                  : undefined,
+                referralCode: authMode === "sign-up" ? referralCode : undefined,
               });
               if (message) game.setError(message);
             } catch {
@@ -1347,9 +1313,7 @@ export function WelcomeAuthModal({
             game.setError("");
             setCaptchaToken(null);
             turnstileRef.current?.reset();
-            setAuthMode((mode) =>
-              mode === "sign-up" ? "sign-in" : "sign-up",
-            );
+            setAuthMode((mode) => (mode === "sign-up" ? "sign-in" : "sign-up"));
           }}
         >
           {authMode === "sign-up" ? "J’ai déjà un compte" : "Créer un compte"}
@@ -1365,10 +1329,14 @@ export function WelcomeAuthModal({
 
 export function BlackjackCasino({
   game,
-  onNavigate,
+  isFullscreen,
+  onToggleFullscreen,
+  rulesRequest,
 }: {
   game: ReturnType<typeof useGame>;
-  onNavigate: (view: CasinoView) => void;
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
+  rulesRequest: number;
 }) {
   const {
     state,
@@ -1377,6 +1345,8 @@ export function BlackjackCasino({
     profile,
     command,
     joinBlackjack,
+    enterBlackjack,
+    leaveBlackjack,
     pending,
   } = game;
   // Backs frozen for the round: each seat's hidden doubled card wears its
@@ -1394,6 +1364,9 @@ export function BlackjackCasino({
   const [modal, setModal] = useState<
     "rules" | "tables" | "history" | "invite" | null
   >(null);
+  useEffect(() => {
+    if (rulesRequest > 0) setModal("rules");
+  }, [rulesRequest]);
   const [tableCode, setTableCode] = useState("");
   const [selectedSeat, setSelectedSeat] = useState(2);
   const [betHistory, setBetHistory] = useState<
@@ -1412,8 +1385,6 @@ export function BlackjackCasino({
   const [doubleChoiceClosing, setDoubleChoiceClosing] = useState(false);
   const [gambleOpen, setGambleOpen] = useState(false);
   const [gamblePromptFeatured, setGamblePromptFeatured] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const shellRef = useRef<HTMLDivElement>(null);
   const previousCards = useRef(0);
   const previousOwnBet = useRef(0);
   const hasSeenOwnBet = useRef(false);
@@ -1543,6 +1514,11 @@ export function BlackjackCasino({
       if (affordable !== undefined) setChip(affordable);
     }
   }, [chip, chipBalance]);
+
+  useEffect(() => {
+    enterBlackjack();
+    return leaveBlackjack;
+  }, [enterBlackjack, leaveBlackjack]);
 
   useEffect(() => {
     if (profile && connected && state?.id) void joinBlackjack();
@@ -1679,23 +1655,6 @@ export function BlackjackCasino({
     if (sound && state?.phase === "shuffling" && audioRef.current)
       playCasinoSound(audioRef.current, "shuffle");
   }, [state?.phase, sound]);
-  useEffect(() => {
-    const syncFullscreenState = () => {
-      setIsFullscreen(document.fullscreenElement === shellRef.current);
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !document.fullscreenElement)
-        setIsFullscreen(false);
-    };
-
-    document.addEventListener("fullscreenchange", syncFullscreenState);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("fullscreenchange", syncFullscreenState);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, []);
-
   const selectSeat = useCallback(
     (s: Seat) => {
       const { profile, playerId, betting } = interactionRef.current;
@@ -1822,38 +1781,8 @@ export function BlackjackCasino({
       setModal("invite");
     }
   }, [shareUrl]);
-  const toggleFullscreen = useCallback(async () => {
-    const shell = shellRef.current;
-    if (!shell) return;
-
-    if (isFullscreen) {
-      setIsFullscreen(false);
-      if (document.fullscreenElement) {
-        await document.exitFullscreen().catch(() => undefined);
-      }
-      return;
-    }
-
-    setIsFullscreen(true);
-    if (document.fullscreenEnabled && shell.requestFullscreen) {
-      try {
-        await shell.requestFullscreen();
-      } catch {
-        // The layout-only mode remains useful when the browser blocks fullscreen.
-      }
-    }
-  }, [isFullscreen]);
-  const goHome = useCallback(() => onNavigate("home"), [onNavigate]);
-  const goBlackjack = useCallback(() => setModal(null), []);
-  const goMines = useCallback(() => onNavigate("mines"), [onNavigate]);
-  const goPoker = useCallback(() => onNavigate("poker"), [onNavigate]);
-  const goTower = useCallback(() => onNavigate("tower"), [onNavigate]);
-  const goChicken = useCallback(() => onNavigate("chicken"), [onNavigate]);
-  const goRoulette = useCallback(() => onNavigate("roulette"), [onNavigate]);
-  const goPlinko = useCallback(() => onNavigate("plinko"), [onNavigate]);
   const openTables = useCallback(() => setModal("tables"), []);
   const openHistory = useCallback(() => setModal("history"), []);
-  const openRules = useCallback(() => setModal("rules"), []);
   const subtitle = myTurn
     ? "C’est à vous de jouer"
     : state?.phase === "insurance"
@@ -1879,327 +1808,250 @@ export function BlackjackCasino({
                   : "Faites vos jeux";
 
   return (
-    <div
-      ref={shellRef}
-      className={`casino-shell blackjack-casino-shell ${isFullscreen ? "is-fullscreen" : ""}`}
-    >
+    <>
       <EmoteLayer
         game="blackjack"
         events={game.emotes}
         playerId={playerId}
         onDone={game.dismissEmote}
       />
-      <BlackjackSidebar
-        onHome={goHome}
-        onBlackjack={goBlackjack}
-        onMines={goMines}
-        onPoker={goPoker}
-        onTower={goTower}
-        onChicken={goChicken}
-        onRoulette={goRoulette}
-        onPlinko={goPlinko}
-        onRules={openRules}
-        blackjackLabel={profile ? "Blackjack" : "Table de cartes"}
-      />
+      <main>
+        <BlackjackPageHeading onInvite={invite} />
 
-      <div className="ml-[76px] max-[700px]:ml-[55px] max-[450px]:ml-0">
-        <BlackjackTopbar
-          balance={balance}
-          name={me?.name ?? profile?.name ?? "M"}
-          onSignOut={game.signOut}
-        />
-
-        <main>
-          <BlackjackPageHeading onInvite={invite} />
-
-          <div className="game-layout">
-            <div className="main-column">
-              <section className="table-panel" aria-label="Table de blackjack">
-                <BlackjackTableToolbar
-                  connected={connected}
-                  tableId={
-                    state?.visibility === "private" ? state.id : "PUBLIQUE"
-                  }
-                  isFullscreen={isFullscreen}
-                  seatCount={
-                    state?.seats.filter((seat) => seat.playerId).length ?? 0
-                  }
-                  countdownDeadline={
-                    state?.phase === "settled" ? null : (state?.deadline ?? null)
-                  }
-                  playerId={playerId}
-                  emotePlayers={emotePlayers}
-                  onSendEmote={game.sendEmote}
-                  onToggleFullscreen={toggleFullscreen}
-                  onOpenTables={openTables}
-                  onOpenHistory={openHistory}
-                />
-                <div className="table-stage">
-                  <div className="ambient-glow" />
-                  <div className="table-surface">
-                    <div className="felt-texture" />
-                    <div className="table-inner-line" />
-                    <div className="table-inner-line second" />
+        <div className="game-layout">
+          <div className="main-column">
+            <section className="table-panel" aria-label="Table de blackjack">
+              <BlackjackTableToolbar
+                connected={connected}
+                tableId={
+                  state?.visibility === "private" ? state.id : "PUBLIQUE"
+                }
+                isFullscreen={isFullscreen}
+                seatCount={
+                  state?.seats.filter((seat) => seat.playerId).length ?? 0
+                }
+                countdownDeadline={
+                  state?.phase === "settled" ? null : (state?.deadline ?? null)
+                }
+                playerId={playerId}
+                emotePlayers={emotePlayers}
+                onSendEmote={game.sendEmote}
+                onToggleFullscreen={onToggleFullscreen}
+                onOpenTables={openTables}
+                onOpenHistory={openHistory}
+              />
+              <div className="table-stage">
+                <div className="ambient-glow" />
+                <div className="table-surface">
+                  <div className="felt-texture" />
+                  <div className="table-inner-line" />
+                  <div className="table-inner-line second" />
+                </div>
+                <div className="dealer">
+                  <div className="dealer-label">
+                    <span />
+                    CROUPIER
+                    <span />
                   </div>
-                  <div className="dealer">
-                    <div className="dealer-label">
-                      <span />
-                      CROUPIER
-                      <span />
+                  <div className="dealer-cards">
+                    {state?.dealer.length ? (
+                      state.dealer.map((card, i) => (
+                        <PlayingCard
+                          key={card.id}
+                          card={card}
+                          index={i}
+                          backSkin={viewerBack}
+                        />
+                      ))
+                    ) : (
+                      <>
+                        <div className="card-outline">
+                          <Spade size={20} />
+                        </div>
+                        <div className="card-outline" />
+                      </>
+                    )}
+                  </div>
+                  {!!state?.dealer.length && (
+                    <div className="dealer-score">
+                      {score(state.dealer).total}
+                      {state.phase === "playing" || state.phase === "dealing"
+                        ? " visible"
+                        : ""}
                     </div>
-                    <div className="dealer-cards">
-                      {state?.dealer.length ? (
-                        state.dealer.map((card, i) => (
-                          <PlayingCard
-                            key={card.id}
-                            card={card}
-                            index={i}
-                            backSkin={viewerBack}
-                          />
-                        ))
-                      ) : (
-                        <>
-                          <div className="card-outline">
-                            <Spade size={20} />
-                          </div>
-                          <div className="card-outline" />
-                        </>
+                  )}
+                </div>
+                <div className="card-shoe">
+                  <div />
+                  <div />
+                  <PlayingCard back decorative backSkin={viewerBack} />
+                  <span>8 JEUX</span>
+                </div>
+                {state?.phase === "shuffling" && (
+                  <PokerShuffleAnimation
+                    hand={state.round}
+                    eyebrow="8 JEUX"
+                    title="Mélange du sabot"
+                    ariaLabel="Mélange du sabot"
+                  />
+                )}
+                <div className="felt-brand">
+                  <span className="felt-diamond">✧</span>
+                  <h2>MINUIT</h2>
+                  <p>BLACKJACK PAYS 3 TO 2</p>
+                  <div>
+                    <span>21 + 3</span>
+                    <i />
+                    SUPER PAIRS
+                  </div>
+                </div>
+                {showCenterSettlement && roundResult && (
+                  <div
+                    className={`table-round-result ${roundBetNet > 0 ? "positive" : roundBetNet < 0 ? "negative" : "neutral"}`}
+                    role="status"
+                    aria-label={`Résultat de la manche : ${roundBetNet < 0 ? "perte de " : "retour de "}${credits(roundBetNet < 0 ? Math.abs(roundBetNet) : roundPayout)} crédits`}
+                  >
+                    <span className="table-round-result-kicker">
+                      {roundBetNet > 0
+                        ? "RETOUR TOTAL"
+                        : roundBetNet === 0
+                          ? "MISE REMBOURSÉE"
+                          : "PERDU"}
+                    </span>
+                    <strong>
+                      {roundBetNet < 0 ? "−" : "+"}
+                      {credits(
+                        roundBetNet < 0 ? Math.abs(roundBetNet) : roundPayout,
+                      )}
+                      <small>cr.</small>
+                    </strong>
+                    <span className="table-round-result-countdown">
+                      <CountdownText deadline={state?.deadline} />
+                    </span>
+                  </div>
+                )}
+                {(state?.seats ?? EMPTY_SEATS).map((s) => (
+                  <SeatView
+                    key={s.index}
+                    seat={s}
+                    owner={state?.players.find((p) => p.id === s.playerId)}
+                    phase={state?.phase ?? null}
+                    activeHandId={state?.activeHandId ?? null}
+                    playerSeatCount={
+                      s.playerId === playerId ? ownSeats.length : 0
+                    }
+                    playerId={playerId}
+                    selected={s.index === seat?.index}
+                    onSelect={selectSeat}
+                    onBet={placeBet}
+                    onRelease={releaseSeat}
+                    chip={s.playerId === playerId ? chip : 0}
+                    disabled={s.playerId === playerId && disabled}
+                    backSkin={tableCardBack(tableSkins, s.playerId, playerId)}
+                  />
+                ))}
+                {((roundResult && roundResult.net > 0) ||
+                  (state?.phase === "bonuses" && myBonus > 0)) && (
+                  <div
+                    className="win-burst"
+                    key={`${state?.round}-${state?.phase}`}
+                    aria-hidden="true"
+                  >
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <i key={i} style={{ "--i": i } as CSSProperties} />
+                    ))}
+                  </div>
+                )}
+                {(state?.phase === "settled" || state?.phase === "betting") &&
+                  ownGamble &&
+                  (gambleOpen ? (
+                    <div className="table-gamble-overlay">
+                      <GamblePanel
+                        gamble={ownGamble}
+                        disabled={disabled}
+                        onGamble={gamble}
+                        onCashout={cashout}
+                        onClose={() => {
+                          setGambleOpen(false);
+                          setGamblePromptFeatured(false);
+                        }}
+                      />
+                    </div>
+                  ) : ownGamble.status === "available" ? (
+                    <div
+                      className={`table-gamble-prompt-anchor table-gamble-prompt-edge ${gamblePromptFeatured ? "is-featured" : "is-compact"}`}
+                    >
+                      <GamblePrompt
+                        stake={ownGamble.stake}
+                        disabled={disabled}
+                        compact={!gamblePromptFeatured}
+                        onOpen={() => setGambleOpen(true)}
+                      />
+                    </div>
+                  ) : null)}
+              </div>
+              <div
+                className="table-status-announcer"
+                role="status"
+                aria-live="polite"
+              >
+                {!profile
+                  ? "Votre place vous attend."
+                  : !connected
+                    ? "Connexion à la table…"
+                    : (state?.message ?? "Bienvenue à la table.")}
+              </div>
+              {showControlsPanel && (
+                <div
+                  className={`controls-panel ${betting ? "controls-betting" : ""} ${myTurn || insuranceSeat ? "controls-active controls-decision" : ""}`}
+                  aria-label="Actions de jeu"
+                >
+                  {!myTurn && !insuranceSeat && (
+                    <div className="controls-heading">
+                      <div>
+                        <span className="section-kicker">
+                          {betting
+                            ? "À VOUS DE MISER"
+                            : state?.phase === "insurance"
+                              ? "ASSURANCE · AS DU CROUPIER"
+                              : state?.phase === "shuffling"
+                                ? "MÉLANGE EN COURS"
+                                : "LA PARTIE CONTINUE"}
+                        </span>
+                        <h2>{subtitle}</h2>
+                      </div>
+                      {betting && (
+                        <span className="selected-hand-label">
+                          {seat ? `Main ${seat.index + 1}` : "Spectateur"}
+                          {ownSeats.length > 1 && (
+                            <span> / {ownSeats.length} mains</span>
+                          )}
+                        </span>
                       )}
                     </div>
-                    {!!state?.dealer.length && (
-                      <div className="dealer-score">
-                        {score(state.dealer).total}
-                        {state.phase === "playing" || state.phase === "dealing"
-                          ? " visible"
-                          : ""}
-                      </div>
-                    )}
-                  </div>
-                  <div className="card-shoe">
-                    <div />
-                    <div />
-                    <PlayingCard back decorative backSkin={viewerBack} />
-                    <span>8 JEUX</span>
-                  </div>
-                  {state?.phase === "shuffling" && (
-                    <PokerShuffleAnimation
-                      hand={state.round}
-                      eyebrow="8 JEUX"
-                      title="Mélange du sabot"
-                      ariaLabel="Mélange du sabot"
-                    />
                   )}
-                  <div className="felt-brand">
-                    <span className="felt-diamond">✧</span>
-                    <h2>MINUIT</h2>
-                    <p>BLACKJACK PAYS 3 TO 2</p>
-                    <div>
-                      <span>21 + 3</span>
-                      <i />
-                      SUPER PAIRS
-                    </div>
-                  </div>
-                  {showCenterSettlement && roundResult && (
-                    <div
-                      className={`table-round-result ${roundBetNet > 0 ? "positive" : roundBetNet < 0 ? "negative" : "neutral"}`}
-                      role="status"
-                      aria-label={`Résultat de la manche : ${roundBetNet < 0 ? "perte de " : "retour de "}${credits(roundBetNet < 0 ? Math.abs(roundBetNet) : roundPayout)} crédits`}
-                    >
-                      <span className="table-round-result-kicker">
-                        {roundBetNet > 0
-                          ? "RETOUR TOTAL"
-                          : roundBetNet === 0
-                            ? "MISE REMBOURSÉE"
-                            : "PERDU"}
-                      </span>
-                      <strong>
-                        {roundBetNet < 0 ? "−" : "+"}
-                        {credits(
-                          roundBetNet < 0 ? Math.abs(roundBetNet) : roundPayout,
-                        )}
-                        <small>cr.</small>
-                      </strong>
-                      <span className="table-round-result-countdown">
-                        <CountdownText deadline={state?.deadline} />
-                      </span>
-                    </div>
-                  )}
-                  {(state?.seats ?? EMPTY_SEATS).map((s) => (
-                    <SeatView
-                      key={s.index}
-                      seat={s}
-                      owner={state?.players.find((p) => p.id === s.playerId)}
-                      phase={state?.phase ?? null}
-                      activeHandId={state?.activeHandId ?? null}
-                      playerSeatCount={
-                        s.playerId === playerId ? ownSeats.length : 0
-                      }
-                      playerId={playerId}
-                      selected={s.index === seat?.index}
-                      onSelect={selectSeat}
-                      onBet={placeBet}
-                      onRelease={releaseSeat}
-                      chip={s.playerId === playerId ? chip : 0}
-                      disabled={s.playerId === playerId && disabled}
-                      backSkin={tableCardBack(tableSkins, s.playerId, playerId)}
-                    />
-                  ))}
-                  {((roundResult && roundResult.net > 0) ||
-                    (state?.phase === "bonuses" && myBonus > 0)) && (
-                    <div
-                      className="win-burst"
-                      key={`${state?.round}-${state?.phase}`}
-                      aria-hidden="true"
-                    >
-                      {Array.from({ length: 12 }, (_, i) => (
-                        <i key={i} style={{ "--i": i } as CSSProperties} />
-                      ))}
-                    </div>
-                  )}
-                  {(state?.phase === "settled" ||
-                    state?.phase === "betting") &&
-                    ownGamble &&
-                    (gambleOpen ? (
-                      <div className="table-gamble-overlay">
-                        <GamblePanel
-                          gamble={ownGamble}
-                          disabled={disabled}
-                          onGamble={gamble}
-                          onCashout={cashout}
-                          onClose={() => {
-                            setGambleOpen(false);
-                            setGamblePromptFeatured(false);
-                          }}
-                        />
-                      </div>
-                    ) : ownGamble.status === "available" ? (
-                      <div
-                        className={`table-gamble-prompt-anchor table-gamble-prompt-edge ${gamblePromptFeatured ? "is-featured" : "is-compact"}`}
-                      >
-                        <GamblePrompt
-                          stake={ownGamble.stake}
-                          disabled={disabled}
-                          compact={!gamblePromptFeatured}
-                          onOpen={() => setGambleOpen(true)}
-                        />
-                      </div>
-                    ) : null)}
-                </div>
-                <div
-                  className="table-status-announcer"
-                  role="status"
-                  aria-live="polite"
-                >
-                  {!profile
-                    ? "Votre place vous attend."
-                    : !connected
-                      ? "Connexion à la table…"
-                      : (state?.message ?? "Bienvenue à la table.")}
-                </div>
-                {showControlsPanel && (
-                  <div
-                    className={`controls-panel ${betting ? "controls-betting" : ""} ${myTurn || insuranceSeat ? "controls-active controls-decision" : ""}`}
-                    aria-label="Actions de jeu"
-                  >
-                    {!myTurn && !insuranceSeat && (
-                      <div className="controls-heading">
-                        <div>
-                          <span className="section-kicker">
-                            {betting
-                              ? "À VOUS DE MISER"
-                              : state?.phase === "insurance"
-                                ? "ASSURANCE · AS DU CROUPIER"
-                                : state?.phase === "shuffling"
-                                  ? "MÉLANGE EN COURS"
-                                  : "LA PARTIE CONTINUE"}
-                          </span>
-                          <h2>{subtitle}</h2>
-                        </div>
-                        {betting && (
-                          <span className="selected-hand-label">
-                            {seat ? `Main ${seat.index + 1}` : "Spectateur"}
-                            {ownSeats.length > 1 && (
-                              <span> / {ownSeats.length} mains</span>
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    <AnimatedMenu active={betting} className="betting-actions">
-                      {betting ? (
-                        <>
-                          <div className="chip-rack">
-                            <div className="chip-picker">
-                              <ChipSlider
-                                pages={BLACKJACK_CHIP_PRESETS}
-                                balance={chipBalance}
-                                selected={chip}
-                                disabled={!!me?.ready}
-                                onSelect={selectChip}
-                                onPageChange={(page) => {
-                                  const nextChip = affordableChipInPage(
-                                    BLACKJACK_CHIP_PRESETS[page] ?? [],
-                                    chipBalance,
-                                  );
-                                  if (nextChip !== undefined) setChip(nextChip);
-                                }}
-                              />
-                              <span className="rack-divider" />
-                              <button
-                                className="icon-button repeat-bet"
-                                disabled={
-                                  disabled ||
-                                  !previousBetTotal ||
-                                  totalBet > 0 ||
-                                  previousBetTotal > balance ||
-                                  !!me?.ready
-                                }
-                                onClick={repeatBet}
-                                title={
-                                  previousBetTotal
-                                    ? `Répéter la mise précédente (${credits(previousBetTotal)} crédits)`
-                                    : "Aucune mise précédente"
-                                }
-                                aria-label="Répéter la mise précédente"
-                              >
-                                <Repeat2 size={16} />
-                                <span>Répéter</span>
-                              </button>
-                              <button
-                                className="icon-button undo-bet"
-                                disabled={
-                                  disabled || !betHistory.length || !!me?.ready
-                                }
-                                onClick={undoBet}
-                                title="Annuler le dernier jeton"
-                                aria-label="Annuler le dernier jeton"
-                              >
-                                <RotateCcw size={17} />
-                              </button>
-                              <HoldToConfirmButton
-                                disabled={disabled || !totalBet || !!me?.ready}
-                                onConfirm={clearBets}
-                                title="Maintenir pour retirer toutes vos mises"
-                                ariaLabel="Maintenir pour retirer toutes vos mises"
-                              >
-                                <X size={17} />
-                              </HoldToConfirmButton>
-                            </div>
-                            <span className="chip-rack-hint">
-                              Jeton de <b>{chipLabel(chip)}</b> sélectionné ·
-                              cliquez sur le tapis pour miser
-                            </span>
-                          </div>
-                          <div className="bet-confirm">
-                            <span>
-                              MISE TOTALE
-                              <b>
-                                {credits(totalBet)} <small>cr.</small>
-                              </b>
-                            </span>
+                  <AnimatedMenu active={betting} className="betting-actions">
+                    {betting ? (
+                      <>
+                        <div className="chip-rack">
+                          <div className="chip-picker">
+                            <ChipSlider
+                              pages={BLACKJACK_CHIP_PRESETS}
+                              balance={chipBalance}
+                              selected={chip}
+                              disabled={!!me?.ready}
+                              onSelect={selectChip}
+                              onPageChange={(page) => {
+                                const nextChip = affordableChipInPage(
+                                  BLACKJACK_CHIP_PRESETS[page] ?? [],
+                                  chipBalance,
+                                );
+                                if (nextChip !== undefined) setChip(nextChip);
+                              }}
+                            />
+                            <span className="rack-divider" />
                             <button
-                              type="button"
-                              className="icon-button repeat-bet mobile-repeat-bet"
+                              className="icon-button repeat-bet"
                               disabled={
                                 disabled ||
                                 !previousBetTotal ||
@@ -2219,229 +2071,281 @@ export function BlackjackCasino({
                               <span>Répéter</span>
                             </button>
                             <button
-                              className={`button primary deal-button ${me?.ready ? "is-ready" : ""}`}
-                              disabled={disabled || totalBet === 0}
-                              onClick={() =>
-                                command({ type: "ready", ready: !me?.ready })
-                              }
-                            >
-                              {me?.ready ? (
-                                <>
-                                  <Check size={18} />
-                                  Prêt · annuler
-                                </>
-                              ) : (
-                                <>
-                                  Je suis prêt
-                                  <ArrowRight size={18} />
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </>
-                      ) : null}
-                    </AnimatedMenu>
-                    {betting && (
-                      <div className="controls-footnote">
-                        <span>
-                          <ShieldCheck size={12} />
-                          Misez directement sur Blackjack, 21+3 ou Super Pairs.
-                        </span>
-                        {seat && (
-                          <button
-                            className="text-button"
-                            disabled={disabled}
-                            title="Annuler votre place et retirer ses mises"
-                            onClick={() => releaseSeat(seat)}
-                          >
-                            Libérer cette place
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    <AnimatedMenu
-                      active={!!insuranceSeat}
-                      className="play-actions insurance-actions"
-                    >
-                      {insuranceSeat && (
-                        <>
-                          <button
-                            className="button insurance-decline"
-                            disabled={disabled}
-                            aria-label={`Refuser l’assurance pour la main ${insuranceSeat.index + 1}`}
-                            onClick={() =>
-                              command({
-                                type: "insurance",
-                                seat: insuranceSeat.index,
-                                take: false,
-                              })
-                            }
-                          >
-                            <span>
-                              Refuser<small>Continuer</small>
-                            </span>
-                          </button>
-                          <button
-                            className="button insurance-accept"
-                            disabled={
-                              disabled || balance < insuranceSeat.bet.main / 2
-                            }
-                            aria-label={`Assurer la main ${insuranceSeat.index + 1} pour ${credits(insuranceSeat.bet.main / 2)} crédits. Gain net de ${credits(insuranceSeat.bet.main)} crédits si le croupier a un blackjack`}
-                            onClick={() =>
-                              command({
-                                type: "insurance",
-                                seat: insuranceSeat.index,
-                                take: true,
-                              })
-                            }
-                          >
-                            <ShieldCheck size={20} />
-                            <span>
-                              Assurer
-                              <small>
-                                {credits(insuranceSeat.bet.main / 2)} cr.
-                              </small>
-                            </span>
-                          </button>
-                        </>
-                      )}
-                    </AnimatedMenu>
-                    <AnimatedMenu
-                      active={!!myTurn && !!activeHand}
-                      className="play-actions"
-                    >
-                      {myTurn && activeHand ? (
-                        <>
-                          <button
-                            className="button hit-button"
-                            disabled={disabled}
-                            onClick={() =>
-                              command({ type: "hit", handId: activeHand.id })
-                            }
-                          >
-                            <Plus size={20} />
-                            <span>
-                              Carte<small>Tirer une carte</small>
-                            </span>
-                          </button>
-                          <button
-                            className="button stand-button"
-                            disabled={disabled}
-                            onClick={() =>
-                              command({ type: "stand", handId: activeHand.id })
-                            }
-                          >
-                            <Minus size={20} />
-                            <span>
-                              Rester<small>Garder votre main</small>
-                            </span>
-                          </button>
-                          <div
-                            className={`double-action ${doubleChoice === activeHand.id && !doubleChoiceClosing ? "choice-open" : ""}`}
-                          >
-                            <button
-                              className="button secondary double-trigger"
+                              className="icon-button undo-bet"
                               disabled={
-                                disabled ||
-                                activeHand.cards.length !== 2 ||
-                                activeHand.splitAces ||
-                                balance < activeHand.bet
+                                disabled || !betHistory.length || !!me?.ready
                               }
-                              aria-haspopup="menu"
-                              aria-expanded={
-                                doubleChoice === activeHand.id &&
-                                !doubleChoiceClosing
-                              }
-                              onClick={() => {
-                                if (doubleChoice === activeHand.id) {
-                                  closeDoubleChoice();
-                                  return;
-                                }
-                                if (doubleCloseTimer.current !== null) {
-                                  window.clearTimeout(doubleCloseTimer.current);
-                                  doubleCloseTimer.current = null;
-                                }
-                                setDoubleChoiceClosing(false);
-                                setDoubleChoice(activeHand.id);
-                              }}
+                              onClick={undoBet}
+                              title="Annuler le dernier jeton"
+                              aria-label="Annuler le dernier jeton"
                             >
-                              <span className="double-icon">×2</span>
-                              <span>
-                                Doubler<small>Choisir la révélation</small>
-                              </span>
-                              <ChevronDown className="double-chevron" size={14} />
+                              <RotateCcw size={17} />
                             </button>
-                            {doubleChoice === activeHand.id && (
-                              <div
-                                className={`double-choice-menu ${doubleChoiceClosing ? "is-closing" : ""}`}
-                                role="menu"
-                                aria-label="Révélation de la carte doublée"
-                              >
-                                <button
-                                  role="menuitem"
-                                  onClick={() => {
-                                    closeDoubleChoice();
-                                    void command({
-                                      type: "double",
-                                      handId: activeHand.id,
-                                      reveal: "now",
-                                    });
-                                  }}
-                                >
-                                  <Eye size={17} />
-                                  <span>
-                                    Carte visible
-                                    <small>Révélée immédiatement</small>
-                                  </span>
-                                </button>
-                                <button
-                                  role="menuitem"
-                                  onClick={() => {
-                                    closeDoubleChoice();
-                                    void command({
-                                      type: "double",
-                                      handId: activeHand.id,
-                                      reveal: "dealer",
-                                    });
-                                  }}
-                                >
-                                  <EyeOff size={17} />
-                                  <span>
-                                    Carte cachée
-                                    <small>Après le croupier</small>
-                                  </span>
-                                </button>
-                              </div>
-                            )}
+                            <HoldToConfirmButton
+                              disabled={disabled || !totalBet || !!me?.ready}
+                              onConfirm={clearBets}
+                              title="Maintenir pour retirer toutes vos mises"
+                              ariaLabel="Maintenir pour retirer toutes vos mises"
+                            >
+                              <X size={17} />
+                            </HoldToConfirmButton>
                           </div>
+                          <span className="chip-rack-hint">
+                            Jeton de <b>{chipLabel(chip)}</b> sélectionné ·
+                            cliquez sur le tapis pour miser
+                          </span>
+                        </div>
+                        <div className="bet-confirm">
+                          <span>
+                            MISE TOTALE
+                            <b>
+                              {credits(totalBet)} <small>cr.</small>
+                            </b>
+                          </span>
                           <button
-                            className="button secondary"
+                            type="button"
+                            className="icon-button repeat-bet mobile-repeat-bet"
                             disabled={
                               disabled ||
-                              !canSplitCards(activeHand.cards) ||
-                              activeHand.splitAces ||
-                              (activeSeat?.hands.length ?? 0) >= 4 ||
-                              balance < activeHand.bet
+                              !previousBetTotal ||
+                              totalBet > 0 ||
+                              previousBetTotal > balance ||
+                              !!me?.ready
                             }
+                            onClick={repeatBet}
+                            title={
+                              previousBetTotal
+                                ? `Répéter la mise précédente (${credits(previousBetTotal)} crédits)`
+                                : "Aucune mise précédente"
+                            }
+                            aria-label="Répéter la mise précédente"
+                          >
+                            <Repeat2 size={16} />
+                            <span>Répéter</span>
+                          </button>
+                          <button
+                            className={`button primary deal-button ${me?.ready ? "is-ready" : ""}`}
+                            disabled={disabled || totalBet === 0}
                             onClick={() =>
-                              command({ type: "split", handId: activeHand.id })
+                              command({ type: "ready", ready: !me?.ready })
                             }
                           >
-                            <Layers2 size={19} />
-                            <span>
-                              Séparer<small>Deux mains</small>
-                            </span>
+                            {me?.ready ? (
+                              <>
+                                <Check size={18} />
+                                Prêt · annuler
+                              </>
+                            ) : (
+                              <>
+                                Je suis prêt
+                                <ArrowRight size={18} />
+                              </>
+                            )}
                           </button>
-                        </>
-                      ) : null}
-                    </AnimatedMenu>
-                  </div>
-                )}
-              </section>
-            </div>
+                        </div>
+                      </>
+                    ) : null}
+                  </AnimatedMenu>
+                  {betting && (
+                    <div className="controls-footnote">
+                      <span>
+                        <ShieldCheck size={12} />
+                        Misez directement sur Blackjack, 21+3 ou Super Pairs.
+                      </span>
+                      {seat && (
+                        <button
+                          className="text-button"
+                          disabled={disabled}
+                          title="Annuler votre place et retirer ses mises"
+                          onClick={() => releaseSeat(seat)}
+                        >
+                          Libérer cette place
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <AnimatedMenu
+                    active={!!insuranceSeat}
+                    className="play-actions insurance-actions"
+                  >
+                    {insuranceSeat && (
+                      <>
+                        <button
+                          className="button insurance-decline"
+                          disabled={disabled}
+                          aria-label={`Refuser l’assurance pour la main ${insuranceSeat.index + 1}`}
+                          onClick={() =>
+                            command({
+                              type: "insurance",
+                              seat: insuranceSeat.index,
+                              take: false,
+                            })
+                          }
+                        >
+                          <span>
+                            Refuser<small>Continuer</small>
+                          </span>
+                        </button>
+                        <button
+                          className="button insurance-accept"
+                          disabled={
+                            disabled || balance < insuranceSeat.bet.main / 2
+                          }
+                          aria-label={`Assurer la main ${insuranceSeat.index + 1} pour ${credits(insuranceSeat.bet.main / 2)} crédits. Gain net de ${credits(insuranceSeat.bet.main)} crédits si le croupier a un blackjack`}
+                          onClick={() =>
+                            command({
+                              type: "insurance",
+                              seat: insuranceSeat.index,
+                              take: true,
+                            })
+                          }
+                        >
+                          <ShieldCheck size={20} />
+                          <span>
+                            Assurer
+                            <small>
+                              {credits(insuranceSeat.bet.main / 2)} cr.
+                            </small>
+                          </span>
+                        </button>
+                      </>
+                    )}
+                  </AnimatedMenu>
+                  <AnimatedMenu
+                    active={!!myTurn && !!activeHand}
+                    className="play-actions"
+                  >
+                    {myTurn && activeHand ? (
+                      <>
+                        <button
+                          className="button hit-button"
+                          disabled={disabled}
+                          onClick={() =>
+                            command({ type: "hit", handId: activeHand.id })
+                          }
+                        >
+                          <Plus size={20} />
+                          <span>
+                            Carte<small>Tirer une carte</small>
+                          </span>
+                        </button>
+                        <button
+                          className="button stand-button"
+                          disabled={disabled}
+                          onClick={() =>
+                            command({ type: "stand", handId: activeHand.id })
+                          }
+                        >
+                          <Minus size={20} />
+                          <span>
+                            Rester<small>Garder votre main</small>
+                          </span>
+                        </button>
+                        <div
+                          className={`double-action ${doubleChoice === activeHand.id && !doubleChoiceClosing ? "choice-open" : ""}`}
+                        >
+                          <button
+                            className="button secondary double-trigger"
+                            disabled={
+                              disabled ||
+                              activeHand.cards.length !== 2 ||
+                              activeHand.splitAces ||
+                              balance < activeHand.bet
+                            }
+                            aria-haspopup="menu"
+                            aria-expanded={
+                              doubleChoice === activeHand.id &&
+                              !doubleChoiceClosing
+                            }
+                            onClick={() => {
+                              if (doubleChoice === activeHand.id) {
+                                closeDoubleChoice();
+                                return;
+                              }
+                              if (doubleCloseTimer.current !== null) {
+                                window.clearTimeout(doubleCloseTimer.current);
+                                doubleCloseTimer.current = null;
+                              }
+                              setDoubleChoiceClosing(false);
+                              setDoubleChoice(activeHand.id);
+                            }}
+                          >
+                            <span className="double-icon">×2</span>
+                            <span>
+                              Doubler<small>Choisir la révélation</small>
+                            </span>
+                            <ChevronDown className="double-chevron" size={14} />
+                          </button>
+                          {doubleChoice === activeHand.id && (
+                            <div
+                              className={`double-choice-menu ${doubleChoiceClosing ? "is-closing" : ""}`}
+                              role="menu"
+                              aria-label="Révélation de la carte doublée"
+                            >
+                              <button
+                                role="menuitem"
+                                onClick={() => {
+                                  closeDoubleChoice();
+                                  void command({
+                                    type: "double",
+                                    handId: activeHand.id,
+                                    reveal: "now",
+                                  });
+                                }}
+                              >
+                                <Eye size={17} />
+                                <span>
+                                  Carte visible
+                                  <small>Révélée immédiatement</small>
+                                </span>
+                              </button>
+                              <button
+                                role="menuitem"
+                                onClick={() => {
+                                  closeDoubleChoice();
+                                  void command({
+                                    type: "double",
+                                    handId: activeHand.id,
+                                    reveal: "dealer",
+                                  });
+                                }}
+                              >
+                                <EyeOff size={17} />
+                                <span>
+                                  Carte cachée
+                                  <small>Après le croupier</small>
+                                </span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          className="button secondary"
+                          disabled={
+                            disabled ||
+                            !canSplitCards(activeHand.cards) ||
+                            activeHand.splitAces ||
+                            (activeSeat?.hands.length ?? 0) >= 4 ||
+                            balance < activeHand.bet
+                          }
+                          onClick={() =>
+                            command({ type: "split", handId: activeHand.id })
+                          }
+                        >
+                          <Layers2 size={19} />
+                          <span>
+                            Séparer<small>Deux mains</small>
+                          </span>
+                        </button>
+                      </>
+                    ) : null}
+                  </AnimatedMenu>
+                </div>
+              )}
+            </section>
           </div>
-        </main>
-      </div>
+        </div>
+      </main>
 
       {notice && (
         <div
@@ -2806,6 +2710,6 @@ export function BlackjackCasino({
           </p>
         </Modal>
       )}
-    </div>
+    </>
   );
 }

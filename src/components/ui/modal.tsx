@@ -9,11 +9,13 @@ export function Modal({
   children,
   onClose,
   className = "",
+  showCloseButton = true,
 }: {
   title: string;
   children: ReactNode;
   onClose?: () => void;
   className?: string;
+  showCloseButton?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const closeTimer = useRef<number | null>(null);
@@ -63,7 +65,7 @@ export function Modal({
         }
       }}
     >
-      {onClose && (
+      {onClose && showCloseButton && (
         <button
           className="icon-button modal-close"
           onClick={requestClose}

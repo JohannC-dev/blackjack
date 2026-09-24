@@ -392,6 +392,16 @@
   border: 1px solid #b79afa70;
   opacity: 0.45;
   animation: climberIn 0.4s var(--ease) both;
+  padding: 0;
+  cursor: pointer;
+}
+.climber [data-slot="avatar"] {
+  width: 18px;
+  height: 18px;
+}
+.climber:hover,
+.climber:focus-visible {
+  opacity: 1;
 }
 .climber[data-lucky] {
   color: #5a3b05;
@@ -1137,9 +1147,6 @@
     grid-template-columns: 34px 14px auto 44px;
     gap: 6px;
     padding-right: 8px;
-  }
-  .climber:not([data-me]) {
-    display: none;
   }
   .difficulties {
     flex-wrap: wrap;
