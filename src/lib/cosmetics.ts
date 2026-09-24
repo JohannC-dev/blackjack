@@ -51,11 +51,7 @@ export type CosmeticStatus = "draft" | "active" | "retired";
 
 /** How a player came to own an item, kept for the collection wording. */
 export type CosmeticSource =
-  | "parrainage-filleul"
-  | "parrainage-parrain"
-  | "streak"
-  | "grant"
-  | "purchase";
+  "parrainage-filleul" | "parrainage-parrain" | "streak" | "grant" | "purchase";
 
 export const COSMETIC_SOURCE_LABELS: Record<CosmeticSource, string> = {
   "parrainage-filleul": "Reçu en tant que filleul",

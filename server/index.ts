@@ -30,7 +30,11 @@ import { areFriends, friendIdsOf } from "./social/repository";
 import { handleReferralRequest } from "./referral/http";
 import { handleCosmeticRequest } from "./cosmetics/http";
 import { onReferralCompleted } from "./referral/events";
-import { checkInDaily, spinDailyWheel } from "./daily/repository";
+import {
+  DailyDatabaseError,
+  checkInDaily,
+  spinDailyWheel,
+} from "./daily/repository";
 import {
   GameError,
   ServerClock,
@@ -423,9 +427,20 @@ function publishWallet(playerId: string, socketId?: string) {
   if (socketId) io.to(socketId).emit("wallet", previous);
 }
 
-/** Runs a streak query, rejecting with its own error and message. */
+/**
+ * Runs a streak query, rejecting with its own error and message. A defect
+ * (a broken invariant) is logged and shown as the usual outage message.
+ */
 async function runDaily<A, E>(effect: Parameters<typeof runDatabase<A, E>>[0]) {
-  const result = await runDatabase(Effect.either(effect));
+  const result = await runDatabase(
+    Effect.either(
+      effect.pipe(
+        Effect.catchAllDefect((cause) =>
+          Effect.fail(new DailyDatabaseError({ cause })),
+        ),
+      ),
+    ),
+  );
   if (Either.isLeft(result)) throw result.left;
   return result.right;
 }

@@ -31,6 +31,22 @@
   color: #eee4d3;
 }
 
+@media (max-width: 700px) {
+  .streak-badge {
+    height: 34px;
+    padding: 0 9px;
+  }
+  .streak-badge b {
+    font-size: 13px;
+  }
+}
+@media (max-width: 450px) {
+  /* The top bar drops its gaps on phones. */
+  .streak-badge {
+    margin: 0 8px;
+  }
+}
+
 .streak-track {
   display: grid;
   grid-template-columns: repeat(10, 1fr);
