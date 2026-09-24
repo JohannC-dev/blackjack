@@ -397,7 +397,7 @@ export const cosmetic = pgTable(
     ),
     check(
       "cosmetic_rarity_values",
-      sql`${table.rarity} in ('common', 'rare', 'epic', 'legendary')`,
+      sql`${table.rarity} in ('common', 'rare', 'epic', 'legendary', 'exclusive')`,
     ),
     check(
       "cosmetic_status_values",

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#140a2a"/>
+      <stop offset=".5" stop-color="#43246f"/>
+      <stop offset=".78" stop-color="#b34f8e"/>
+      <stop offset="1" stop-color="#f19a86"/>
+    </linearGradient>
+    <radialGradient id="moon" cx=".4" cy=".35" r=".7">
+      <stop offset="0" stop-color="#fffaf0"/>
+      <stop offset="1" stop-color="#f1d9a8"/>
+    </radialGradient>
+    <radialGradient id="halo" r=".5">
+      <stop offset="0" stop-color="#ffe9c4" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#ffe9c4" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbe6b0"/>
+      <stop offset="1" stop-color="#c0914a"/>
+    </linearGradient>
+  </defs>
+  <rect width="250" height="350" rx="10" fill="url(#sky)"/>
+  <path d="M-10 120C40 90 90 140 140 110s90-40 120-20" fill="none" stroke="#7af0c4" stroke-opacity=".22" stroke-width="18" stroke-linecap="round"/>
+  <path d="M-10 150C50 125 100 165 150 140s80-30 110-15" fill="none" stroke="#e98ad0" stroke-opacity=".2" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="125" cy="232" r="90" fill="url(#halo)"/>
+  <circle cx="125" cy="232" r="46" fill="url(#moon)"/>
+  <path d="M0 262c30-14 52-8 78-18s50-4 72 2 55-14 100-4v108H0Z" fill="#2a1540"/>
+  <path d="M0 290c40-12 80 2 125-6s85-10 125 0v66H0Z" fill="#1a0d2b"/>
+  <g fill="#fff">
+    <circle cx="44" cy="52" r="2.2"/>
+    <circle cx="92" cy="34" r="1.4"/>
+    <circle cx="160" cy="58" r="1.8"/>
+    <circle cx="206" cy="36" r="2.4"/>
+    <circle cx="196" cy="96" r="1.3"/>
+    <circle cx="58" cy="100" r="1.5"/>
+    <path d="M125 60l2.5 7 7 2.5-7 2.5-2.5 7-2.5-7-7-2.5 7-2.5z"/>
+  </g>
+  <rect x="12" y="12" width="226" height="326" rx="8" fill="none" stroke="url(#gold)" stroke-width="2.5"/>
+  <path d="M22 44V30a8 8 0 0 1 8-8h14M206 22h14a8 8 0 0 1 8 8v14M228 306v14a8 8 0 0 1-8 8h-14M44 328H30a8 8 0 0 1-8-8v-14" fill="none" stroke="url(#gold)" stroke-width="2" stroke-linecap="round"/>
+</svg>

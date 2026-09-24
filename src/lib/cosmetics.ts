@@ -24,11 +24,16 @@ export function isCosmeticKind(value: unknown): value is CosmeticKind {
   return COSMETIC_KINDS.includes(value as CosmeticKind);
 }
 
+/**
+ * The first four say what an item is worth; "exclusive" says it is never
+ * sold, only earned (parrainage, events).
+ */
 export const COSMETIC_RARITIES = [
   "common",
   "rare",
   "epic",
   "legendary",
+  "exclusive",
 ] as const;
 
 export type CosmeticRarity = (typeof COSMETIC_RARITIES)[number];
@@ -38,6 +43,7 @@ export const COSMETIC_RARITY_LABELS: Record<CosmeticRarity, string> = {
   rare: "Rare",
   epic: "Épique",
   legendary: "Légendaire",
+  exclusive: "Exclusif",
 };
 
 /** draft: hidden; active: listed to everyone; retired: kept by its owners. */

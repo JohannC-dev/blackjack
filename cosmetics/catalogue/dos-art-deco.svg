@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7e3a3"/>
+      <stop offset=".5" stop-color="#d4a94f"/>
+      <stop offset="1" stop-color="#9c7331"/>
+    </linearGradient>
+  </defs>
+  <rect width="250" height="350" rx="10" fill="#111015"/>
+  <g stroke="#d4a94f" stroke-opacity=".7" fill="none" stroke-width="1.4">
+    <path d="M125 175 30 330M125 175 70 330M125 175 105 330M125 175 145 330M125 175 180 330M125 175 220 330"/>
+    <path d="M125 175 30 20M125 175 70 20M125 175 105 20M125 175 145 20M125 175 180 20M125 175 220 20"/>
+  </g>
+  <g fill="#111015" stroke="url(#gold)" stroke-width="2.5">
+    <path d="M40 330a85 85 0 0 1 170 0Z"/>
+    <path d="M40 20a85 85 0 0 0 170 0Z"/>
+  </g>
+  <g fill="none" stroke="url(#gold)" stroke-width="2">
+    <path d="M62 330a63 63 0 0 1 126 0M84 330a41 41 0 0 1 82 0M106 330a19 19 0 0 1 38 0"/>
+    <path d="M62 20a63 63 0 0 0 126 0M84 20a41 41 0 0 0 82 0M106 20a19 19 0 0 0 38 0"/>
+  </g>
+  <path d="M125 135 152 162v26l-27 27-27-27v-26Z" fill="#111015" stroke="url(#gold)" stroke-width="3"/>
+  <path d="M125 150 140 165v20l-15 15-15-15v-20Z" fill="url(#gold)"/>
+  <rect x="10" y="10" width="230" height="330" rx="7" fill="none" stroke="url(#gold)" stroke-width="3"/>
+  <rect x="17" y="17" width="216" height="316" rx="4" fill="none" stroke="url(#gold)" stroke-opacity=".5"/>
+</svg>

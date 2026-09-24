@@ -34,6 +34,8 @@ Le parrainage débloquait déjà deux objets décrits dans le code (`src/lib/cos
 - Un SVG peut contenir du script : on ne l’affiche jamais inline, uniquement en `<img>`. La route qui le sert impose une `Content-Security-Policy` fermée.
 - Les objets du parrainage gardent leurs identifiants, donc les possessions existantes restent valables. Ils restent `active` sans visuel, affichés « Bientôt » et non équipables, jusqu’à ce qu’on importe leur image.
 - En dehors des tables, un joueur qui change de skin reste vu avec l’ancien par les autres jusqu’à ce que leur cache ait plus d’une minute et que son avatar soit de nouveau affiché. Lui voit son choix tout de suite.
+- Une cinquième rareté, `exclusive` (« Exclusif »), marque ce qui ne se vend jamais et ne s’obtient que par un événement (parrainage, lancement). Elle dit comment on obtient l’objet ; les quatre autres disent ce qu’il vaut.
+- Le catalogue de référence (manifeste et SVG) est versionné dans `cosmetics/catalogue/` : l’importer remet n’importe quelle base à niveau.
 - Deux scripts `package.json` alimentent le catalogue : `bun run cosmetics:import <dossier>` et `bun run cosmetics:grant <joueur> <skin>`.
 
 ## Alternatives examinées

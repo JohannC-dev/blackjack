@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350">
+  <defs>
+    <pattern id="bricks" width="40" height="20" patternUnits="userSpaceOnUse">
+      <path d="M0 .5h40M0 10.5h40M20 0v10M0 10v10M40 10v10" stroke="#ffffff" stroke-opacity=".05"/>
+    </pattern>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="250" height="350" rx="10" fill="#0b0912"/>
+  <rect width="250" height="350" rx="10" fill="url(#bricks)"/>
+  <g filter="url(#glow)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="20" y="20" width="210" height="310" rx="16" stroke="#ff4fb0" stroke-width="4"/>
+    <path transform="translate(85 76) scale(.8)" d="M50 6C58 22 90 36 90 60c0 15-11 24-23 24-7 0-12-3-15-7 1 8 5 14 11 18H37c6-4 10-10 11-18-3 4-8 7-15 7-12 0-23-9-23-24C10 36 42 22 50 6Z" stroke="#4ff0ff" stroke-width="4.5"/>
+    <text x="125" y="238" text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="38" letter-spacing="3" fill="#ffd1ec" stroke="#ff4fb0" stroke-width="1.5">MINUIT</text>
+    <path d="M60 264h130" stroke="#4ff0ff" stroke-width="3"/>
+    <path d="M78 280h94" stroke="#ff4fb0" stroke-width="2.5" stroke-dasharray="6 7"/>
+  </g>
+</svg>

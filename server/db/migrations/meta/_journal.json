@@ -78,6 +78,13 @@
       "when": 1790246298870,
       "tag": "0010_skins",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790249887319,
+      "tag": "0011_exclusive_rarity",
+      "breakpoints": true
     }
   ]
 }

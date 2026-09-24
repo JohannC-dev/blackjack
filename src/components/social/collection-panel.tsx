@@ -31,6 +31,7 @@ const RARITY_FRAMES: Record<CosmeticRarity, string> = {
   rare: "border-sky-400/40",
   epic: "border-minuit-purple/60",
   legendary: "border-amber-300/60",
+  exclusive: "border-minuit-mint/60",
 };
 
 const RARITY_TEXT: Record<CosmeticRarity, string> = {
@@ -38,6 +39,7 @@ const RARITY_TEXT: Record<CosmeticRarity, string> = {
   rare: "text-sky-300",
   epic: "text-minuit-purple",
   legendary: "text-amber-200",
+  exclusive: "text-minuit-mint",
 };
 
 /** What the collection shows while the player wears nothing of a kind. */
@@ -221,8 +223,9 @@ function Tile({
   return (
     <button
       type="button"
-      disabled={!wearable || busy}
-      onClick={onWear}
+      // The worn tile stays enabled so it does not look greyed out.
+      disabled={(!wearable && !worn) || busy}
+      onClick={wearable ? onWear : undefined}
       aria-pressed={worn}
       className={cn(
         "group relative flex flex-col items-center gap-2 rounded-xl border bg-white/[0.025] px-3 pt-4 pb-3 text-center transition-colors",
