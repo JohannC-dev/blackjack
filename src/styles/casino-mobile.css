@@ -1,0 +1,1757 @@
+﻿/* A phone-first blackjack layout. Desktop keeps its existing table and controls. */
+.mobile-repeat-bet {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .blackjack-casino-shell {
+    min-height: 100dvh;
+    overflow-x: clip;
+  }
+
+  .blackjack-casino-shell > div {
+    min-width: 0;
+  }
+
+  .blackjack-casino-shell .topbar {
+    height: 56px;
+    gap: 8px;
+    padding: 0 13px;
+  }
+
+  .blackjack-casino-shell .wordmark {
+    font-size: 18px;
+    letter-spacing: 3px;
+  }
+
+  .blackjack-casino-shell .topbar-right {
+    gap: 7px;
+  }
+
+  .blackjack-casino-shell .profile-avatar {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    font-size: 11px;
+  }
+
+  .blackjack-casino-shell .topbar-right .global-sound {
+    width: 34px;
+    height: 34px;
+  }
+
+  .blackjack-casino-shell .wallet {
+    gap: 6px;
+    padding: 6px 9px;
+  }
+
+  .blackjack-casino-shell .wallet > b {
+    font-size: 12px;
+  }
+
+  .blackjack-casino-shell .wallet > span,
+  .blackjack-casino-shell .wallet .wallet-coin {
+    display: none;
+  }
+
+  .blackjack-casino-shell main {
+    max-width: none;
+    padding: 10px 11px 22px;
+  }
+
+  .blackjack-casino-shell main:has(.controls-panel.controls-betting),
+  .blackjack-casino-shell main:has(.controls-panel.controls-decision) {
+    padding-bottom: calc(174px + env(safe-area-inset-bottom));
+  }
+
+  .blackjack-casino-shell .page-heading {
+    min-height: 31px;
+    margin: 0 2px 8px;
+    padding: 0;
+  }
+
+  .blackjack-casino-shell .page-heading .eyebrow,
+  .blackjack-casino-shell .page-heading .invite-button {
+    display: none;
+  }
+
+  .blackjack-casino-shell .page-heading h1 {
+    gap: 6px;
+    font-size: 18px;
+    letter-spacing: -0.6px;
+  }
+
+  .blackjack-casino-shell .page-heading h1 > span:not(.live-tag) {
+    font-size: 12px;
+  }
+
+  .blackjack-casino-shell .game-layout {
+    display: block;
+  }
+
+  .blackjack-casino-shell .table-panel {
+    --table-stage-height: clamp(350px, 47dvh, 420px);
+    --table-action-lift: 0px;
+    margin-bottom: 0;
+    border-radius: 15px;
+  }
+
+  .blackjack-casino-shell .table-toolbar {
+    min-height: 42px;
+    gap: 8px;
+    padding: 6px 9px;
+  }
+
+  .blackjack-casino-shell .table-identity {
+    min-width: 0;
+    gap: 6px;
+  }
+
+  .blackjack-casino-shell .table-identity b {
+    font-size: 8px;
+    letter-spacing: 0.7px;
+  }
+
+  .blackjack-casino-shell .table-separator,
+  .blackjack-casino-shell .table-description {
+    display: none;
+  }
+
+  .blackjack-casino-shell .table-toolbar-actions {
+    flex: 0 0 auto;
+    gap: 3px;
+  }
+
+  .blackjack-casino-shell .table-toolbar-actions .poker-sound {
+    width: 34px;
+    height: 34px;
+  }
+
+  .blackjack-casino-shell .table-toolbar .text-button {
+    min-height: 34px;
+    padding: 0 4px;
+    gap: 3px;
+    font-size: 9px;
+  }
+
+  .blackjack-casino-shell .table-stage {
+    height: var(--table-stage-height);
+  }
+
+  .blackjack-casino-shell .table-surface {
+    top: 7%;
+    right: 2.5%;
+    left: 2.5%;
+    height: 86%;
+    transform: perspective(900px) rotateX(5deg);
+  }
+
+  .blackjack-casino-shell .table-inner-line {
+    inset: 13px;
+  }
+
+  .blackjack-casino-shell .table-inner-line.second {
+    inset: 18px;
+  }
+
+  .blackjack-casino-shell .dealer {
+    top: 2px;
+  }
+
+  .blackjack-casino-shell .dealer-label {
+    gap: 7px;
+    margin-bottom: 6px;
+    font-size: 7px;
+    letter-spacing: 1.5px;
+  }
+
+  .blackjack-casino-shell .dealer-label > span {
+    width: 13px;
+  }
+
+  .blackjack-casino-shell .dealer-cards {
+    min-height: 68px;
+    gap: 4px;
+  }
+
+  .blackjack-casino-shell .dealer-cards .playing-card,
+  .blackjack-casino-shell .card-outline {
+    width: 46px;
+    min-width: 46px;
+    height: 66px;
+  }
+
+  .blackjack-casino-shell .card-outline {
+    border-radius: 6px;
+  }
+
+  .blackjack-casino-shell .dealer-score {
+    top: 86px;
+    padding: 3px 8px;
+    font-size: 9px;
+  }
+
+  .blackjack-casino-shell .card-shoe {
+    display: none;
+  }
+
+  .blackjack-casino-shell .felt-brand {
+    top: 35%;
+  }
+
+  .blackjack-casino-shell .felt-brand .felt-diamond {
+    margin-bottom: 5px;
+    font-size: 14px;
+  }
+
+  .blackjack-casino-shell .felt-brand h2 {
+    font-size: 21px;
+    letter-spacing: 6px;
+    padding-left: 6px;
+  }
+
+  .blackjack-casino-shell .felt-brand > p {
+    margin-top: 5px;
+    font-size: 5px;
+    letter-spacing: 1.5px;
+  }
+
+  .blackjack-casino-shell .felt-brand > div {
+    margin-top: 9px;
+    gap: 6px;
+    font-size: 5px;
+    letter-spacing: 1px;
+  }
+
+  .blackjack-casino-shell .seat {
+    width: 100px;
+    transform: translate(-50%, -8%);
+  }
+
+  .blackjack-casino-shell .seat-0 {
+    left: 12%;
+    top: 43%;
+  }
+
+  .blackjack-casino-shell .seat-1 {
+    left: 28%;
+    top: 63%;
+  }
+
+  .blackjack-casino-shell .seat-2 {
+    left: 50%;
+    top: 74%;
+  }
+
+  .blackjack-casino-shell .seat-3 {
+    left: 72%;
+    top: 63%;
+  }
+
+  .blackjack-casino-shell .seat-4 {
+    left: 88%;
+    top: 43%;
+  }
+
+  .blackjack-casino-shell .seat.my-seat.selected-seat,
+  .blackjack-casino-shell .seat.my-seat.current-seat {
+    left: 50%;
+    top: 75%;
+    z-index: 7;
+    width: min(150px, 43vw);
+    transform: translate(-50%, -6%);
+  }
+
+  .blackjack-casino-shell .seat.has-cards .seat-hands {
+    top: -80px;
+  }
+
+  .blackjack-casino-shell .seat.my-seat.selected-seat .seat-hands,
+  .blackjack-casino-shell .seat.my-seat.current-seat .seat-hands {
+    top: -94px;
+    max-width: 100%;
+  }
+
+  .blackjack-casino-shell .seat-hands {
+    gap: 9px;
+    min-height: 68px;
+  }
+
+  .blackjack-casino-shell .hand-cards > .playing-card {
+    width: 47px;
+    min-width: 47px;
+    height: 68px;
+  }
+
+  .blackjack-casino-shell .hand-cards > .playing-card + .playing-card {
+    margin-left: -22px;
+  }
+
+  .blackjack-casino-shell .hand-cards .card-pip {
+    font-size: 20px;
+  }
+
+  .blackjack-casino-shell .hand-cards .card-corner > b {
+    font-size: 13px;
+  }
+
+  .blackjack-casino-shell .hand-cards .card-corner > span {
+    font-size: 9px;
+  }
+
+  .blackjack-casino-shell .hand-score {
+    bottom: -9px;
+    min-height: 21px;
+    padding: 3px 6px;
+    font-size: 9px;
+  }
+
+  .blackjack-casino-shell .hand-result {
+    font-size: 8px;
+  }
+
+  .blackjack-casino-shell .seat-name-row {
+    margin-top: 3px;
+  }
+
+  .blackjack-casino-shell .seat-name {
+    max-width: 94px;
+    min-height: 28px;
+    margin-top: 0;
+    padding: 3px 6px;
+    border-radius: 9px;
+    background: #170f20b8;
+    font-size: 8px;
+  }
+
+  .blackjack-casino-shell .seat-name small {
+    display: none;
+  }
+
+  .blackjack-casino-shell .seat-name .avatar.tiny {
+    width: 17px;
+    min-width: 17px;
+    height: 17px;
+    font-size: 8px;
+  }
+
+  .blackjack-casino-shell .seat.empty .seat-name-row {
+    display: none;
+  }
+
+  .blackjack-casino-shell .seat-target {
+    width: 68px;
+    height: 68px;
+    gap: 5px;
+  }
+
+  .blackjack-casino-shell .seat-target > span {
+    font-size: 6px;
+    letter-spacing: 0.2px;
+  }
+
+  .blackjack-casino-shell .empty-bet-zones {
+    width: 100px;
+    height: 76px;
+  }
+
+  .blackjack-casino-shell .empty-bet-zones .seat-target {
+    left: 16px;
+    top: 3px;
+  }
+
+  .blackjack-casino-shell .table-bet-zones {
+    width: 108px;
+    height: 82px;
+  }
+
+  .blackjack-casino-shell .table-bet-spot .spot-label {
+    font-size: 5px;
+  }
+
+  .blackjack-casino-shell .table-round-result {
+    top: 39%;
+  }
+
+  .blackjack-casino-shell .table-panel .controls-panel.controls-betting,
+  .blackjack-casino-shell .table-panel .controls-panel.controls-decision {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 35;
+    display: flex;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    flex-direction: column;
+    gap: 0;
+    margin: 0;
+    padding: 10px 12px max(10px, env(safe-area-inset-bottom));
+    overflow: visible;
+    border: 1px solid #ffffff16;
+    border-bottom: 0;
+    border-radius: 17px 17px 0 0;
+    background: linear-gradient(180deg, #211a2bf5 0%, #130f1bf7 100%);
+    box-shadow:
+      0 -12px 36px #08050db0,
+      inset 0 1px #ffffff0a;
+    -webkit-backdrop-filter: blur(18px) saturate(120%);
+    backdrop-filter: blur(18px) saturate(120%);
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-betting
+    .controls-heading,
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .controls-heading,
+  .blackjack-casino-shell .table-panel .controls-panel .controls-footnote {
+    display: none;
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-betting
+    .betting-actions {
+    display: flex;
+    height: auto;
+    min-height: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 7px;
+    margin: 0;
+  }
+
+  .blackjack-casino-shell .table-panel .chip-rack {
+    position: static;
+    width: 100%;
+    transform: none;
+    gap: 5px;
+    align-items: stretch;
+  }
+
+  .blackjack-casino-shell .table-panel .chip-rack::before {
+    margin: 0 0 1px;
+    color: #a99bbb;
+    content: "CHOISISSEZ UN JETON";
+    font-size: 7px;
+    letter-spacing: 1.2px;
+    text-align: left;
+    text-shadow: none;
+  }
+
+  .blackjack-casino-shell .table-panel .chip-rack .chip-picker {
+    width: 100%;
+    justify-content: space-between;
+    gap: 3px;
+    padding: 0;
+  }
+
+  .blackjack-casino-shell .table-panel .chip-rack .chip {
+    width: clamp(32px, 10vw, 38px);
+    min-width: clamp(32px, 10vw, 38px);
+    height: clamp(32px, 10vw, 38px);
+    padding: 3px;
+  }
+
+  .blackjack-casino-shell .table-panel .chip-rack .chip > span {
+    font-size: 10px;
+  }
+
+  .blackjack-casino-shell .table-panel .chip-rack .chip-range-button {
+    width: 23px;
+    height: 34px;
+    flex: 0 0 23px;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+  }
+
+  .blackjack-casino-shell .table-panel .chip-rack .rack-divider {
+    display: none;
+  }
+
+  .blackjack-casino-shell .table-panel .chip-rack .repeat-bet,
+  .blackjack-casino-shell .table-panel .chip-rack .undo-bet,
+  .blackjack-casino-shell .table-panel .chip-rack .hold-to-confirm {
+    width: 30px;
+    min-width: 30px;
+    height: 34px;
+    flex: 0 0 30px;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .chip-rack
+    .repeat-bet:not(.mobile-repeat-bet) {
+    display: none;
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .chip-rack
+    .repeat-bet
+    > span:not(.hold-to-confirm-progress) {
+    display: none;
+  }
+
+  .blackjack-casino-shell .table-panel .chip-rack-hint {
+    margin: 0;
+    overflow: hidden;
+    color: #9b8cae;
+    font-size: 7px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    text-align: left;
+  }
+
+  .blackjack-casino-shell .table-panel .bet-confirm {
+    position: static;
+    inset: auto;
+    display: flex;
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0;
+    padding: 7px 0 0;
+    border-top: 1px solid #ffffff12;
+    transform: none;
+  }
+
+  .blackjack-casino-shell .table-panel .bet-confirm > span {
+    flex: 0 0 auto;
+    font-size: 6px;
+    text-align: left;
+  }
+
+  .blackjack-casino-shell .table-panel .bet-confirm > span > b {
+    margin-top: 1px;
+    font-size: 15px;
+  }
+
+  .blackjack-casino-shell .table-panel .bet-confirm .deal-button {
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    min-height: 46px;
+    flex: 1 1 auto;
+    border-radius: 10px;
+    font-size: 11px;
+  }
+
+  .blackjack-casino-shell .table-panel .bet-confirm .mobile-repeat-bet {
+    display: grid;
+    width: 36px;
+    min-width: 36px;
+    height: 38px;
+    flex: 0 0 36px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #ffffff20;
+    border-radius: 9px;
+    background: #ffffff08;
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-betting
+    .betting-actions.is-closing
+    > .chip-rack,
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-betting
+    .betting-actions.is-closing
+    > .bet-confirm {
+    opacity: 0;
+    transform: none;
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .play-actions {
+    position: static;
+    display: grid;
+    width: 100%;
+    max-width: none;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 6px;
+    margin: 0;
+    transform: none;
+    --decision-size: auto;
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .play-actions::before {
+    position: static;
+    grid-column: 1 / -1;
+    margin: 0 0 1px;
+    color: #a99bbb;
+    content: "À VOUS DE JOUER";
+    font-size: 7px;
+    letter-spacing: 1.2px;
+    text-align: left;
+    text-shadow: none;
+    transform: none;
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .play-actions
+    > .button,
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .play-actions
+    > .double-action,
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .play-actions
+    > .double-action
+    > .button {
+    width: 100%;
+    min-width: 0;
+    height: 58px;
+    min-height: 58px;
+    flex: none;
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .play-actions
+    > .button,
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .play-actions
+    > .double-action
+    > .button {
+    gap: 2px;
+    padding: 5px 2px;
+    border-radius: 11px;
+    box-shadow: inset 0 1px #ffffff24;
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .play-actions
+    > .button
+    > span,
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .play-actions
+    > .double-action
+    > .button
+    > span {
+    font-size: 9px;
+    line-height: 1;
+    text-align: center;
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .play-actions
+    small {
+    display: none;
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .double-action {
+    min-width: 0;
+    height: 58px;
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .play-actions
+    .double-choice-menu {
+    bottom: calc(100% + 9px);
+    left: 50%;
+    width: min(220px, calc(100vw - 28px));
+    min-width: 0;
+    transform: translateX(-50%);
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .play-actions.is-closing {
+    opacity: 0;
+    transform: none;
+  }
+
+  .blackjack-casino-shell .table-panel .play-actions.insurance-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 451px) and (max-width: 700px) {
+  .blackjack-casino-shell .table-panel .controls-panel.controls-betting,
+  .blackjack-casino-shell .table-panel .controls-panel.controls-decision {
+    left: 55px;
+  }
+}
+
+@media (max-width: 360px) {
+  .blackjack-casino-shell .table-panel .chip-rack .repeat-bet {
+    display: none;
+  }
+
+  .blackjack-casino-shell .table-panel .controls-panel.controls-betting,
+  .blackjack-casino-shell .table-panel .controls-panel.controls-decision {
+    padding-right: 9px;
+    padding-left: 9px;
+  }
+
+  .blackjack-casino-shell
+    .table-panel
+    .controls-panel.controls-decision
+    .play-actions {
+    gap: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) and (max-width: 700px) {
+  .blackjack-casino-shell .table-panel .controls-panel .betting-actions,
+  .blackjack-casino-shell .table-panel .controls-panel .play-actions {
+    transition-duration: 0.01ms;
+  }
+}
+
+/* Phone layout shared by the games. Keep desktop rules above 700px untouched. */
+@media (max-width: 700px) {
+  .casino-shell {
+    --mobile-nav-height: 0px;
+    --mobile-dock-height: 232px;
+    min-height: 100dvh;
+    overflow-x: clip;
+  }
+
+  .casino-shell .topbar {
+    position: relative;
+    z-index: 25;
+    height: 56px;
+    gap: 8px;
+    padding: 0 12px;
+    background: #100e18;
+  }
+
+  .casino-shell .topbar-divider {
+    display: none;
+  }
+
+  .casino-shell .wordmark {
+    font-size: 17px;
+    letter-spacing: 3px;
+  }
+
+  .casino-shell .topbar-right {
+    gap: 7px;
+  }
+
+  .casino-shell .topbar .profile-avatar {
+    display: grid !important;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    font-size: 11px;
+  }
+
+  .casino-shell .topbar-right .global-sound {
+    width: 34px;
+    height: 34px;
+  }
+
+  .casino-shell .wallet {
+    gap: 6px;
+    padding: 6px 9px;
+  }
+
+  .casino-shell .wallet > b {
+    font-size: 12px;
+  }
+
+  .casino-shell .wallet > span,
+  .casino-shell .wallet .wallet-coin {
+    display: none;
+  }
+
+  .casino-shell main {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    margin-inline: 0;
+  }
+
+  .casino-shell .game-controls-bar {
+    position: fixed;
+    z-index: 36;
+    right: 0;
+    bottom: var(--mobile-nav-height);
+    left: 0;
+    box-sizing: border-box;
+    display: flex;
+    width: auto;
+    max-width: none;
+    max-height: min(
+      var(--mobile-dock-height),
+      calc(100dvh - 190px - var(--mobile-nav-height))
+    );
+    flex-direction: column;
+    flex-wrap: nowrap !important;
+    align-items: stretch;
+    gap: 7px;
+    margin: 0;
+    padding: 10px 12px max(10px, env(safe-area-inset-bottom));
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 1px solid #ffffff18;
+    border-bottom: 0;
+    border-radius: 16px 16px 0 0;
+    background: linear-gradient(180deg, #211a2bf5 0%, #130f1bf7 100%);
+    box-shadow:
+      0 -12px 36px #08050db0,
+      inset 0 1px #ffffff0a;
+    -webkit-backdrop-filter: blur(18px) saturate(120%);
+    backdrop-filter: blur(18px) saturate(120%);
+  }
+
+  .casino-shell .game-controls-bar > *,
+  .casino-shell .game-controls-bar .game-control-group {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .casino-shell .game-controls-bar .game-control-group {
+    gap: 5px;
+  }
+
+  .casino-shell .game-controls-bar .game-control-label {
+    font-size: 8px;
+    letter-spacing: 0.14em;
+  }
+
+  .casino-shell .game-controls-bar .game-options {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 5px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .casino-shell .game-controls-bar .game-options::-webkit-scrollbar,
+  .casino-shell .game-controls-bar .chip-picker::-webkit-scrollbar {
+    display: none;
+  }
+
+  .casino-shell .game-controls-bar .game-option {
+    min-width: 0;
+    min-height: 42px;
+    flex: 1 0 auto;
+    padding: 6px 8px;
+  }
+
+  .casino-shell .game-controls-bar .game-option small {
+    font-size: 7px;
+  }
+
+  .casino-shell .game-controls-bar .chip-picker {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .casino-shell .game-controls-bar .chip {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+  }
+
+  .casino-shell .game-controls-bar .chip-range-button {
+    width: 24px;
+    min-width: 24px;
+    height: 34px;
+    flex: 0 0 24px;
+  }
+
+  .casino-shell .game-controls-bar .game-action {
+    width: 100%;
+    min-width: 0;
+    min-height: 50px;
+    flex: none;
+    margin: 0;
+    padding: 7px 12px;
+  }
+
+  .casino-shell .game-controls-bar .game-action b {
+    font-size: 12px;
+  }
+
+  .casino-shell .game-controls-bar .game-action small {
+    font-size: 9px;
+  }
+
+  .casino-shell .game-controls-bar .mines-loop-control {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    flex: none;
+    margin: 0;
+    padding: 7px 0 0;
+    border-top: 1px solid #ffffff12;
+    border-left: 0;
+  }
+
+  .blackjack-casino-shell main:has(.controls-panel.controls-betting),
+  .blackjack-casino-shell main:has(.controls-panel.controls-decision) {
+    padding-bottom: calc(
+      190px + var(--mobile-nav-height) + env(safe-area-inset-bottom)
+    );
+  }
+
+  .blackjack-casino-shell .table-panel .controls-panel.controls-betting,
+  .blackjack-casino-shell .table-panel .controls-panel.controls-decision {
+    bottom: var(--mobile-nav-height);
+  }
+
+  .roulette-shell {
+    --mobile-dock-height: 202px;
+  }
+
+  .roulette-shell .roulette-page {
+    padding: 10px 10px
+      calc(var(--mobile-dock-height) + var(--mobile-nav-height) + 16px);
+    gap: 10px;
+  }
+
+  .roulette-shell .page-heading {
+    min-height: 38px;
+    margin: 0 2px 2px;
+  }
+
+  .roulette-shell .page-heading h1 {
+    gap: 5px;
+    font-size: 19px;
+  }
+
+  .roulette-shell .table-panel {
+    min-width: 0;
+    border-radius: 14px;
+  }
+
+  .roulette-shell .table-toolbar {
+    min-height: 40px;
+    padding: 6px 8px;
+  }
+
+  .roulette-shell .table-identity {
+    min-width: 0;
+    gap: 5px;
+  }
+
+  .roulette-shell .table-identity > span:last-child {
+    display: none;
+  }
+
+  .roulette-shell .roulette-stage {
+    min-width: 0;
+    padding: 12px 8px 18px;
+  }
+
+  .roulette-shell .roulette-board-zone {
+    order: 1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .roulette-shell .roulette-wheel-zone {
+    order: 2;
+    gap: 10px;
+    margin-top: 6px;
+  }
+
+  .roulette-shell .roulette-wheel-frame {
+    --wheel-size: min(56vw, 205px);
+  }
+
+  .roulette-shell .roulette-layout-scroll {
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
+  }
+
+  .roulette-shell .game-controls-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px;
+    grid-template-areas:
+      "chips chips"
+      "summary summary"
+      "action repeat";
+    padding: 8px 12px max(9px, env(safe-area-inset-bottom));
+  }
+
+  .roulette-shell .game-controls-bar > .game-control-group:first-child {
+    grid-area: chips;
+  }
+
+  .roulette-shell .game-controls-bar > .game-control-group:nth-child(2) {
+    grid-area: summary;
+  }
+
+  .roulette-shell .game-controls-bar .chip-picker {
+    flex-wrap: nowrap;
+  }
+
+  .roulette-shell .game-controls-bar .game-action {
+    grid-area: action;
+    min-height: 48px;
+  }
+
+  .roulette-shell .game-controls-bar .repeat-bet:not(.mobile-repeat-bet) {
+    display: none;
+  }
+
+  .roulette-shell .game-controls-bar .mobile-repeat-bet {
+    display: grid;
+    grid-area: repeat;
+    width: 40px;
+    min-width: 40px;
+    height: 46px;
+    align-self: end;
+    justify-self: end;
+    padding: 0;
+    border: 1px solid #ffffff20;
+    border-radius: 9px;
+    background: #ffffff08;
+  }
+
+  .tower-shell {
+    --mobile-dock-height: 230px;
+  }
+
+  .tower-shell main {
+    padding: 10px 11px
+      calc(var(--mobile-dock-height) + var(--mobile-nav-height) + 16px);
+  }
+
+  .tower-shell main > section[aria-label="La tour"] {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 300px;
+    height: clamp(300px, 42dvh, 360px);
+    flex: 0 0 auto;
+  }
+
+  .tower-shell .game-controls-bar {
+    gap: 7px;
+    padding: 9px 12px max(9px, env(safe-area-inset-bottom));
+  }
+
+  .tower-shell
+    .game-controls-bar
+    .game-control-group:first-child
+    .game-options {
+    min-height: 43px;
+  }
+
+  .tower-shell .game-controls-bar .game-option {
+    min-width: 73px;
+    min-height: 42px;
+  }
+
+  .mines-shell {
+    --mobile-dock-height: 214px;
+  }
+
+  .mines-shell .mines-page {
+    min-width: 0;
+    padding: 10px 12px
+      calc(var(--mobile-dock-height) + var(--mobile-nav-height) + 12px);
+  }
+
+  .mines-shell .mines-page-heading {
+    margin-bottom: 9px;
+  }
+
+  .mines-shell .mines-page-heading h1 {
+    font-size: 24px;
+  }
+
+  .mines-shell .mines-game-layout {
+    min-width: 0;
+  }
+
+  .mines-shell .mines-board-stage {
+    min-height: 0;
+    padding: 0 0 8px;
+  }
+
+  .mines-shell .mines-board-stage > .mines-board-wrap {
+    width: min(100%, 300px);
+    margin-inline: auto;
+  }
+
+  .mines-shell .mines-grid {
+    width: 100%;
+    gap: 7px;
+  }
+
+  .mines-shell .mines-cell {
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .mines-shell .mines-board-footer {
+    padding-top: 8px;
+  }
+
+  .mines-shell .game-controls-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 138px;
+    grid-template-areas:
+      "difficulty difficulty"
+      "bet bet"
+      "action pattern";
+    gap: 6px;
+    padding: 9px 12px max(9px, env(safe-area-inset-bottom));
+  }
+
+  .mines-shell .game-controls-bar .mines-difficulty-control {
+    grid-area: difficulty;
+  }
+
+  .mines-shell .game-controls-bar .mines-bet-control {
+    grid-area: bet;
+  }
+
+  .mines-shell .game-controls-bar .mines-difficulty-control {
+    gap: 2px;
+  }
+
+  .mines-shell .game-controls-bar .mines-difficulty-summary {
+    min-height: 22px;
+  }
+
+  .mines-shell .game-controls-bar .mines-difficulty-summary b {
+    font-size: 13px;
+  }
+
+  .mines-shell .game-controls-bar .mines-difficulty-slider {
+    height: 20px;
+    margin-top: 2px;
+  }
+
+  .mines-shell .game-controls-bar .game-action {
+    grid-area: action;
+    width: 100%;
+    min-height: 46px;
+  }
+
+  .mines-shell .game-controls-bar .mines-pattern-trigger {
+    min-height: 46px;
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .mines-shell .game-controls-bar .mines-pattern-trigger-copy small {
+    display: none;
+  }
+
+  .mines-shell .game-controls-bar .mines-loop-control {
+    grid-area: pattern;
+    width: 100%;
+    min-height: 46px;
+    flex: none;
+    padding: 0;
+    border: 0;
+  }
+
+  .chicken-shell {
+    --mobile-dock-height: 198px;
+  }
+
+  .chicken-shell main {
+    min-width: 0;
+    padding: 10px 11px
+      calc(var(--mobile-dock-height) + var(--mobile-nav-height) + 14px);
+  }
+
+  .chicken-shell main > section[aria-label="Route de Chicken"] {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    height: clamp(340px, 46dvh, 410px);
+  }
+
+  .chicken-shell
+    main
+    > section[aria-label="Route de Chicken"]
+    > div:last-child {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    gap: 7px;
+  }
+
+  .chicken-shell
+    main
+    > section[aria-label="Route de Chicken"]
+    > div:last-child
+    > span {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chicken-shell .game-controls-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 110px;
+    grid-template-areas:
+      "difficulty difficulty"
+      "bet bet"
+      "action auto";
+    gap: 6px;
+    padding: 9px 12px max(9px, env(safe-area-inset-bottom));
+  }
+
+  .chicken-shell .game-controls-bar .game-control-group:first-child {
+    grid-area: difficulty;
+  }
+
+  .chicken-shell .game-controls-bar .game-control-group:nth-child(2) {
+    grid-area: bet;
+  }
+
+  .chicken-shell
+    .game-controls-bar
+    .game-control-group:first-child
+    .game-options {
+    gap: 5px;
+  }
+
+  .chicken-shell .game-controls-bar .game-option {
+    min-height: 44px;
+  }
+
+  .chicken-shell .game-controls-bar .chip {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
+
+  .chicken-shell .game-controls-bar .game-action {
+    grid-area: action;
+    min-height: 46px;
+  }
+
+  .chicken-shell .game-controls-bar .game-auto-control {
+    display: flex;
+    grid-area: auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 46px;
+    flex: none;
+    padding: 0;
+    border: 0;
+  }
+
+  .chicken-shell .game-controls-bar .game-auto-control .game-auto-trigger {
+    min-height: 46px;
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .chicken-shell .game-controls-bar .game-auto-trigger-copy small {
+    display: none;
+  }
+
+  .chicken-shell .game-controls-bar > div:last-child > button {
+    min-height: 38px;
+    margin-top: 0;
+    padding-block: 5px;
+  }
+
+  .plinko-shell {
+    --mobile-dock-height: 210px;
+  }
+
+  .plinko-shell .topbar {
+    height: 56px;
+    padding: 0 12px;
+  }
+
+  .plinko-shell .plinko-page {
+    min-width: 0;
+    min-height: 0;
+    padding: 10px 10px
+      calc(var(--mobile-dock-height) + var(--mobile-nav-height) + 14px);
+  }
+
+  .plinko-shell .plinko-page-heading {
+    margin-bottom: 8px;
+  }
+
+  .plinko-shell .plinko-page-heading h1 {
+    font-size: 23px;
+    letter-spacing: -1px;
+  }
+
+  .plinko-shell .plinko-game-layout {
+    min-width: 0;
+    gap: 0;
+  }
+
+  .plinko-shell .plinko-board-stage {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    height: clamp(300px, 38dvh, 330px);
+    min-height: 0;
+    flex: 0 0 auto;
+    padding: 9px 8px 8px;
+  }
+
+  .plinko-shell .plinko-pins {
+    min-height: 0;
+  }
+
+  .plinko-shell .plinko-slots {
+    gap: 2px;
+  }
+
+  .plinko-shell .plinko-slot {
+    padding-inline: 1px;
+    letter-spacing: -0.05em;
+  }
+
+  .plinko-shell .game-controls-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 122px;
+    grid-template-areas:
+      "risk rows"
+      "bet bet"
+      "action series";
+    gap: 6px 10px;
+    padding: 9px 12px max(9px, env(safe-area-inset-bottom));
+  }
+
+  .plinko-shell .plinko-risk-control {
+    grid-area: risk;
+  }
+
+  .plinko-shell .plinko-rows-control {
+    grid-area: rows;
+  }
+
+  .plinko-shell .plinko-bet-control {
+    grid-area: bet;
+  }
+
+  .plinko-shell .game-controls-bar .game-action {
+    grid-area: action;
+    min-height: 46px;
+  }
+
+  .plinko-shell .game-controls-bar .mines-loop-control {
+    grid-area: series;
+    width: 100%;
+    min-height: 46px;
+    flex: none;
+    padding: 0;
+    border: 0;
+  }
+
+  .plinko-shell .game-controls-bar .mines-pattern-trigger {
+    min-height: 46px;
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .plinko-shell .game-controls-bar .mines-pattern-trigger-copy small {
+    display: none;
+  }
+
+  .plinko-shell .game-controls-bar .plinko-risk-control .game-options {
+    gap: 3px;
+  }
+
+  .plinko-shell .game-controls-bar .plinko-risk-control .game-option {
+    min-height: 34px;
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+
+  .plinko-shell .game-controls-bar .game-control-label {
+    min-height: 12px;
+  }
+
+  .poker-shell .poker-lobby,
+  .hub-shell .club-lobby {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0 !important;
+    padding-bottom: calc(20px + var(--mobile-nav-height));
+  }
+
+  .hub-shell .club-lobby {
+    padding: 12px 12px calc(20px + var(--mobile-nav-height));
+  }
+
+  .hub-shell .club-hero {
+    min-height: 0;
+    padding: 22px 18px;
+  }
+
+  .hub-shell .club-emblem {
+    display: none;
+  }
+
+  .hub-shell .game-selection {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .poker-shell .poker-table-page {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0 !important;
+    padding: 10px 10px calc(150px + var(--mobile-nav-height) + 12px);
+  }
+
+  .poker-shell .poker-table-heading {
+    height: auto;
+    min-height: 46px;
+    gap: 8px;
+  }
+
+  .poker-shell .poker-room-layout {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .poker-shell .poker-table-panel {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .poker-shell .poker-felt {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: clamp(390px, 53dvh, 455px);
+    border-width: 6px;
+    border-radius: 42% / 18%;
+  }
+
+  .poker-shell .community-cards {
+    gap: 3px;
+  }
+
+  .poker-shell .community-cards .playing-card,
+  .poker-shell .community-placeholder {
+    width: clamp(39px, 11vw, 45px);
+    height: 62px;
+  }
+
+  .poker-shell .poker-seat {
+    width: clamp(72px, 22vw, 86px);
+    height: 72px;
+  }
+
+  .poker-shell .poker-hole-cards .playing-card {
+    width: 35px;
+    height: 50px;
+  }
+
+  .poker-shell .poker-player-card {
+    gap: 4px;
+    padding: 4px 5px;
+  }
+
+  .poker-shell .poker-player-card b {
+    font-size: 8px;
+  }
+
+  .poker-shell .poker-action-zone {
+    position: fixed;
+    z-index: 36;
+    right: 0;
+    bottom: var(--mobile-nav-height);
+    left: 0;
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    flex: none;
+    padding: 9px 12px max(9px, env(safe-area-inset-bottom));
+    border: 1px solid #ffffff18;
+    border-bottom: 0;
+    border-radius: 16px 16px 0 0;
+    background: linear-gradient(180deg, #211a2bf5 0%, #130f1bf7 100%);
+    box-shadow: 0 -12px 36px #08050db0;
+    -webkit-backdrop-filter: blur(18px) saturate(120%);
+    backdrop-filter: blur(18px) saturate(120%);
+  }
+
+  .poker-shell .poker-actions {
+    min-height: 52px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-content: stretch;
+    gap: 7px;
+  }
+
+  .poker-shell .poker-actions > button {
+    min-width: 0;
+    min-height: 52px;
+    font-size: 12px;
+  }
+
+  .poker-shell .raise-drawer {
+    right: 0;
+    bottom: calc(100% + 8px);
+    left: 0;
+    width: auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 450px) {
+  .casino-shell {
+    --mobile-nav-height: calc(62px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .casino-shell > aside[aria-label="Navigation principale"] {
+    position: fixed;
+    z-index: 48;
+    inset: auto 0 0;
+    display: flex !important;
+    box-sizing: border-box;
+    width: 100%;
+    height: var(--mobile-nav-height);
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: center;
+    padding: 4px 3px env(safe-area-inset-bottom, 0px);
+    overflow: hidden;
+    border: 0;
+    border-top: 1px solid #ffffff12;
+    background: #14111df7;
+    -webkit-backdrop-filter: blur(20px) saturate(130%);
+    backdrop-filter: blur(20px) saturate(130%);
+  }
+
+  .casino-shell
+    > aside[aria-label="Navigation principale"]
+    > button:first-child,
+  .casino-shell > aside[aria-label="Navigation principale"] > div:last-child {
+    display: none !important;
+  }
+
+  .casino-shell > aside[aria-label="Navigation principale"] > div:nth-child(2) {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    flex: 1 1 auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+    gap: 0;
+    margin: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .casino-shell
+    > aside[aria-label="Navigation principale"]
+    > div:nth-child(2)::-webkit-scrollbar {
+    display: none;
+  }
+
+  .casino-shell
+    > aside[aria-label="Navigation principale"]
+    > div:nth-child(2)
+    > button {
+    position: relative;
+    display: flex;
+    width: auto;
+    min-width: 42px;
+    height: 52px;
+    flex: 1 0 42px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 3px 1px;
+    border-radius: 9px;
+  }
+
+  .casino-shell
+    > aside[aria-label="Navigation principale"]
+    > div:nth-child(2)
+    > button::before {
+    display: none;
+  }
+
+  .casino-shell
+    > aside[aria-label="Navigation principale"]
+    > div:nth-child(2)
+    > button::after {
+    max-width: 100%;
+    overflow: hidden;
+    color: #92899f;
+    content: attr(title);
+    font-size: 7px;
+    line-height: 1;
+    text-overflow: clip;
+    white-space: nowrap;
+  }
+
+  .casino-shell
+    > aside[aria-label="Navigation principale"]
+    > div:nth-child(2)
+    > button:nth-child(2)::after {
+    content: "Blackjack";
+  }
+
+  .casino-shell
+    > aside[aria-label="Navigation principale"]
+    > div:nth-child(2)
+    > button:nth-child(3)::after {
+    content: "Mine";
+  }
+
+  .casino-shell
+    > aside[aria-label="Navigation principale"]
+    > div:nth-child(2)
+    > button:nth-child(5)::after {
+    content: "Tower";
+  }
+
+  .casino-shell
+    > aside[aria-label="Navigation principale"]
+    > div:nth-child(2)
+    > button[data-active="true"]::after {
+    color: #d4bfff;
+  }
+
+  .casino-shell
+    > aside[aria-label="Navigation principale"]
+    > div:nth-child(2)
+    > button
+    > svg,
+  .casino-shell
+    > aside[aria-label="Navigation principale"]
+    > div:nth-child(2)
+    > button
+    > img {
+    width: 21px;
+    height: 21px;
+  }
+
+  .casino-shell .blackjack-icon {
+    width: 22px;
+    height: 23px;
+  }
+
+  .casino-shell .blackjack-icon > .playing-card {
+    width: 12px;
+    min-width: 12px;
+    height: 18px;
+  }
+
+  .casino-shell .blackjack-icon .card-pip {
+    font-size: 7px;
+  }
+
+  .casino-shell main {
+    padding-bottom: calc(var(--mobile-nav-height) + 14px);
+  }
+
+  .blackjack-casino-shell main:has(.controls-panel.controls-betting),
+  .blackjack-casino-shell main:has(.controls-panel.controls-decision) {
+    padding-bottom: calc(
+      190px + var(--mobile-nav-height) + env(safe-area-inset-bottom)
+    );
+  }
+
+  .blackjack-casino-shell .table-panel .controls-panel.controls-betting,
+  .blackjack-casino-shell .table-panel .controls-panel.controls-decision {
+    bottom: var(--mobile-nav-height);
+  }
+
+  .roulette-shell .roulette-page {
+    padding-bottom: calc(
+      var(--mobile-dock-height) + var(--mobile-nav-height) + 14px
+    );
+  }
+
+  .tower-shell main {
+    padding-bottom: calc(
+      var(--mobile-dock-height) + var(--mobile-nav-height) + 14px
+    );
+  }
+
+  .mines-shell .mines-page {
+    padding-bottom: calc(
+      var(--mobile-dock-height) + var(--mobile-nav-height) + 12px
+    );
+  }
+
+  .chicken-shell main {
+    padding-bottom: calc(
+      var(--mobile-dock-height) + var(--mobile-nav-height) + 14px
+    );
+  }
+
+  .plinko-shell .plinko-page {
+    padding-bottom: calc(
+      var(--mobile-dock-height) + var(--mobile-nav-height) + 14px
+    );
+  }
+
+  .poker-shell .poker-table-page {
+    padding-bottom: calc(150px + var(--mobile-nav-height) + 12px);
+  }
+
+  .poker-shell .poker-action-zone {
+    bottom: var(--mobile-nav-height);
+  }
+}
+
+@media (min-width: 451px) and (max-width: 700px) {
+  .casino-shell .game-controls-bar,
+  .poker-shell .poker-action-zone {
+    right: 0;
+    left: 55px;
+  }
+}

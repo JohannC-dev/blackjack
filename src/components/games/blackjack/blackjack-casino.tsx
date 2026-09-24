@@ -1877,7 +1877,7 @@ export function BlackjackCasino({
   return (
     <div
       ref={shellRef}
-      className={`casino-shell ${isFullscreen ? "is-fullscreen" : ""}`}
+      className={`casino-shell blackjack-casino-shell ${isFullscreen ? "is-fullscreen" : ""}`}
     >
       <EmoteLayer
         game="blackjack"
@@ -2192,6 +2192,27 @@ export function BlackjackCasino({
                                 {credits(totalBet)} <small>cr.</small>
                               </b>
                             </span>
+                            <button
+                              type="button"
+                              className="icon-button repeat-bet mobile-repeat-bet"
+                              disabled={
+                                disabled ||
+                                !previousBetTotal ||
+                                totalBet > 0 ||
+                                previousBetTotal > balance ||
+                                !!me?.ready
+                              }
+                              onClick={repeatBet}
+                              title={
+                                previousBetTotal
+                                  ? `Répéter la mise précédente (${credits(previousBetTotal)} crédits)`
+                                  : "Aucune mise précédente"
+                              }
+                              aria-label="Répéter la mise précédente"
+                            >
+                              <Repeat2 size={16} />
+                              <span>Répéter</span>
+                            </button>
                             <button
                               className={`button primary deal-button ${me?.ready ? "is-ready" : ""}`}
                               disabled={disabled || totalBet === 0}

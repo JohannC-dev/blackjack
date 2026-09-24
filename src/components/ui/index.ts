@@ -11,6 +11,7 @@ export {
   GameControlsBar,
   GameOption,
   GamePopoverControl,
+  GamePopoverPortal,
   GameStepSlider,
 } from "./game-controls";
 export { GamePoster } from "./game-poster";
