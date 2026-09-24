@@ -42,37 +42,6 @@
   color: var(--plinko-accent);
   font-style: normal;
 }
-.plinko-table-facts {
-  display: flex;
-  gap: 10px;
-  margin: 0;
-}
-.plinko-table-facts > div {
-  min-width: 132px;
-  padding: 10px 15px 9px;
-  border: 1px solid #ffffff0e;
-  border-radius: 13px;
-  background: var(--panel, #191622);
-}
-.plinko-table-facts dt {
-  color: #8c879e;
-  font-size: 8px;
-  font-weight: 750;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-}
-.plinko-table-facts dd {
-  margin: 3px 0 0;
-  color: #f4f1fb;
-  font-size: 18px;
-  font-variant-numeric: tabular-nums;
-}
-.plinko-table-facts dd.is-up {
-  color: #83e9bc;
-}
-.plinko-table-facts dd.is-down {
-  color: #e2564f;
-}
 
 .plinko-game-layout {
   display: flex;
@@ -304,10 +273,6 @@
   .plinko-page-heading {
     flex-direction: column;
     align-items: flex-start;
-  }
-  .plinko-table-facts {
-    width: 100%;
-    flex-wrap: wrap;
   }
   .plinko-board-stage {
     padding: 14px 12px 12px;

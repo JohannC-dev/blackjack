@@ -54,9 +54,6 @@ function wait(ms: number) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 }
 
-/** Credits of the balls still falling, held back from the wallet on screen. */
-type InFlight = { payout: number; net: number };
-
 export function PlinkoCasino({
   game,
   onNavigate,
@@ -71,7 +68,8 @@ export function PlinkoCasino({
   const [autoCount, setAutoCount] = useState<number>(AUTO_DEFAULT);
   const [auto, setAuto] = useState(false);
   const [autoLeft, setAutoLeft] = useState(0);
-  const [inFlight, setInFlight] = useState<InFlight>({ payout: 0, net: 0 });
+  /** Winnings of the balls still falling, held back from the wallet on screen. */
+  const [inFlight, setInFlight] = useState(0);
   const [highlight, setHighlight] = useState<{
     slot: number;
     key: number;
@@ -99,13 +97,12 @@ export function PlinkoCasino({
   const releaseAt = useRef(0);
 
   // The wager leaves the wallet at once, the winnings only when the ball lands.
-  const settledBalance = Math.max(0, getClubBalance(game) - inFlight.payout);
+  const settledBalance = Math.max(0, getClubBalance(game) - inFlight);
   const maxBet = Math.min(PLINKO_MAX_BET, Math.floor(settledBalance));
   const multipliers = useMemo(
     () => plinkoMultipliers(risk, rows),
     [risk, rows],
   );
-  const best = multipliers[0];
 
   const play = useCallback((effect: (context: AudioContext) => void) => {
     if (soundRef.current && audioRef.current) effect(audioRef.current);
@@ -116,10 +113,7 @@ export function PlinkoCasino({
       flashKey.current += 1;
       setHighlight({ slot: drop.slot, key: flashKey.current });
       setHistory((current) => [drop, ...current].slice(0, HISTORY_SIZE));
-      setInFlight((current) => ({
-        payout: Math.max(0, current.payout - drop.payout),
-        net: current.net - drop.net,
-      }));
+      setInFlight((current) => Math.max(0, current - drop.payout));
       if (drop.multiplier >= 10) play(playTowerJackpot);
       else if (drop.multiplier >= 1)
         play((context) => playTowerCashout(context, 4));
@@ -144,13 +138,7 @@ export function PlinkoCasino({
     if (seen.current.size > 200)
       seen.current = new Set(state.drops.map((drop) => drop.id));
     setInFlight((current) =>
-      fresh.reduce(
-        (total, drop) => ({
-          payout: total.payout + drop.payout,
-          net: total.net + drop.net,
-        }),
-        current,
-      ),
+      fresh.reduce((total, drop) => total + drop.payout, current),
     );
     const now = performance.now();
     const first = Math.max(now, releaseAt.current);
@@ -231,7 +219,6 @@ export function PlinkoCasino({
 
   /** A board that changes shape mid-series would mislabel the landings. */
   const locked = auto;
-  const sessionNet = (state?.sessionNet ?? 0) - inFlight.net;
   const changeAutoCount = (delta: number) =>
     setAutoCount((current) => Math.min(AUTO_MAX, Math.max(1, current + delta)));
 
@@ -254,19 +241,6 @@ export function PlinkoCasino({
                 Le <em>Plinko</em>
               </h1>
             </div>
-            <dl className="plinko-table-facts">
-              <div>
-                <dt>Gain maximum</dt>
-                <dd>{plinkoMultiplierLabel(best)}</dd>
-              </div>
-              <div>
-                <dt>Bilan de séance</dt>
-                <dd className={sessionNet < 0 ? "is-down" : "is-up"}>
-                  {sessionNet > 0 ? "+" : ""}
-                  {credits(sessionNet)} cr.
-                </dd>
-              </div>
-            </dl>
           </header>
 
           <div className="plinko-game-layout">
