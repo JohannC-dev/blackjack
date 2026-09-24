@@ -19,6 +19,7 @@ const WAGER_KINDS = new Set(["wager", "additional-wager", "buy-in", "refund"]);
 
 type StatTotals = typeof playerGameStats.$inferInsert & {
   played: number;
+  won: number;
   wageredMinor: number;
   deltaMinor: number;
   maxWinMinor: number;
@@ -49,6 +50,7 @@ export const applyGameStats = (
           userId,
           game,
           played: 0,
+          won: 0,
           wageredMinor: 0,
           deltaMinor: 0,
           maxWinMinor: 0,
@@ -76,11 +78,20 @@ export const applyGameStats = (
         game: result.game,
         playId: result.playId,
         netMinor: toMinor(result.net),
+        // A batched result still counts, and ranks, each of its plays.
+        playNets: (result.plays ?? [result.net]).map(toMinor),
       }));
     if (plays.length) {
       const inserted = yield* db
         .insert(playerGameResult)
-        .values(plays)
+        .values(
+          plays.map(({ userId, game, playId, netMinor }) => ({
+            userId,
+            game,
+            playId,
+            netMinor,
+          })),
+        )
         .onConflictDoNothing()
         .returning({
           userId: playerGameResult.userId,
@@ -118,9 +129,12 @@ export const applyGameStats = (
       for (const play of plays) {
         if (!fresh.has(playKey(play))) continue;
         const total = totalsFor(play.userId, play.game);
-        total.played += 1;
-        total.maxWinMinor = Math.max(total.maxWinMinor, play.netMinor);
-        total.maxLossMinor = Math.max(total.maxLossMinor, -play.netMinor);
+        for (const netMinor of play.playNets) {
+          total.played += 1;
+          if (netMinor > 0) total.won += 1;
+          total.maxWinMinor = Math.max(total.maxWinMinor, netMinor);
+          total.maxLossMinor = Math.max(total.maxLossMinor, -netMinor);
+        }
       }
     }
 
@@ -132,6 +146,7 @@ export const applyGameStats = (
         target: [playerGameStats.userId, playerGameStats.game],
         set: {
           played: sql`${playerGameStats.played} + excluded.played`,
+          won: sql`${playerGameStats.won} + excluded.won`,
           wageredMinor: sql`${playerGameStats.wageredMinor} + excluded.wagered_minor`,
           deltaMinor: sql`${playerGameStats.deltaMinor} + excluded.delta_minor`,
           maxWinMinor: sql`greatest(${playerGameStats.maxWinMinor}, excluded.max_win_minor)`,

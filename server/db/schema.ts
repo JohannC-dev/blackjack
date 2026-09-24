@@ -162,6 +162,7 @@ export const playerGameStats = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     game: text("game").notNull(),
     played: integer("played").default(0).notNull(),
+    won: integer("won").default(0).notNull(),
     wageredMinor: bigint("wagered_minor", { mode: "number" })
       .default(0)
       .notNull(),
@@ -176,6 +177,7 @@ export const playerGameStats = pgTable(
   (table) => [
     primaryKey({ columns: [table.userId, table.game] }),
     check("player_game_stats_played_nonnegative", sql`${table.played} >= 0`),
+    check("player_game_stats_won_nonnegative", sql`${table.won} >= 0`),
     check(
       "player_game_stats_wagered_nonnegative",
       sql`${table.wageredMinor} >= 0`,

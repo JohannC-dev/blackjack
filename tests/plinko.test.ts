@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import {
+  InMemoryGameWallet,
+  type GameResult,
+  type WalletAccount,
+  type WalletChange,
+} from "../server/game-wallet";
 import { PlinkoGame } from "../server/plinko";
 import {
   plinkoMultipliers,
@@ -101,6 +107,47 @@ describe("Plinko", () => {
     expect(new Set(state.drops.map((drop) => drop.id)).size).toBe(
       state.drops.length,
     );
+  });
+
+  test("une salve n'écrit qu'une mise, un gain et un résultat", () => {
+    const moves: { kind: string; amount: number }[] = [];
+    const results: GameResult[] = [];
+    class RecordingWallet extends InMemoryGameWallet {
+      override debit(account: WalletAccount, change: WalletChange) {
+        super.debit(account, change);
+        moves.push({ kind: change.kind, amount: change.amount });
+      }
+      override credit(account: WalletAccount, change: WalletChange) {
+        super.credit(account, change);
+        moves.push({ kind: change.kind, amount: change.amount });
+      }
+      override recordGameResult(result: GameResult) {
+        results.push(result);
+      }
+    }
+    const game = new PlinkoGame(new RecordingWallet(), {
+      min: 5,
+      max: 500,
+      step: 5,
+    });
+    const player = { id: randomUUID(), balance: 100_000 };
+    game.drop(player, 100, "high", 16, 10);
+    const drops = game.snapshot().drops;
+    const payout = drops.reduce((total, drop) => total + drop.payout, 0);
+
+    expect(drops).toHaveLength(10);
+    expect(moves).toEqual(
+      payout > 0
+        ? [
+            { kind: "wager", amount: 1_000 },
+            { kind: "payout", amount: payout },
+          ]
+        : [{ kind: "wager", amount: 1_000 }],
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0].net).toBe(payout - 1_000);
+    expect(results[0].plays).toEqual(drops.map((drop) => drop.net));
+    expect(player.balance).toBe(100_000 - 1_000 + payout);
   });
 
   test("une mise, un risque ou des rangées invalides sont refusés", () => {

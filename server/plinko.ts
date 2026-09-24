@@ -146,65 +146,83 @@ export class PlinkoGame {
     this.rows = rows;
     this.bet = bet;
     const multipliers = plinkoMultipliers(risk, rows);
-    for (let ball = 0; ball < count; ball++)
-      this.settle(player, bet, multipliers);
+    this.settle(player, bet, multipliers, count);
     this.message =
       count === 1
         ? "La bille est tombée. Le serveur a tiré son chemin."
         : `${count} billes lâchées.`;
   }
 
+  /**
+   * A salvo is one entry in the ledger, not one per ball: a single wager for
+   * all its balls, a single payout for their winnings, a single result that
+   * still hands each ball's net to the stats. Each ball stays a fresh draw;
+   * only the paperwork is grouped, which keeps the ledger from growing by
+   * three rows per ball.
+   */
   private settle(
     player: PlinkoPlayer,
     bet: number,
     multipliers: readonly number[],
+    count: number,
   ) {
-    const dropId = randomUUID();
+    const salvoId = randomUUID();
     this.wallet.debit(player, {
-      operationId: `plinko:${dropId}:wager`,
+      operationId: `plinko:${salvoId}:wager`,
       game: "plinko",
       kind: "wager",
       reason: "drop",
-      referenceId: dropId,
-      amount: bet,
-      metadata: { risk: this.risk, rows: this.rows },
+      referenceId: salvoId,
+      amount: bet * count,
+      metadata: { risk: this.risk, rows: this.rows, bet, balls: count },
     });
-    this.round += 1;
 
-    const path = Array.from({ length: this.rows }, () => randomInt(2));
-    const slot = plinkoSlot(path);
-    const multiplier = multipliers[slot];
-    const payout = plinkoPayout(bet, multiplier);
-    const net = payout - bet;
+    const drops: PlinkoDrop[] = [];
+    for (let ball = 0; ball < count; ball++) {
+      this.round += 1;
+      const path = Array.from({ length: this.rows }, () => randomInt(2));
+      const slot = plinkoSlot(path);
+      const multiplier = multipliers[slot];
+      const payout = plinkoPayout(bet, multiplier);
+      drops.push({
+        id: randomUUID(),
+        risk: this.risk,
+        rows: this.rows,
+        bet,
+        path,
+        slot,
+        multiplier,
+        payout,
+        net: payout - bet,
+      });
+    }
+
+    const payout = drops.reduce((total, drop) => total + drop.payout, 0);
+    const net = payout - bet * count;
     if (payout > 0)
       this.wallet.credit(player, {
-        operationId: `plinko:${dropId}:payout`,
+        operationId: `plinko:${salvoId}:payout`,
         game: "plinko",
         kind: "payout",
         reason: "slot",
-        referenceId: dropId,
+        referenceId: salvoId,
         amount: payout,
-        metadata: { slot, multiplier, round: this.round },
+        metadata: {
+          slots: drops.map((drop) => drop.slot),
+          multipliers: drops.map((drop) => drop.multiplier),
+          round: this.round,
+        },
       });
     this.wallet.recordGameResult({
       userId: player.id,
       game: "plinko",
-      playId: dropId,
+      playId: salvoId,
       net,
+      plays: drops.map((drop) => drop.net),
     });
 
     this.sessionNet += net;
-    this.drops.push({
-      id: dropId,
-      risk: this.risk,
-      rows: this.rows,
-      bet,
-      path,
-      slot,
-      multiplier,
-      payout,
-      net,
-    });
+    this.drops.push(...drops);
     if (this.drops.length > PLINKO_HISTORY_SIZE)
       this.drops.splice(0, this.drops.length - PLINKO_HISTORY_SIZE);
   }

@@ -44,6 +44,12 @@ export type GameResult = {
   readonly playId: string;
   /** Final result of that play in credits, including its wagers. */
   readonly net: number;
+  /**
+   * Nets of the plays this result closes at once, when a game settles several
+   * in one go (a Plinko salvo): one ledger row for all of them, while the
+   * stats still count, and rank, each play. They add up to `net`.
+   */
+  readonly plays?: readonly number[];
 };
 
 export interface GameWallet {
@@ -137,6 +143,17 @@ export class RecordingGameWallet extends InMemoryGameWallet {
     if (!this.pending)
       throw new Error("Le résultat du jeu est hors transaction.");
     if (!result.playId || !Number.isSafeInteger(Math.round(result.net * 100)))
+      throw new Error("Résultat de jeu invalide.");
+    if (
+      result.plays &&
+      (!result.plays.length ||
+        result.plays.some(
+          (net) => !Number.isSafeInteger(Math.round(net * 100)),
+        ) ||
+        Math.round(
+          result.plays.reduce((total, net) => total + net, 0) * 100,
+        ) !== Math.round(result.net * 100))
+    )
       throw new Error("Résultat de jeu invalide.");
     const key = `${result.userId}\0${result.game}\0${result.playId}`;
     if (this.resultIds.has(key))
