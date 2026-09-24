@@ -47,6 +47,7 @@ import {
   GameActionButton,
   GameControlGroup,
   GameControlsBar,
+  GamePopoverPortal,
 } from "../../ui/game-controls";
 import { MineBomb, MineDiamond } from "./mine-art";
 import { useMySkins } from "@/lib/cosmetics-api";
@@ -165,6 +166,7 @@ function MinesControls({
   const active = state?.phase === "playing";
   const [patternOpen, setPatternOpen] = useState(false);
   const patternControlRef = useRef<HTMLDivElement>(null);
+  const patternPopoverRef = useRef<HTMLDivElement>(null);
   const balance = getClubBalance(game);
   const targetIndex = Math.max(
     0,
@@ -263,8 +265,8 @@ function MinesControls({
     if (!patternOpen) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
       if (
-        patternControlRef.current &&
-        !patternControlRef.current.contains(event.target as Node)
+        !patternControlRef.current?.contains(event.target as Node) &&
+        !patternPopoverRef.current?.contains(event.target as Node)
       )
         setPatternOpen(false);
     };
@@ -437,147 +439,148 @@ function MinesControls({
             />
           </button>
 
-          {patternOpen && (
-            <div
-              id="mines-pattern-popover"
-              className="mines-pattern-popover"
-              role="dialog"
-              aria-label="Configurer le pattern"
-            >
-              <div className="mines-pattern-popover-heading">
-                <div>
-                  <span className="mines-pattern-kicker">MODE AUTOMATIQUE</span>
-                  <strong>
-                    {looping ? "Pattern en cours" : "Répéter une séquence"}
-                  </strong>
-                </div>
-                <button
-                  type="button"
-                  className="mines-pattern-close"
-                  aria-label="Fermer le panneau pattern"
-                  onClick={() => setPatternOpen(false)}
-                >
-                  <X size={15} />
-                </button>
-              </div>
-              <p className="mines-pattern-intro">
-                Choisissez les cases dans l’ordre. À chaque manche, toute la
-                séquence est révélée d’un coup puis encaissée automatiquement.
-              </p>
-              <ol className="mines-pattern-steps">
-                <li className={patternMode ? "is-current" : ""}>
-                  <b>1</b>
-                  <span>
-                    <strong>Activez le mode pattern</strong>
-                    <small>
-                      {patternMode
-                        ? "La grille accepte votre séquence."
-                        : "La grille reste en mode de jeu normal."}
-                    </small>
-                  </span>
-                </li>
-                <li className={patternLength ? "is-current" : ""}>
-                  <b>2</b>
-                  <span>
-                    <strong>Sélectionnez les cases</strong>
-                    <small>
-                      {patternLength
-                        ? `${patternLength} case${patternLength === 1 ? "" : "s"} dans l’ordre indiqué.`
-                        : "Cliquez sur la grille dans l’ordre voulu."}
-                    </small>
-                  </span>
-                </li>
-                <li className={patternLength ? "is-current" : ""}>
-                  <b>3</b>
-                  <span>
-                    <strong>Lancez les manches</strong>
-                    <small>
-                      {looping
-                        ? `${loopRounds}/${loopCount} manche${loopCount === 1 ? "" : "s"} terminée${loopCount === 1 ? "" : "s"}.`
-                        : `Le bouton principal lancera ×${loopCount} manche${loopCount === 1 ? "" : "s"}.`}
-                    </small>
-                  </span>
-                </li>
-              </ol>
-              <div className="mines-pattern-settings">
-                <div className="mines-pattern-setting">
-                  <span>Cases sélectionnées</span>
-                  <b>{patternLength}/25</b>
-                </div>
-                <div className="mines-pattern-setting">
-                  <span>Nombre de manches</span>
-                  <div className="mines-pattern-stepper">
-                    <button
-                      type="button"
-                      aria-label="Diminuer le nombre de manches"
-                      disabled={loopCountDisabled || loopCount <= 1}
-                      onClick={() => changeLoopCount(-1)}
-                    >
-                      <Minus size={13} />
-                    </button>
-                    <label>
-                      <span aria-hidden="true">×</span>
-                      <input
-                        type="number"
-                        min="1"
-                        max={MINES_LOOP_MAX_COUNT}
-                        step="1"
-                        value={loopCount}
-                        disabled={loopCountDisabled}
-                        aria-label="Nombre de manches du pattern"
-                        onChange={(event) => {
-                          const value = Number(event.currentTarget.value);
-                          onLoopCountChange(
-                            Number.isFinite(value)
-                              ? Math.min(
-                                  MINES_LOOP_MAX_COUNT,
-                                  Math.max(1, Math.round(value)),
-                                )
-                              : 1,
-                          );
-                        }}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      aria-label="Augmenter le nombre de manches"
-                      disabled={
-                        loopCountDisabled || loopCount >= MINES_LOOP_MAX_COUNT
-                      }
-                      onClick={() => changeLoopCount(1)}
-                    >
-                      <Plus size={13} />
-                    </button>
-                  </div>
-                </div>
+          <GamePopoverPortal
+            anchorRef={patternControlRef}
+            panelRef={patternPopoverRef}
+            open={patternOpen}
+            id="mines-pattern-popover"
+            className="mines-pattern-popover"
+            contextClassName={`mines-loop-control ${looping ? "is-running" : ""} ${patternOpen ? "is-open" : ""}`.trim()}
+            panelLabel="Configurer le pattern"
+          >
+            <div className="mines-pattern-popover-heading">
+              <div>
+                <span className="mines-pattern-kicker">MODE AUTOMATIQUE</span>
+                <strong>
+                  {looping ? "Pattern en cours" : "Répéter une séquence"}
+                </strong>
               </div>
               <button
                 type="button"
-                className="mines-pattern-mode-button"
-                disabled={patternOptionDisabled}
-                aria-pressed={patternMode || looping}
-                onClick={onTogglePatternMode}
+                className="mines-pattern-close"
+                aria-label="Fermer le panneau pattern"
+                onClick={() => setPatternOpen(false)}
               >
-                {looping ? (
-                  <Square size={14} fill="currentColor" />
-                ) : (
-                  <Repeat2 size={15} />
-                )}
-                <span>
-                  {looping
-                    ? "Arrêter la boucle"
-                    : patternMode
-                      ? "Désactiver le mode pattern"
-                      : "Activer le mode pattern"}
-                </span>
+                <X size={15} />
               </button>
-              {loopMessage && !looping && (
-                <p className="mines-pattern-feedback" aria-live="polite">
-                  {loopMessage}
-                </p>
-              )}
             </div>
-          )}
+            <p className="mines-pattern-intro">
+              Choisissez les cases dans l’ordre. À chaque manche, toute la
+              séquence est révélée d’un coup puis encaissée automatiquement.
+            </p>
+            <ol className="mines-pattern-steps">
+              <li className={patternMode ? "is-current" : ""}>
+                <b>1</b>
+                <span>
+                  <strong>Activez le mode pattern</strong>
+                  <small>
+                    {patternMode
+                      ? "La grille accepte votre séquence."
+                      : "La grille reste en mode de jeu normal."}
+                  </small>
+                </span>
+              </li>
+              <li className={patternLength ? "is-current" : ""}>
+                <b>2</b>
+                <span>
+                  <strong>Sélectionnez les cases</strong>
+                  <small>
+                    {patternLength
+                      ? `${patternLength} case${patternLength === 1 ? "" : "s"} dans l’ordre indiqué.`
+                      : "Cliquez sur la grille dans l’ordre voulu."}
+                  </small>
+                </span>
+              </li>
+              <li className={patternLength ? "is-current" : ""}>
+                <b>3</b>
+                <span>
+                  <strong>Lancez les manches</strong>
+                  <small>
+                    {looping
+                      ? `${loopRounds}/${loopCount} manche${loopCount === 1 ? "" : "s"} terminée${loopCount === 1 ? "" : "s"}.`
+                      : `Le bouton principal lancera ×${loopCount} manche${loopCount === 1 ? "" : "s"}.`}
+                  </small>
+                </span>
+              </li>
+            </ol>
+            <div className="mines-pattern-settings">
+              <div className="mines-pattern-setting">
+                <span>Cases sélectionnées</span>
+                <b>{patternLength}/25</b>
+              </div>
+              <div className="mines-pattern-setting">
+                <span>Nombre de manches</span>
+                <div className="mines-pattern-stepper">
+                  <button
+                    type="button"
+                    aria-label="Diminuer le nombre de manches"
+                    disabled={loopCountDisabled || loopCount <= 1}
+                    onClick={() => changeLoopCount(-1)}
+                  >
+                    <Minus size={13} />
+                  </button>
+                  <label>
+                    <span aria-hidden="true">×</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max={MINES_LOOP_MAX_COUNT}
+                      step="1"
+                      value={loopCount}
+                      disabled={loopCountDisabled}
+                      aria-label="Nombre de manches du pattern"
+                      onChange={(event) => {
+                        const value = Number(event.currentTarget.value);
+                        onLoopCountChange(
+                          Number.isFinite(value)
+                            ? Math.min(
+                                MINES_LOOP_MAX_COUNT,
+                                Math.max(1, Math.round(value)),
+                              )
+                            : 1,
+                        );
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    aria-label="Augmenter le nombre de manches"
+                    disabled={
+                      loopCountDisabled || loopCount >= MINES_LOOP_MAX_COUNT
+                    }
+                    onClick={() => changeLoopCount(1)}
+                  >
+                    <Plus size={13} />
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="mines-pattern-mode-button"
+              disabled={patternOptionDisabled}
+              aria-pressed={patternMode || looping}
+              onClick={onTogglePatternMode}
+            >
+              {looping ? (
+                <Square size={14} fill="currentColor" />
+              ) : (
+                <Repeat2 size={15} />
+              )}
+              <span>
+                {looping
+                  ? "Arrêter la boucle"
+                  : patternMode
+                    ? "Désactiver le mode pattern"
+                    : "Activer le mode pattern"}
+              </span>
+            </button>
+            {loopMessage && !looping && (
+              <p className="mines-pattern-feedback" aria-live="polite">
+                {loopMessage}
+              </p>
+            )}
+          </GamePopoverPortal>
         </div>
       </GameControlsBar>
       {(!game.connected || balance < bet) && (

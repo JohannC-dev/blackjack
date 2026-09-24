@@ -122,9 +122,8 @@ type Layout = {
 const CHARACTER_WIDTH: Record<string, number> = { ".": 0.3, x: 0.56 };
 
 /**
- * Type size of the badges. A slot is only as wide as a peg gap, and the
- * labels run from `0.6x` to `1317`: the whole row takes the size that fits
- * its longest label, so the strip reads as one line rather than a staircase.
+ * Type size of the badges. The whole row shares one size so the strip reads
+ * as one line rather than a staircase.
  */
 function slotFontSize(labels: readonly string[], spacing: number) {
   const widest = labels.reduce(
@@ -165,15 +164,28 @@ function slotColor(heat: number) {
 }
 
 /**
- * The triangle is sized by whichever of the two axes runs out first, then
- * centred: a wide panel keeps a tall narrow board rather than stretching it.
+ * The desktop triangle keeps its equilateral spacing. Mobile can fill the
+ * available width, with its row height fitted independently to the panel.
  */
-function layoutFor(width: number, height: number, rows: number): Layout {
+function layoutFor(
+  width: number,
+  height: number,
+  rows: number,
+  fillWidth = false,
+): Layout {
   // Half a gap of margin on each side, plus room for the ball at the edges.
   const fromWidth = width / (rows + 2.2);
   const fromHeight = height / ((rows + DROP_IN_ROWS + 0.6) * ROW_RATIO);
-  const spacing = Math.max(6, Math.min(fromWidth, fromHeight));
-  const rowHeight = spacing * ROW_RATIO;
+  const spacing = Math.max(
+    6,
+    fillWidth ? fromWidth : Math.min(fromWidth, fromHeight),
+  );
+  // On narrow screens, spread the peg columns across the board while keeping
+  // the rows within the available height. Desktop keeps the equilateral grid.
+  const rowHeight = Math.min(
+    spacing * ROW_RATIO,
+    height / (rows + DROP_IN_ROWS + 0.6),
+  );
   const boardWidth = spacing * (rows + 1);
   const dropIn = rowHeight * DROP_IN_ROWS;
   const used = dropIn + rows * rowHeight;
@@ -334,7 +346,7 @@ export function PlinkoBoard({
   onLandRef.current = onLand;
   const onPegRef = useRef(onPeg);
   onPegRef.current = onPeg;
-  const [size, setSize] = useState({ width: 0, spacing: 0 });
+  const [size, setSize] = useState({ width: 0, spacing: 0, mobile: false });
   const labels = useMemo(() => multipliers.map(plinkoSlotLabel), [multipliers]);
 
   const stop = useCallback(() => {
@@ -493,11 +505,12 @@ export function PlinkoBoard({
         canvas.style.width = `${rect.width}px`;
         canvas.style.height = `${rect.height}px`;
       }
-      const layout = layoutFor(rect.width, rect.height, rows);
+      const mobile = window.matchMedia("(max-width: 700px)").matches;
+      const layout = layoutFor(rect.width, rect.height, rows, mobile);
       layoutRef.current = layout;
       ballSprite.current = makeBallSprite(layout.ballRadius, dpr);
       flashSprite.current = makeFlashSprite(layout.pegRadius, dpr);
-      setSize({ width: layout.boardWidth, spacing: layout.spacing });
+      setSize({ width: layout.boardWidth, spacing: layout.spacing, mobile });
       paintPegs(pegs, layout, rows, dpr);
     };
 
@@ -533,7 +546,11 @@ export function PlinkoBoard({
         style={
           {
             width: size.width ? `${size.width}px` : undefined,
-            fontSize: `${slotFontSize(labels, size.spacing).toFixed(1)}px`,
+            fontSize: `${(
+              size.mobile
+                ? Math.max(7, Math.min(8, size.spacing * 0.4))
+                : slotFontSize(labels, size.spacing)
+            ).toFixed(1)}px`,
             gridTemplateColumns: `repeat(${rows + 1}, minmax(0, 1fr))`,
             "--slot-size": `${size.spacing}px`,
           } as CSSProperties

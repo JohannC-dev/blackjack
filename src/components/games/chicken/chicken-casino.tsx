@@ -54,6 +54,7 @@ import {
   GameControlGroup,
   GameControlsBar,
   GameOption,
+  GamePopoverPortal,
   getClubBalance,
 } from "../../ui";
 import { ChickenArt, ChickenBarrierArt, ChickenCarArt } from "./chicken-art";
@@ -96,6 +97,7 @@ export function ChickenCasino({
   const [mode, setMode] = useState<"manual" | "auto">("manual");
   const [autoOpen, setAutoOpen] = useState(false);
   const autoControlRef = useRef<HTMLDivElement>(null);
+  const autoPopoverRef = useRef<HTMLDivElement>(null);
   const [steps, setSteps] = useState(3);
   const [rounds, setRounds] = useState(10);
   const [stopProfit, setStopProfit] = useState(0);
@@ -190,8 +192,8 @@ export function ChickenCasino({
     if (!autoOpen) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
       if (
-        autoControlRef.current &&
-        !autoControlRef.current.contains(event.target as Node)
+        !autoControlRef.current?.contains(event.target as Node) &&
+        !autoPopoverRef.current?.contains(event.target as Node)
       )
         setAutoOpen(false);
     };
@@ -682,11 +684,11 @@ export function ChickenCasino({
             )}
             <div
               ref={autoControlRef}
-              className={`${styles.autoControl} ${autoOpen ? styles.autoOpen : ""} ${mode === "auto" || autoRunning ? styles.autoSelected : ""}`}
+              className={`game-auto-control ${styles.autoControl} ${autoOpen ? styles.autoOpen : ""} ${mode === "auto" || autoRunning ? styles.autoSelected : ""}`}
             >
               <button
                 type="button"
-                className={styles.autoTrigger}
+                className={`game-auto-trigger ${styles.autoTrigger}`}
                 aria-haspopup="dialog"
                 aria-expanded={autoOpen}
                 aria-controls="chicken-auto-popover"
@@ -699,7 +701,9 @@ export function ChickenCasino({
                     <Repeat2 size={15} />
                   )}
                 </span>
-                <span className={styles.autoTriggerCopy}>
+                <span
+                  className={`game-auto-trigger-copy ${styles.autoTriggerCopy}`}
+                >
                   <b>Auto</b>
                   <small>
                     {autoRunning
@@ -715,103 +719,102 @@ export function ChickenCasino({
                   aria-hidden="true"
                 />
               </button>
-              {autoOpen && (
-                <section
-                  id="chicken-auto-popover"
-                  className={styles.autoPopover}
-                  role="dialog"
-                  aria-label="Réglages du mode automatique"
-                >
-                  <div className={styles.autoPopoverHeading}>
-                    <div>
-                      <span className={styles.autoKicker}>
-                        MODE AUTOMATIQUE
-                      </span>
-                      <strong>Régler la série</strong>
-                    </div>
-                    <button
-                      type="button"
-                      className={styles.autoClose}
-                      aria-label="Fermer les réglages automatiques"
-                      onClick={() => setAutoOpen(false)}
-                    >
-                      <X size={15} />
-                    </button>
+              <GamePopoverPortal
+                anchorRef={autoControlRef}
+                panelRef={autoPopoverRef}
+                open={autoOpen}
+                id="chicken-auto-popover"
+                className={styles.autoPopover}
+                contextClassName={styles.autoControl}
+                panelLabel="Réglages du mode automatique"
+              >
+                <div className={styles.autoPopoverHeading}>
+                  <div>
+                    <span className={styles.autoKicker}>MODE AUTOMATIQUE</span>
+                    <strong>Régler la série</strong>
                   </div>
-                  <p className={styles.autoIntro}>
-                    Choisissez le nombre de sauts et les limites de la série.
-                  </p>
-                  <div className={styles.autoSettings}>
-                    <AutoField
-                      label="Sauts par partie"
-                      value={steps}
-                      min={1}
-                      max={CHICKEN_MULTIPLIERS[difficulty].length}
-                      disabled={active || autoRunning}
-                      onChange={setSteps}
-                    />
-                    <AutoField
-                      label="Parties"
-                      value={rounds}
-                      min={1}
-                      max={1000}
-                      disabled={active || autoRunning}
-                      onChange={setRounds}
-                    />
-                    <AutoField
-                      label="Arrêt gain net"
-                      value={stopProfit}
-                      min={0}
-                      disabled={active || autoRunning}
-                      onChange={setStopProfit}
-                    />
-                    <AutoField
-                      label="Arrêt perte nette"
-                      value={stopLoss}
-                      min={0}
-                      disabled={active || autoRunning}
-                      onChange={setStopLoss}
-                    />
-                    <AutoField
-                      label="Après gain %"
-                      value={onWinPercent}
-                      min={-100}
-                      max={500}
-                      disabled={active || autoRunning}
-                      onChange={setOnWinPercent}
-                    />
-                    <AutoField
-                      label="Après perte %"
-                      value={onLossPercent}
-                      min={-100}
-                      max={500}
-                      disabled={active || autoRunning}
-                      onChange={setOnLossPercent}
-                    />
-                  </div>
-                  {autoRunning && (
-                    <p className={styles.autoProgress} aria-live="polite">
-                      {state?.auto?.played ?? 0}/{state?.auto?.rounds ?? rounds}{" "}
-                      parties · bilan {money(state?.auto?.net ?? 0)}
-                    </p>
-                  )}
                   <button
                     type="button"
-                    className={styles.autoModeButton}
-                    disabled={active || autoRunning}
-                    aria-pressed={mode === "auto"}
-                    onClick={() =>
-                      setMode((current) =>
-                        current === "auto" ? "manual" : "auto",
-                      )
-                    }
+                    className={styles.autoClose}
+                    aria-label="Fermer les réglages automatiques"
+                    onClick={() => setAutoOpen(false)}
                   >
-                    {mode === "auto"
-                      ? "Revenir au mode manuel"
-                      : "Activer le mode auto"}
+                    <X size={15} />
                   </button>
-                </section>
-              )}
+                </div>
+                <p className={styles.autoIntro}>
+                  Choisissez le nombre de sauts et les limites de la série.
+                </p>
+                <div className={styles.autoSettings}>
+                  <AutoField
+                    label="Sauts par partie"
+                    value={steps}
+                    min={1}
+                    max={CHICKEN_MULTIPLIERS[difficulty].length}
+                    disabled={active || autoRunning}
+                    onChange={setSteps}
+                  />
+                  <AutoField
+                    label="Parties"
+                    value={rounds}
+                    min={1}
+                    max={1000}
+                    disabled={active || autoRunning}
+                    onChange={setRounds}
+                  />
+                  <AutoField
+                    label="Arrêt gain net"
+                    value={stopProfit}
+                    min={0}
+                    disabled={active || autoRunning}
+                    onChange={setStopProfit}
+                  />
+                  <AutoField
+                    label="Arrêt perte nette"
+                    value={stopLoss}
+                    min={0}
+                    disabled={active || autoRunning}
+                    onChange={setStopLoss}
+                  />
+                  <AutoField
+                    label="Après gain %"
+                    value={onWinPercent}
+                    min={-100}
+                    max={500}
+                    disabled={active || autoRunning}
+                    onChange={setOnWinPercent}
+                  />
+                  <AutoField
+                    label="Après perte %"
+                    value={onLossPercent}
+                    min={-100}
+                    max={500}
+                    disabled={active || autoRunning}
+                    onChange={setOnLossPercent}
+                  />
+                </div>
+                {autoRunning && (
+                  <p className={styles.autoProgress} aria-live="polite">
+                    {state?.auto?.played ?? 0}/{state?.auto?.rounds ?? rounds}{" "}
+                    parties · bilan {money(state?.auto?.net ?? 0)}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className={styles.autoModeButton}
+                  disabled={active || autoRunning}
+                  aria-pressed={mode === "auto"}
+                  onClick={() =>
+                    setMode((current) =>
+                      current === "auto" ? "manual" : "auto",
+                    )
+                  }
+                >
+                  {mode === "auto"
+                    ? "Revenir au mode manuel"
+                    : "Activer le mode auto"}
+                </button>
+              </GamePopoverPortal>
             </div>
           </GameControlsBar>
         </main>

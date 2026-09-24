@@ -8,13 +8,16 @@ import {
 } from "lucide-react";
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { CASINO_CHIP_DENOMINATIONS } from "@/lib/chips";
 import { Chip } from "./chip";
 
@@ -256,6 +259,173 @@ export function GameActionButton({
 }
 
 /**
+ * Render a dock popover outside scroll and clipping containers, while keeping
+ * it aligned to the control that opened it.
+ */
+export function GamePopoverPortal({
+  anchorRef,
+  panelRef,
+  open,
+  id,
+  className,
+  contextClassName,
+  panelLabel,
+  children,
+}: {
+  anchorRef: { current: HTMLDivElement | null };
+  panelRef: { current: HTMLDivElement | null };
+  open: boolean;
+  id: string;
+  className: string;
+  contextClassName?: string;
+  panelLabel: string;
+  children: ReactNode;
+}) {
+  const [placement, setPlacement] = useState<{
+    left: number;
+    top: number;
+    maxHeight: number;
+    ready: boolean;
+  }>({ left: 0, top: 0, maxHeight: 0, ready: false });
+  const [isMobile, setIsMobile] = useState(false);
+
+  useLayoutEffect(() => {
+    const updateViewportMode = () =>
+      setIsMobile(window.matchMedia("(max-width: 700px)").matches);
+    updateViewportMode();
+    window.addEventListener("resize", updateViewportMode);
+    return () => window.removeEventListener("resize", updateViewportMode);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || !isMobile) return;
+
+    const updatePosition = () => {
+      const anchor = anchorRef.current;
+      const panel = panelRef.current;
+      if (!anchor || !panel) return;
+
+      const anchorRect = anchor.getBoundingClientRect();
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = window.innerHeight;
+      const panelWidth = panel.offsetWidth;
+      const edge = 12;
+      const gap = 12;
+      const availableAbove = Math.max(0, anchorRect.top - edge - gap);
+      const availableBelow = Math.max(
+        0,
+        viewportHeight - anchorRect.bottom - edge - gap,
+      );
+      const openAbove =
+        panel.scrollHeight <= availableAbove ||
+        availableAbove >= availableBelow;
+      const maxHeight = Math.floor(openAbove ? availableAbove : availableBelow);
+      const panelHeight = Math.min(panel.scrollHeight, maxHeight);
+      const left = Math.max(
+        edge,
+        Math.min(
+          anchorRect.right - panelWidth,
+          viewportWidth - panelWidth - edge,
+        ),
+      );
+      const top = openAbove
+        ? anchorRect.top - panelHeight - gap
+        : anchorRect.bottom + gap;
+
+      const computed = window.getComputedStyle(anchor);
+      const context = panel.parentElement;
+      if (context) {
+        for (const token of [
+          "--panel",
+          "--text",
+          "--muted",
+          "--border",
+          "--mines-accent",
+          "--mines-accent-deep",
+          "--mines-accent-soft",
+          "--mines-gold",
+          "--mines-panel",
+          "--mines-panel-raised",
+          "--tower-gold",
+        ]) {
+          const value = computed.getPropertyValue(token).trim();
+          if (value) context.style.setProperty(token, value);
+        }
+      }
+
+      setPlacement((current) =>
+        current.ready &&
+        current.left === left &&
+        current.top === top &&
+        current.maxHeight === maxHeight
+          ? current
+          : { left, top, maxHeight, ready: true },
+      );
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updatePosition);
+    if (observer && anchorRef.current) observer.observe(anchorRef.current);
+    if (observer && panelRef.current) observer.observe(panelRef.current);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      observer?.disconnect();
+    };
+  }, [anchorRef, isMobile, open, panelRef]);
+
+  if (!open || typeof document === "undefined") return null;
+
+  if (!isMobile) {
+    return (
+      <div
+        ref={panelRef}
+        id={id}
+        className={className}
+        role="dialog"
+        aria-label={panelLabel}
+      >
+        {children}
+      </div>
+    );
+  }
+
+  const panelStyle: CSSProperties = {
+    position: "fixed",
+    top: placement.top,
+    right: "auto",
+    bottom: "auto",
+    left: placement.left,
+    zIndex: 70,
+    maxHeight: placement.ready ? placement.maxHeight : undefined,
+    overflowY: "auto",
+    visibility: placement.ready ? "visible" : "hidden",
+  };
+
+  return createPortal(
+    <div className={contextClassName} style={{ display: "contents" }}>
+      <div
+        ref={panelRef}
+        id={id}
+        className={className}
+        role="dialog"
+        aria-label={panelLabel}
+        style={panelStyle}
+      >
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/**
  * Step slider of the club: a value picked among a handful of steps, with the
  * ticks and the scale under it. The styles were first written for the Mine,
  * which still carries its own copy of this markup.
@@ -416,13 +586,14 @@ export function GamePopoverControl({
 }) {
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
       if (
-        container.current &&
-        !container.current.contains(event.target as Node)
+        !container.current?.contains(event.target as Node) &&
+        !panel.current?.contains(event.target as Node)
       )
         setOpen(false);
     };
@@ -469,16 +640,17 @@ export function GamePopoverControl({
           aria-hidden="true"
         />
       </button>
-      {open && (
-        <div
-          id={id}
-          className="mines-pattern-popover"
-          role="dialog"
-          aria-label={panelLabel}
-        >
-          {children(() => setOpen(false))}
-        </div>
-      )}
+      <GamePopoverPortal
+        anchorRef={container}
+        panelRef={panel}
+        open={open}
+        id={id}
+        className="mines-pattern-popover"
+        contextClassName={`mines-loop-control ${running ? "is-running" : ""} ${open ? "is-open" : ""}`.trim()}
+        panelLabel={panelLabel}
+      >
+        {children(() => setOpen(false))}
+      </GamePopoverPortal>
     </div>
   );
 }

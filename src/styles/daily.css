@@ -32,18 +32,14 @@
 }
 
 @media (max-width: 700px) {
+  /* Matches the sound button of the mobile top bar. */
   .streak-badge {
     height: 34px;
-    padding: 0 9px;
+    gap: 4px;
+    padding: 0 8px;
   }
   .streak-badge b {
-    font-size: 13px;
-  }
-}
-@media (max-width: 450px) {
-  /* The top bar drops its gaps on phones. */
-  .streak-badge {
-    margin: 0 8px;
+    font-size: 12px;
   }
 }
 

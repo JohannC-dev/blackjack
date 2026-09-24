@@ -506,6 +506,26 @@ export function RouletteCasino({
                 void game.rouletteCommand({ type: "ready", ready: !ready })
               }
             />
+            <button
+              type="button"
+              className="icon-button repeat-bet mobile-repeat-bet"
+              disabled={
+                !canBet ||
+                !me?.previousTotal ||
+                total > 0 ||
+                me.previousTotal > balance
+              }
+              onClick={repeat}
+              title={
+                me?.previousTotal
+                  ? `Répéter la mise précédente (${credits(me.previousTotal)} crédits)`
+                  : "Aucune mise précédente"
+              }
+              aria-label="Répéter la mise précédente"
+            >
+              <Repeat2 size={16} />
+              <span>Répéter</span>
+            </button>
           </GameControlsBar>
           {game.error && (
             <p className="mines-global-error" role="alert">
