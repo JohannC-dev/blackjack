@@ -37,10 +37,12 @@ export async function handleReferralRequest(
     if (!session) throw new HttpError(401, "Non authentifié.");
     if (claiming) {
       const claim = await run(claimReferralRewards(session.user.id));
-      send(res, 200, {
-        ...claim,
-        overview: await run(referralOverview(session.user.id, deps)),
-      });
+      // The credits are in: a panel that fails to reload must not read as a
+      // failed claim. The client refetches on its own when it comes back null.
+      const overview = await run(referralOverview(session.user.id, deps)).catch(
+        () => null,
+      );
+      send(res, 200, { ...claim, overview });
       return true;
     }
     send(res, 200, await run(referralOverview(session.user.id, deps)));

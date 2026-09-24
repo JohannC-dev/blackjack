@@ -204,20 +204,12 @@ function notifySocial(userIds: readonly string[]) {
 }
 
 /**
- * A filleul just signed up with a parrainage code. A connected parrain sees
- * their new credits and their filleul straight away.
+ * A filleul just signed up with a parrainage code. The parrain is credited
+ * nothing here — a fresh filleul has wagered nothing — but they see them
+ * arrive, and the two are now friends.
  */
 onReferralCompleted((event) => {
-  const parrain = playersById.get(event.parrainId);
-  if (parrain)
-    Effect.runPromise(refreshWalletEffect(parrain)).catch((error: unknown) =>
-      console.error("Parrainage · portefeuille", error),
-    );
-  emitToPlayer(event.parrainId, "referral:filleul", {
-    filleul: event.filleul,
-    tiers: event.tiers,
-  });
-  // The registration made them friends: both lists are now stale.
+  emitToPlayer(event.parrainId, "referral:filleul", { filleul: event.filleul });
   notifySocial([event.parrainId, event.filleul.id]);
 });
 
@@ -231,16 +223,19 @@ onTiersGranted((event) => {
     Effect.runPromise(refreshWalletEffect(parrain)).catch((error: unknown) =>
       console.error("Parrainage · portefeuille", error),
     );
-  emitToPlayer(event.parrainId, "referral:claimed", {
-    filleulId: event.filleulId,
-    tiers: event.tiers,
-  });
+  emitToPlayer(event.parrainId, "referral:claimed", { tiers: event.tiers });
+  // Nothing is left to collect, so nothing is left to remember either.
+  for (const key of tiersAnnounced.keys())
+    if (key.startsWith(`${event.parrainId}\0`)) tiersAnnounced.delete(key);
 });
 
 /** Filleuls whose tiers were checked recently, with the time of that check. */
 const tiersCheckedAt = new Map<string, number>();
 const TIER_CHECK_INTERVAL = 60_000;
-/** Highest tier each parrain was already told about, per filleul. */
+/**
+ * Highest tier each parrain was already told about, per filleul. Cleared when
+ * they claim, so it never outgrows what is actually waiting to be collected.
+ */
 const tiersAnnounced = new Map<string, number>();
 
 /**
@@ -258,7 +253,9 @@ function announceClaimableTiers(userIds: Iterable<string>) {
     tiersCheckedAt.set(userId, now);
     runDatabase(claimableTiersOf(userId)).then(
       (progress) => {
-        if (!progress) return;
+        // Told only to a parrain who is there to hear it: an absent one finds
+        // the credits waiting in their panel anyway.
+        if (!progress || !playerSockets.get(progress.parrainId)?.size) return;
         const highest = Math.max(...progress.tiers.map((tier) => tier.tier));
         const key = `${progress.parrainId}\0${userId}`;
         if ((tiersAnnounced.get(key) ?? 0) >= highest) return;

@@ -28,7 +28,8 @@ async function loadOverview(signal?: AbortSignal) {
 export type ReferralClaim = {
   readonly tiers: ReferralTier[];
   readonly credited: number;
-  readonly overview: ReferralOverview;
+  /** The refreshed panel, or null when only the reload failed. */
+  readonly overview: ReferralOverview | null;
 };
 
 /** Collects every tier the filleuls have unlocked. Nothing is automatic. */

@@ -240,7 +240,7 @@ function ClaimButton({
     setClaiming(true);
     try {
       const result = await claimReferralRewards();
-      onClaimed(result.overview);
+      if (result.overview) onClaimed(result.overview);
       toast.success(`${credits(result.credited)} crédits récupérés`, {
         description: `${result.tiers.length} palier${
           result.tiers.length > 1 ? "s" : ""

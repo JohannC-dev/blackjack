@@ -8,8 +8,6 @@ import type { ReferralTier } from "../../src/lib/referral";
 export type ReferralCompleted = {
   readonly parrainId: string;
   readonly filleul: { readonly id: string; readonly name: string };
-  /** Tiers the parrain reached with this filleul, possibly none. */
-  readonly tiers: readonly ReferralTier[];
 };
 
 let listener: ((event: ReferralCompleted) => void) | null = null;
@@ -34,7 +32,7 @@ export function announceReferral(event: ReferralCompleted) {
  */
 export type TiersGranted = {
   readonly parrainId: string;
-  readonly filleulId: string;
+  /** Every tier the claim collected, across all their filleuls. */
   readonly tiers: readonly ReferralTier[];
 };
 

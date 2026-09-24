@@ -74,19 +74,22 @@ function grant(
 }
 
 /**
- * Pays a list of tiers the parrain just claimed for one filleul. The wallet
- * operation ids are stable, so a retried claim never credits the same tier
- * twice, and the reward rows are what marks a tier as collected.
+ * Pays a list of tiers the parrain just claimed for one filleul, and answers
+ * with the ones this call actually collected. The wallet operation ids are
+ * stable and carry nothing that moves — a tier retried after the filleul kept
+ * playing must describe the same operation, or the ledger rejects it — so a
+ * retry credits nothing twice. The reward rows are what marks a tier as
+ * collected, and two claims racing each other share them: only the one that
+ * inserts a row reports the tier.
  */
 const payTiers = (
   parrainId: string,
   filleulId: string,
-  wagered: number,
   tiers: readonly ReferralTier[],
 ) =>
   Effect.gen(function* () {
     const db = yield* PgDrizzle;
-    if (!tiers.length) return;
+    if (!tiers.length) return [] as ReferralTier[];
     yield* applyWalletOperations(
       tiers.map((tier) =>
         grant(
@@ -95,12 +98,12 @@ const payTiers = (
           `tier-${tier.tier}`,
           filleulId,
           tier.reward,
-          { filleulId, wagered, threshold: tier.wagered },
+          { filleulId, threshold: tier.wagered },
         ),
       ),
     );
     // Recorded once the credits landed: a failure here only costs a retry.
-    yield* db
+    const recorded = yield* db
       .insert(referralReward)
       .values(
         tiers.map((tier) => ({
@@ -110,13 +113,16 @@ const payTiers = (
           amount: tier.reward,
         })),
       )
-      .onConflictDoNothing();
-    if (tiers.some((tier) => tier.tier === REFERRAL_COSMETIC_TIER))
+      .onConflictDoNothing()
+      .returning({ tier: referralReward.tier });
+    const collected = new Set(recorded.map((row) => row.tier));
+    if (collected.has(REFERRAL_COSMETIC_TIER))
       yield* grantCosmetics(
         parrainId,
         PARRAINAGE_COSMETICS,
         "parrainage-parrain",
       );
+    return tiers.filter((tier) => collected.has(tier.tier));
   });
 
 /** The tiers each filleul of a parrain has reached but not been claimed for. */
@@ -128,11 +134,7 @@ const claimableOf = (parrainId: string) =>
       .from(referral)
       .where(eq(referral.parrainId, parrainId))).map((row) => row.id);
     if (!filleulIds.length)
-      return [] as {
-        filleulId: string;
-        wagered: number;
-        tiers: ReferralTier[];
-      }[];
+      return [] as { filleulId: string; tiers: ReferralTier[] }[];
 
     const activity = yield* activityOf(filleulIds);
     const claimed = yield* db
@@ -149,17 +151,13 @@ const claimableOf = (parrainId: string) =>
       byFilleul.set(row.filleulId, tiers);
     }
     return filleulIds
-      .map((filleulId) => {
-        const wagered = activity.get(filleulId)?.wagered ?? 0;
-        return {
-          filleulId,
-          wagered,
-          tiers: claimableTiers(
-            wagered,
-            byFilleul.get(filleulId) ?? new Set<number>(),
-          ),
-        };
-      })
+      .map((filleulId) => ({
+        filleulId,
+        tiers: claimableTiers(
+          activity.get(filleulId)?.wagered ?? 0,
+          byFilleul.get(filleulId) ?? new Set<number>(),
+        ),
+      }))
       .filter((entry) => entry.tiers.length > 0);
   });
 
@@ -181,15 +179,17 @@ export const claimReferralRewards = (parrainId: string) =>
         status: 409,
       });
     const claimed: ReferralTier[] = [];
-    for (const entry of pending) {
-      yield* payTiers(parrainId, entry.filleulId, entry.wagered, entry.tiers);
-      claimed.push(...entry.tiers);
-      announceTiers({
-        parrainId,
-        filleulId: entry.filleulId,
-        tiers: entry.tiers,
+    for (const entry of pending)
+      claimed.push(
+        ...(yield* payTiers(parrainId, entry.filleulId, entry.tiers)),
+      );
+    // Another claim got there first: nothing was collected here.
+    if (!claimed.length)
+      return yield* new ReferralError({
+        message: "Aucune récompense à récupérer.",
+        status: 409,
       });
-    }
+    announceTiers({ parrainId, tiers: claimed });
     return {
       tiers: claimed,
       credited: totalReward(claimed),
@@ -214,14 +214,13 @@ export const findParrainByCode = (input: string) =>
 export type ReferralRegistration = {
   readonly parrain: { readonly id: string; readonly name: string };
   readonly welcomeBonus: number;
-  /** Tiers the parrain reaches thanks to this filleul. */
-  readonly tiers: readonly ReferralTier[];
 };
 
 /**
  * Binds a new player to the parrain owning the code: the filleul gets their
- * welcome credits and cosmetics, the two become friends, and the parrain gets
- * every tier they now reach. Everything commits together, or nothing does.
+ * welcome credits and cosmetics, and the two become friends. Everything
+ * commits together, or nothing does. A fresh filleul has wagered nothing, so
+ * there is no tier to collect yet.
  */
 export const registerReferral = (filleulId: string, input: string) =>
   Effect.gen(function* () {
@@ -272,7 +271,6 @@ export const registerReferral = (filleulId: string, input: string) =>
         return {
           parrain: { id: parrain.id, name: parrain.name },
           welcomeBonus: REFERRAL_WELCOME_BONUS,
-          tiers: [],
         } satisfies ReferralRegistration;
       }),
     );
