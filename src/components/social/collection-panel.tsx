@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardBackSkin, PlayingCard } from "@/components/ui/playing-card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SkinImage } from "@/components/ui/skin-image";
 import {
   COSMETIC_KINDS,
@@ -17,7 +18,11 @@ import {
   type CosmeticRarity,
   type EquippedSkins,
 } from "@/lib/cosmetics";
-import { cosmeticsApi, rememberEquipped } from "@/lib/cosmetics-api";
+import {
+  CosmeticsApiError,
+  cosmeticsApi,
+  rememberEquipped,
+} from "@/lib/cosmetics-api";
 import { useProfile } from "@/lib/profile-context";
 import { cn } from "@/lib/utils";
 import { ChickenArt } from "../games/chicken/chicken-art";
@@ -43,6 +48,10 @@ const RARITY_TEXT: Record<CosmeticRarity, string> = {
 };
 
 /** What the collection shows while the player wears nothing of a kind. */
+function errorText(failure: unknown, fallback: string) {
+  return failure instanceof CosmeticsApiError ? failure.message : fallback;
+}
+
 const CLASSIC_DESCRIPTION: Record<CosmeticKind, string> = {
   "card-back": "Le dos violet du club.",
   "profile-icon": "Votre initiale, sur votre couleur.",
@@ -60,21 +69,24 @@ export function CollectionPanel() {
   const [items, setItems] = useState<CollectionItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<CosmeticKind | null>(null);
+  const [reloads, setReloads] = useState(0);
+  const reload = useCallback(() => setReloads((count) => count + 1), []);
 
-  const load = useCallback(() => {
+  useEffect(() => {
+    let active = true;
     setError(null);
     cosmeticsApi.collection().then(
-      (collection) => setItems(collection.items),
-      (failure: unknown) =>
-        setError(
-          failure instanceof Error
-            ? failure.message
-            : "Collection indisponible.",
-        ),
+      (collection) => {
+        if (active) setItems(collection.items);
+      },
+      (failure: unknown) => {
+        if (active) setError(errorText(failure, "Collection indisponible."));
+      },
     );
-  }, []);
-
-  useEffect(load, [load]);
+    return () => {
+      active = false;
+    };
+  }, [reloads]);
 
   const equip = async (kind: CosmeticKind, cosmeticId: string | null) => {
     if (!items || saving) return;
@@ -92,9 +104,7 @@ export function CollectionPanel() {
       if (me) rememberEquipped(me.id, worn);
     } catch (failure) {
       setItems(previous);
-      toast.error(
-        failure instanceof Error ? failure.message : "Choix non enregistré.",
-      );
+      toast.error(errorText(failure, "Choix non enregistré."));
     } finally {
       setSaving(null);
     }
@@ -104,7 +114,7 @@ export function CollectionPanel() {
     return (
       <div>
         <p className="text-sm text-muted-foreground">{error}</p>
-        <Button variant="secondary" size="sm" className="mt-3" onClick={load}>
+        <Button variant="secondary" size="sm" className="mt-3" onClick={reload}>
           Réessayer
         </Button>
       </div>
@@ -113,10 +123,7 @@ export function CollectionPanel() {
     return (
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
-          <div
-            key={index}
-            className="h-44 animate-pulse rounded-xl bg-white/[0.03]"
-          />
+          <Skeleton key={index} className="h-44 rounded-xl" />
         ))}
       </div>
     );

@@ -95,7 +95,7 @@ function fetchEquipped(ids: readonly string[]) {
 }
 
 /** Equipment of these players; `fresh` skips the cache, e.g. on a new round. */
-export async function loadEquipped(
+async function loadEquipped(
   ids: readonly string[],
   fresh = false,
 ): Promise<EquippedLookup> {

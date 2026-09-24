@@ -23,6 +23,8 @@ export function SkinImage({
       alt=""
       aria-hidden="true"
       draggable={false}
+      // Remounted at each chicken hop: decode before painting, never blink.
+      decoding="sync"
       className={className}
       onError={() => setFailed(src)}
     />

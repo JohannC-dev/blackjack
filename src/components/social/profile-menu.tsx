@@ -72,7 +72,13 @@ export function ProfileMenu({
         className="w-64 border-white/[0.07] bg-[#17141f] p-1.5 font-sans"
       >
         <DropdownMenuLabel className="flex items-center gap-3 px-2 py-2">
-          <PlayerAvatar id={me?.id ?? name} name={name} size="lg" />
+          <PlayerAvatar
+            id={me?.id ?? name}
+            name={name}
+            size="lg"
+            // Until the id is known, the name stands in: nothing to look up.
+            icon={me ? undefined : null}
+          />
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold text-foreground">
               {name}

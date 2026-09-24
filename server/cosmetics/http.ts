@@ -29,6 +29,26 @@ const EquipBody = Schema.Struct({
   ),
 });
 
+type Asset = Effect.Effect.Success<ReturnType<typeof cosmeticAssetOf>>;
+
+/**
+ * Pictures only change through an import, and the route is public: a short
+ * cache keeps unversioned or repeated requests off the database. Misses are
+ * cached too, and the whole cache is dropped rather than growing unbounded.
+ */
+const ASSET_CACHE_MS = 60_000;
+const ASSET_CACHE_SIZE = 200;
+const assetCache = new Map<string, { asset: Asset; expires: number }>();
+
+async function cachedAsset(cosmeticId: string) {
+  const hit = assetCache.get(cosmeticId);
+  if (hit && hit.expires > Date.now()) return hit.asset;
+  const asset = await run(cosmeticAssetOf(cosmeticId));
+  if (assetCache.size >= ASSET_CACHE_SIZE) assetCache.clear();
+  assetCache.set(cosmeticId, { asset, expires: Date.now() + ASSET_CACHE_MS });
+  return asset;
+}
+
 /** Runs a database effect; refusals become HTTP errors. */
 async function run<A, E>(effect: Effect.Effect<A, E, PgDrizzle | SqlClient>) {
   const result = await runDatabase(Effect.either(effect));
@@ -63,7 +83,8 @@ export async function handleCosmeticRequest(
 
     // GET /api/cosmetics/:id/asset?v=<hash>, public like any other image.
     if (method === "GET" && parts.length === 2 && parts[1] === "asset") {
-      const asset = await run(cosmeticAssetOf(parts[0]!));
+      const id = parts[0]!;
+      const asset = id.length <= 64 ? await cachedAsset(id) : null;
       if (!asset) throw new HttpError(404, "Visuel introuvable.");
       res.writeHead(200, {
         "Content-Type": asset.contentType,

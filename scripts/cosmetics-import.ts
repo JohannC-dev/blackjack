@@ -23,13 +23,8 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { eq, sql } from "drizzle-orm";
-import {
-  COSMETIC_RARITIES,
-  isCosmeticKind,
-  type CosmeticKind,
-  type CosmeticRarity,
-  type CosmeticStatus,
-} from "../src/lib/cosmetics";
+import { Either, ParseResult, Schema } from "effect";
+import { COSMETIC_KINDS, COSMETIC_RARITIES } from "../src/lib/cosmetics";
 import {
   AssetError,
   assetHash,
@@ -38,81 +33,47 @@ import {
 import { authDatabase, closeDatabase } from "../server/db/client";
 import { cosmetic, cosmeticAsset } from "../server/db/schema";
 
-type Entry = {
-  id: string;
-  kind: CosmeticKind;
-  name: string;
-  description: string;
-  rarity: CosmeticRarity;
-  status: CosmeticStatus;
-  unlockHint: string | null;
-  sortOrder: number;
-  priceCredits: number | null;
-  priceCents: number | null;
-  priceCurrency: string | null;
-  asset: string | null;
-};
+const Text = Schema.Trim.pipe(Schema.nonEmptyString());
+const optional = <A, I>(schema: Schema.Schema<A, I>, fallback: A) =>
+  Schema.optionalWith(schema, { default: () => fallback, nullable: true });
+const Positive = Schema.Int.pipe(Schema.positive());
+/** One of a closed list, reported in a single line. */
+const oneOf = <const T extends readonly [string, ...string[]]>(values: T) =>
+  Schema.Literal(...values).annotations({
+    message: () => ({
+      message: `attendu : ${values.join(", ")}`,
+      override: true,
+    }),
+  });
 
-const STATUSES: readonly CosmeticStatus[] = ["draft", "active", "retired"];
+const Entry = Schema.Struct({
+  id: Text.pipe(Schema.maxLength(64)),
+  kind: oneOf(COSMETIC_KINDS),
+  name: Text,
+  description: optional(Schema.Trim, ""),
+  rarity: optional(oneOf(COSMETIC_RARITIES), "common"),
+  status: optional(oneOf(["draft", "active", "retired"]), "draft"),
+  unlockHint: optional(Schema.NullOr(Text), null),
+  sortOrder: optional(Schema.Int, 0),
+  priceCredits: optional(Schema.NullOr(Positive), null),
+  priceCents: optional(Schema.NullOr(Positive), null),
+  priceCurrency: optional(
+    Schema.NullOr(Schema.String.pipe(Schema.pattern(/^[A-Z]{3}$/))),
+    null,
+  ),
+  asset: optional(Schema.NullOr(Text), null),
+}).pipe(
+  Schema.filter(
+    (entry) =>
+      (entry.priceCents === null) === (entry.priceCurrency === null) ||
+      "« priceCents » et « priceCurrency » vont ensemble.",
+  ),
+);
+
+const Manifest = Schema.Array(Entry);
 
 function fail(message: string): never {
   throw new AssetError(message);
-}
-
-function readEntry(raw: unknown, index: number): Entry {
-  const at = `Entrée ${index + 1}`;
-  if (!raw || typeof raw !== "object") fail(`${at} : objet attendu.`);
-  const value = raw as Record<string, unknown>;
-  const text = (key: string, optional = false) => {
-    const field = value[key];
-    if (field === undefined || field === null) {
-      if (optional) return null;
-      fail(`${at} : « ${key} » manquant.`);
-    }
-    if (typeof field !== "string" || !field.trim())
-      fail(`${at} : « ${key} » doit être un texte.`);
-    return field.trim();
-  };
-  const count = (key: string) => {
-    const field = value[key];
-    if (field === undefined || field === null) return null;
-    if (!Number.isSafeInteger(field) || (field as number) <= 0)
-      fail(`${at} : « ${key} » doit être un entier positif.`);
-    return field as number;
-  };
-
-  const id = text("id")!;
-  if (id.length > 64) fail(`${at} : l’id dépasse 64 caractères.`);
-  const kind = text("kind")!;
-  if (!isCosmeticKind(kind)) fail(`${at} : type « ${kind} » inconnu.`);
-  const rarity = text("rarity", true) ?? "common";
-  if (!COSMETIC_RARITIES.includes(rarity as CosmeticRarity))
-    fail(`${at} : rareté « ${rarity} » inconnue.`);
-  const status = text("status", true) ?? "draft";
-  if (!STATUSES.includes(status as CosmeticStatus))
-    fail(`${at} : statut « ${status} » inconnu.`);
-  const priceCents = count("priceCents");
-  const priceCurrency = text("priceCurrency", true);
-  if ((priceCents === null) !== (priceCurrency === null))
-    fail(`${at} : « priceCents » et « priceCurrency » vont ensemble.`);
-  const sortOrder = value.sortOrder ?? 0;
-  if (!Number.isSafeInteger(sortOrder))
-    fail(`${at} : « sortOrder » doit être un entier.`);
-
-  return {
-    id,
-    kind,
-    name: text("name")!,
-    description: text("description", true) ?? "",
-    rarity: rarity as CosmeticRarity,
-    status: status as CosmeticStatus,
-    unlockHint: text("unlockHint", true),
-    sortOrder: sortOrder as number,
-    priceCredits: count("priceCredits"),
-    priceCents,
-    priceCurrency: priceCurrency?.toUpperCase() ?? null,
-    asset: text("asset", true),
-  };
 }
 
 const [folder, ...flags] = process.argv.slice(2);
@@ -125,11 +86,28 @@ if (!folder) {
 const dryRun = flags.includes("--dry-run");
 
 try {
-  const manifest = JSON.parse(
-    await readFile(join(folder, "manifest.json"), "utf8"),
-  ) as unknown;
-  if (!Array.isArray(manifest)) fail("manifest.json doit être une liste.");
-  const entries = manifest.map(readEntry);
+  const manifest = Schema.decodeUnknownEither(Manifest)(
+    JSON.parse(await readFile(join(folder, "manifest.json"), "utf8")),
+    { errors: "all" },
+  );
+  if (Either.isLeft(manifest)) {
+    const issues = ParseResult.ArrayFormatter.formatErrorSync(manifest.left);
+    const where = (path: readonly PropertyKey[]) =>
+      `entrée ${Number(path[0]) + 1}${path.length > 1 ? ` · ${path.slice(1).join(".")}` : ""}`;
+    // An optional field also reports "not null", "not undefined": noise.
+    const absent = /^Expected (null|undefined), actual/;
+    const lines = issues.flatMap(({ path, message }) =>
+      absent.test(message) &&
+      issues.some(
+        (other) =>
+          where(other.path) === where(path) && !absent.test(other.message),
+      )
+        ? []
+        : [`  ${where(path)} : ${message}`],
+    );
+    fail(["manifest.json invalide :", ...lines].join("\n"));
+  }
+  const entries = manifest.right;
   const ids = new Set<string>();
   for (const entry of entries) {
     if (ids.has(entry.id)) fail(`Id « ${entry.id} » présent deux fois.`);

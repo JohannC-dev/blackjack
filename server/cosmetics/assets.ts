@@ -4,16 +4,16 @@ import type { CosmeticKind } from "../../src/lib/cosmetics";
 /** A card back or an icon weighs a few dozen kilobytes. */
 export const MAX_ASSET_BYTES = 256 * 1024;
 
-export const ASSET_TYPES = {
+const ASSET_TYPES = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".webp": "image/webp",
 } as const;
 
-export type AssetContentType = (typeof ASSET_TYPES)[keyof typeof ASSET_TYPES];
+type AssetContentType = (typeof ASSET_TYPES)[keyof typeof ASSET_TYPES];
 
 /** Width over height each kind is drawn at. */
-export const ASSET_RATIOS: Record<CosmeticKind, number> = {
+const ASSET_RATIOS: Record<CosmeticKind, number> = {
   "card-back": 5 / 7,
   "profile-icon": 1,
   chicken: 1,

@@ -15,6 +15,7 @@
     "test:spin-multiplayer": "bun tests/spin-multiplayer.ts",
     "test:tower-multiplayer": "bun tests/tower-multiplayer.ts",
     "test:friends": "bun tests/friends.ts",
+    "test:cosmetics": "bun tests/cosmetics.ts",
     "test:ui": "bun tests/ui-layout.ts",
     "test:poker-ui": "bun tests/poker-ui.ts",
     "test:poker-lobby": "bun tests/poker-lobby.ts",
