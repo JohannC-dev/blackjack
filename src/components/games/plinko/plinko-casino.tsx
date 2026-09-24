@@ -3,7 +3,6 @@
 import { CircleDot, Minus, Plus, Repeat2, Square, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGameAudio } from "@/lib/audio-context";
-import type { CasinoView } from "@/lib/navigation";
 import {
   plinkoMultiplierLabel,
   plinkoMultipliers,
@@ -25,7 +24,7 @@ import {
 import { credits } from "@/lib/rules";
 import type { PlinkoDrop } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
-import { CasinoRail, ClubHeader, getClubBalance } from "../../ui";
+import { getClubBalance } from "../../ui";
 import {
   BetChipPicker,
   GameActionButton,
@@ -54,10 +53,10 @@ function wait(ms: number) {
 
 export function PlinkoCasino({
   game,
-  onNavigate,
+  onSettledBalanceChange,
 }: {
   game: Game;
-  onNavigate: (view: CasinoView) => void;
+  onSettledBalanceChange: (balance: number) => void;
 }) {
   const state = game.plinkoState;
   const [risk, setRisk] = useState<PlinkoRisk>("medium");
@@ -102,6 +101,9 @@ export function PlinkoCasino({
 
   // The wager leaves the wallet at once, the winnings only when the ball lands.
   const settledBalance = Math.max(0, getClubBalance(game) - inFlight);
+  useEffect(() => {
+    onSettledBalanceChange(settledBalance);
+  }, [onSettledBalanceChange, settledBalance]);
   const maxBet = Math.min(PLINKO_MAX_BET, Math.floor(settledBalance));
   const multipliers = useMemo(
     () => plinkoMultipliers(risk, rows),
@@ -266,232 +268,222 @@ export function PlinkoCasino({
     setAutoCount((current) => Math.min(AUTO_MAX, Math.max(1, current + delta)));
 
   return (
-    <div className="casino-shell plinko-shell">
-      <CasinoRail active="plinko" onNavigate={onNavigate} />
-      <div className="ml-[76px] max-[700px]:ml-[55px] max-[450px]:ml-0">
-        <ClubHeader
-          balance={settledBalance}
-          name={game.profile?.name ?? ""}
-          onSignOut={game.signOut}
-        />
-        <main className="plinko-page">
-          <header className="plinko-page-heading">
-            <div className="plinko-title-block">
-              <span className="eyebrow">
-                LE CLUB <span>/</span> JEU SOLO
-              </span>
-              <h1>
-                Le <em>Plinko</em>
-              </h1>
-            </div>
-          </header>
+    <main className="plinko-page">
+      <header className="plinko-page-heading">
+        <div className="plinko-title-block">
+          <span className="eyebrow">
+            LE CLUB <span>/</span> JEU SOLO
+          </span>
+          <h1>
+            Le <em>Plinko</em>
+          </h1>
+        </div>
+      </header>
 
-          <div className="plinko-game-layout">
-            <section className="plinko-board-stage" aria-label="Planche Plinko">
-              <PlinkoBoard
-                rows={rows}
-                risk={risk}
-                multipliers={multipliers}
-                highlight={highlight}
-                handle={board}
-                onLand={onLand}
-                onPeg={onPeg}
-              />
-              <ul className="plinko-history" aria-label="Dernières billes">
-                {history.map((drop) => (
-                  <li
-                    key={drop.id}
-                    data-heat={plinkoSlotHeat(drop.slot, drop.rows).toFixed(1)}
-                    className={drop.net >= 0 ? "is-up" : "is-down"}
-                  >
-                    {plinkoMultiplierLabel(drop.multiplier)}
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            <GameControlsBar ariaLabel="Réglages du Plinko">
-              <GameControlGroup label="Risque" className="plinko-risk-control">
-                <div className="game-options" role="radiogroup">
-                  {PLINKO_RISKS.map((option) => (
-                    <GameOption
-                      key={option}
-                      compact
-                      selected={risk === option}
-                      disabled={boardLocked}
-                      onClick={() => setRisk(option)}
-                    >
-                      {PLINKO_RISK_LABELS[option]}
-                    </GameOption>
-                  ))}
-                </div>
-              </GameControlGroup>
-
-              <GameControlGroup
-                label={
-                  <>
-                    Rangées<span className="game-bet-amount">{rows}</span>
-                  </>
-                }
-                className="plinko-rows-control"
+      <div className="plinko-game-layout">
+        <section className="plinko-board-stage" aria-label="Planche Plinko">
+          <PlinkoBoard
+            rows={rows}
+            risk={risk}
+            multipliers={multipliers}
+            highlight={highlight}
+            handle={board}
+            onLand={onLand}
+            onPeg={onPeg}
+          />
+          <ul className="plinko-history" aria-label="Dernières billes">
+            {history.map((drop) => (
+              <li
+                key={drop.id}
+                data-heat={plinkoSlotHeat(drop.slot, drop.rows).toFixed(1)}
+                className={drop.net >= 0 ? "is-up" : "is-down"}
               >
-                <GameStepSlider
-                  values={PLINKO_ROW_OPTIONS}
-                  value={rows}
+                {plinkoMultiplierLabel(drop.multiplier)}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <GameControlsBar ariaLabel="Réglages du Plinko">
+          <GameControlGroup label="Risque" className="plinko-risk-control">
+            <div className="game-options" role="radiogroup">
+              {PLINKO_RISKS.map((option) => (
+                <GameOption
+                  key={option}
+                  compact
+                  selected={risk === option}
                   disabled={boardLocked}
-                  ariaLabel="Nombre de rangées"
-                  summary={`${rows} rangées`}
-                  format={(value) => String(value)}
-                  hints={["cases larges", "gains extrêmes"]}
-                  onChange={(value) => setRows(value as PlinkoRows)}
-                />
-              </GameControlGroup>
+                  onClick={() => setRisk(option)}
+                >
+                  {PLINKO_RISK_LABELS[option]}
+                </GameOption>
+              ))}
+            </div>
+          </GameControlGroup>
 
-              <GameControlGroup label="Jetons" className="plinko-bet-control">
-                <BetChipPicker
-                  bet={bet}
-                  maxBet={maxBet}
-                  balance={settledBalance}
-                  disabled={auto}
-                  onSelect={setBet}
-                />
-              </GameControlGroup>
+          <GameControlGroup
+            label={
+              <>
+                Rangées<span className="game-bet-amount">{rows}</span>
+              </>
+            }
+            className="plinko-rows-control"
+          >
+            <GameStepSlider
+              values={PLINKO_ROW_OPTIONS}
+              value={rows}
+              disabled={boardLocked}
+              ariaLabel="Nombre de rangées"
+              summary={`${rows} rangées`}
+              format={(value) => String(value)}
+              hints={["cases larges", "gains extrêmes"]}
+              onChange={(value) => setRows(value as PlinkoRows)}
+            />
+          </GameControlGroup>
 
-              <GameActionButton
-                variant="start"
-                busy={game.pending && !auto}
-                disabled={!game.connected || auto || insufficient}
-                icon={<CircleDot size={18} />}
-                label="Lâcher une bille"
-                subline={`${credits(bet)} cr.`}
-                onClick={dropOne}
-              />
+          <GameControlGroup label="Jetons" className="plinko-bet-control">
+            <BetChipPicker
+              bet={bet}
+              maxBet={maxBet}
+              balance={settledBalance}
+              disabled={auto}
+              onSelect={setBet}
+            />
+          </GameControlGroup>
 
-              <GamePopoverControl
-                id="plinko-auto-popover"
-                panelLabel="Configurer la série automatique"
-                running={auto}
-                icon={
-                  auto ? (
+          <GameActionButton
+            variant="start"
+            busy={game.pending && !auto}
+            disabled={!game.connected || auto || insufficient}
+            icon={<CircleDot size={18} />}
+            label="Lâcher une bille"
+            subline={`${credits(bet)} cr.`}
+            onClick={dropOne}
+          />
+
+          <GamePopoverControl
+            id="plinko-auto-popover"
+            panelLabel="Configurer la série automatique"
+            running={auto}
+            icon={
+              auto ? (
+                <Square size={14} fill="currentColor" />
+              ) : (
+                <Repeat2 size={15} />
+              )
+            }
+            title="Série"
+            status={
+              auto
+                ? `${autoLeft} à lâcher`
+                : `${autoCount} bille${autoCount === 1 ? "" : "s"}`
+            }
+            badge={`×${autoCount}`}
+          >
+            {(close) => (
+              <>
+                <div className="mines-pattern-popover-heading">
+                  <div>
+                    <span className="mines-pattern-kicker">
+                      MODE AUTOMATIQUE
+                    </span>
+                    <strong>
+                      {auto ? "Série en cours" : "Lâcher plusieurs billes"}
+                    </strong>
+                  </div>
+                  <button
+                    type="button"
+                    className="mines-pattern-close"
+                    aria-label="Fermer le panneau série"
+                    onClick={close}
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+                <p className="mines-pattern-intro">
+                  Les billes partent par salves de {PLINKO_MAX_BALLS}, à la mise
+                  et au risque choisis. Chaque bille est réglée séparément par
+                  le serveur.
+                </p>
+                <div className="mines-pattern-settings">
+                  <div className="mines-pattern-setting">
+                    <span>Nombre de billes</span>
+                    <div className="mines-pattern-stepper">
+                      <button
+                        type="button"
+                        aria-label="Diminuer le nombre de billes"
+                        disabled={auto || autoCount <= 1}
+                        onClick={() => changeAutoCount(-1)}
+                      >
+                        <Minus size={13} />
+                      </button>
+                      <label>
+                        <span aria-hidden="true">×</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max={AUTO_MAX}
+                          step="1"
+                          value={autoCount}
+                          disabled={auto}
+                          aria-label="Nombre de billes de la série"
+                          onChange={(event) => {
+                            const value = Number(event.currentTarget.value);
+                            setAutoCount(
+                              Number.isFinite(value)
+                                ? Math.min(
+                                    AUTO_MAX,
+                                    Math.max(1, Math.round(value)),
+                                  )
+                                : 1,
+                            );
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        aria-label="Augmenter le nombre de billes"
+                        disabled={auto || autoCount >= AUTO_MAX}
+                        onClick={() => changeAutoCount(1)}
+                      >
+                        <Plus size={13} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="mines-pattern-mode-button"
+                  disabled={!game.connected || (!auto && insufficient)}
+                  aria-pressed={auto}
+                  onClick={() => void startAuto()}
+                >
+                  {auto ? (
                     <Square size={14} fill="currentColor" />
                   ) : (
                     <Repeat2 size={15} />
-                  )
-                }
-                title="Série"
-                status={
-                  auto
-                    ? `${autoLeft} à lâcher`
-                    : `${autoCount} bille${autoCount === 1 ? "" : "s"}`
-                }
-                badge={`×${autoCount}`}
-              >
-                {(close) => (
-                  <>
-                    <div className="mines-pattern-popover-heading">
-                      <div>
-                        <span className="mines-pattern-kicker">
-                          MODE AUTOMATIQUE
-                        </span>
-                        <strong>
-                          {auto ? "Série en cours" : "Lâcher plusieurs billes"}
-                        </strong>
-                      </div>
-                      <button
-                        type="button"
-                        className="mines-pattern-close"
-                        aria-label="Fermer le panneau série"
-                        onClick={close}
-                      >
-                        <X size={15} />
-                      </button>
-                    </div>
-                    <p className="mines-pattern-intro">
-                      Les billes partent par salves de {PLINKO_MAX_BALLS}, à la
-                      mise et au risque choisis. Chaque bille est réglée
-                      séparément par le serveur.
-                    </p>
-                    <div className="mines-pattern-settings">
-                      <div className="mines-pattern-setting">
-                        <span>Nombre de billes</span>
-                        <div className="mines-pattern-stepper">
-                          <button
-                            type="button"
-                            aria-label="Diminuer le nombre de billes"
-                            disabled={auto || autoCount <= 1}
-                            onClick={() => changeAutoCount(-1)}
-                          >
-                            <Minus size={13} />
-                          </button>
-                          <label>
-                            <span aria-hidden="true">×</span>
-                            <input
-                              type="number"
-                              min="1"
-                              max={AUTO_MAX}
-                              step="1"
-                              value={autoCount}
-                              disabled={auto}
-                              aria-label="Nombre de billes de la série"
-                              onChange={(event) => {
-                                const value = Number(event.currentTarget.value);
-                                setAutoCount(
-                                  Number.isFinite(value)
-                                    ? Math.min(
-                                        AUTO_MAX,
-                                        Math.max(1, Math.round(value)),
-                                      )
-                                    : 1,
-                                );
-                              }}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            aria-label="Augmenter le nombre de billes"
-                            disabled={auto || autoCount >= AUTO_MAX}
-                            onClick={() => changeAutoCount(1)}
-                          >
-                            <Plus size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="mines-pattern-mode-button"
-                      disabled={!game.connected || (!auto && insufficient)}
-                      aria-pressed={auto}
-                      onClick={() => void startAuto()}
-                    >
-                      {auto ? (
-                        <Square size={14} fill="currentColor" />
-                      ) : (
-                        <Repeat2 size={15} />
-                      )}
-                      <span>
-                        {auto
-                          ? "Arrêter la série"
-                          : `Lancer ×${autoCount} · ${credits(bet * autoCount)} cr.`}
-                      </span>
-                    </button>
-                    {message && !auto && (
-                      <p className="mines-pattern-feedback" aria-live="polite">
-                        {message}
-                      </p>
-                    )}
-                  </>
+                  )}
+                  <span>
+                    {auto
+                      ? "Arrêter la série"
+                      : `Lancer ×${autoCount} · ${credits(bet * autoCount)} cr.`}
+                  </span>
+                </button>
+                {message && !auto && (
+                  <p className="mines-pattern-feedback" aria-live="polite">
+                    {message}
+                  </p>
                 )}
-              </GamePopoverControl>
-            </GameControlsBar>
-          </div>
-          {game.error && (
-            <p className="plinko-global-error" role="alert">
-              {game.error}
-            </p>
-          )}
-        </main>
+              </>
+            )}
+          </GamePopoverControl>
+        </GameControlsBar>
       </div>
-    </div>
+      {game.error && (
+        <p className="plinko-global-error" role="alert">
+          {game.error}
+        </p>
+      )}
+    </main>
   );
 }

@@ -16,7 +16,6 @@ import {
   type RouletteBetKind,
 } from "@/lib/roulette";
 import { credits } from "@/lib/rules";
-import type { CasinoView } from "@/lib/navigation";
 import type { ChipCount } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
 import { Chip } from "../../ui/chip";
@@ -27,20 +26,14 @@ import {
   GameControlGroup,
   GameControlsBar,
 } from "../../ui/game-controls";
-import { CasinoRail, ClubHeader, getClubBalance } from "../../ui";
+import { getClubBalance } from "../../ui";
 import { RouletteBoard, betMap, betChipMap } from "./roulette-board";
 import { colorName, numberTone, RouletteWheel } from "./roulette-wheel";
 
 type Game = ReturnType<typeof useGame>;
 export { targetAt, zeroTargetAt } from "./roulette-board";
 
-export function RouletteCasino({
-  game,
-  onNavigate,
-}: {
-  game: Game;
-  onNavigate: (view: CasinoView) => void;
-}) {
+export function RouletteCasino({ game }: { game: Game }) {
   const table = game.rouletteState;
   const balance = getClubBalance(game);
   const { enterRoulette, leaveRoulette } = game;
@@ -210,305 +203,224 @@ export function RouletteCasino({
   );
 
   return (
-    <div className="casino-shell roulette-shell">
-      <CasinoRail active="roulette" onNavigate={onNavigate} />
-      <div className="workspace">
-        <ClubHeader
-          balance={balance}
-          name={game.profile?.name ?? ""}
-          onSignOut={game.signOut}
-        />
-        <main className="roulette-page">
-          <div className="page-heading">
-            <div>
-              <div className="eyebrow">
-                LE CLUB <span>/</span> JEUX DE TABLE
-              </div>
-              <h1>
-                Roulette <span>Européenne</span>
-                <span className="live-tag">
-                  <i />
-                  LIVE
-                </span>
-              </h1>
-            </div>
+    <main className="roulette-page">
+      <div className="page-heading">
+        <div>
+          <div className="eyebrow">
+            LE CLUB <span>/</span> JEUX DE TABLE
           </div>
+          <h1>
+            Roulette <span>Européenne</span>
+            <span className="live-tag">
+              <i />
+              LIVE
+            </span>
+          </h1>
+        </div>
+      </div>
 
-          <section
-            className="table-panel roulette-panel"
-            aria-label="Table de roulette"
-          >
-            <div className="table-toolbar">
-              <div className="table-identity">
-                <span
-                  className={`connection-dot ${game.connected ? "online" : ""}`}
-                />
-                <b>TABLE PUBLIQUE</b>
-                <span className="table-separator">/</span>
-                <span>
-                  {credits(ROULETTE_MIN_CHIP)} –{" "}
-                  {credits(ROULETTE_MAX_PER_SPOT)} crédits par case
-                </span>
-              </div>
-              <div className="table-toolbar-actions">
-                <ol
-                  className="roulette-history"
-                  aria-label="Derniers numéros sortis"
-                >
-                  {(table?.history ?? []).slice(0, 10).map((number, index) => (
-                    <li
-                      key={`${table?.round}-${index}`}
-                      className={numberTone(number)}
-                    >
-                      {number}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            </div>
-
-            <div className="roulette-stage" ref={stageRef}>
-              <div className="roulette-felt">
-                <div className="felt-texture" />
-                <div className="table-inner-line" />
-              </div>
-              <div className="roulette-wheel-zone">
-                <RouletteWheel
-                  result={table?.number ?? null}
-                  spinKey={round}
-                  spinning={phase === "spinning"}
-                  showResult={phase === "settled"}
-                />
-                <div
-                  className={`roulette-outcome ${
-                    phase === "spinning"
-                      ? "is-spinning"
-                      : phase === "settled" && myResult
-                        ? myResult.net > 0
-                          ? "positive"
-                          : myResult.net < 0
-                            ? "negative"
-                            : "neutral"
-                        : ""
-                  }`}
-                  role="status"
-                  aria-live="polite"
-                >
-                  {phase === "spinning" ? (
-                    <>
-                      <small>RIEN NE VA PLUS</small>
-                      <strong>La bille tourne…</strong>
-                    </>
-                  ) : phase === "settled" && table?.number != null ? (
-                    <>
-                      <small>
-                        LE {table.number} {colorName(table.number)} EST SORTI
-                      </small>
-                      <strong>
-                        {!myResult
-                          ? "Vous n’avez pas misé"
-                          : myResult.net > 0
-                            ? "Gains versés"
-                            : myResult.net < 0
-                              ? "La banque ramasse"
-                              : "Mise remboursée"}
-                      </strong>
-                    </>
-                  ) : table?.deadline ? (
-                    <>
-                      <small>DERNIÈRES MISES</small>
-                      <strong>
-                        Lancement dans{" "}
-                        <CountdownText deadline={table.deadline} />
-                      </strong>
-                    </>
-                  ) : (
-                    <>
-                      <small>FAITES VOS JEUX</small>
-                      <strong>Posez vos jetons</strong>
-                    </>
-                  )}
-                </div>
-                <ul className="roulette-players" aria-label="Joueurs à table">
-                  {(table?.players ?? []).map((player) => {
-                    const playerResult = table?.results.find(
-                      (entry) => entry.playerId === player.id,
-                    );
-                    const staked = rouletteTotal(player.bets);
-                    return (
-                      <li
-                        key={player.id}
-                        className={`${player.id === me?.id ? "is-me" : "is-other"} ${player.ready ? "is-ready" : ""} ${player.connected ? "" : "is-away"}`}
-                      >
-                        <span className="roulette-player-avatar">
-                          {player.name.slice(0, 1).toUpperCase()}
-                        </span>
-                        <span className="roulette-player-name">
-                          {player.id === me?.id ? "Vous" : player.name}
-                        </span>
-                        {phase === "settled" && playerResult ? (
-                          <b
-                            className={
-                              playerResult.net > 0
-                                ? "positive"
-                                : playerResult.net < 0
-                                  ? "negative"
-                                  : ""
-                            }
-                          >
-                            {playerResult.net > 0 ? "+" : ""}
-                            {credits(playerResult.net)}
-                          </b>
-                        ) : (
-                          <b>{staked ? `${credits(staked)} cr.` : "—"}</b>
-                        )}
-                        {player.ready && betting && (
-                          <Check
-                            size={12}
-                            className="roulette-player-ready"
-                            aria-label="Prêt"
-                          />
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-              <div className="roulette-board-zone">
-                <div className="roulette-pot-zone">
-                  <span className="roulette-pot-anchor" aria-hidden="true" />
-                  {phase === "settled" && myResult && (
-                    <div
-                      className={`table-round-result roulette-round-result ${myResult.net > 0 ? "positive" : myResult.net < 0 ? "negative" : "neutral"}`}
-                      role="status"
-                      aria-label={`Résultat de la manche : ${myResult.net < 0 ? "perte de " : "retour de "}${credits(myResult.net < 0 ? -myResult.net : myResult.payout)} crédits`}
-                    >
-                      <span className="table-round-result-kicker">
-                        {myResult.net > 0
-                          ? "RETOUR TOTAL"
-                          : myResult.net === 0
-                            ? "MISE REMBOURSÉE"
-                            : "MANCHE PERDUE"}
-                      </span>
-                      <strong>
-                        {myResult.net < 0 ? "−" : "+"}
-                        {credits(
-                          myResult.net < 0 ? -myResult.net : myResult.payout,
-                        )}
-                        <small>cr.</small>
-                      </strong>
-                      <span className="table-round-result-countdown">
-                        <small>PROCHAINE MANCHE</small>
-                        <CountdownText deadline={table?.deadline} />
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <RouletteBoard
-                  mine={mine}
-                  mineChips={mineChips}
-                  others={othersMap}
-                  othersChips={othersChips}
-                  chip={chip}
-                  canBet={canBet}
-                  result={result}
-                  phase={phase}
-                  onPlace={place}
-                  onRemove={remove}
-                />
-              </div>
-              <RouletteFx table={table} stageRef={stageRef} />
-            </div>
-          </section>
-
-          <GameControlsBar ariaLabel="Mises de la roulette">
-            <GameControlGroup label="Jeton">
-              <div className="chip-picker">
-                {CASINO_CHIP_DENOMINATIONS.map((amount) => (
-                  <Chip
-                    key={amount}
-                    amount={amount}
-                    selected={chip === amount}
-                    disabled={!betting || ready || amount > balance - total}
-                    onClick={setChip}
-                  />
-                ))}
-                <span className="rack-divider" />
-                <button
-                  type="button"
-                  className="icon-button repeat-bet"
-                  disabled={
-                    !canBet ||
-                    !me?.previousTotal ||
-                    total > 0 ||
-                    me.previousTotal > balance
-                  }
-                  onClick={repeat}
-                  title={
-                    me?.previousTotal
-                      ? `Répéter la mise précédente (${credits(me.previousTotal)} crédits)`
-                      : "Aucune mise précédente"
-                  }
-                  aria-label="Répéter la mise précédente"
-                >
-                  <Repeat2 size={16} />
-                  <span>Répéter</span>
-                </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  disabled={!canBet || !undo.length}
-                  onClick={undoLast}
-                  title="Annuler le dernier jeton"
-                  aria-label="Annuler le dernier jeton"
-                >
-                  <RotateCcw size={17} />
-                </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  disabled={!canBet || !myBets.length}
-                  onClick={() => void send([])}
-                  title="Retirer toutes vos mises"
-                  aria-label="Retirer toutes vos mises"
-                >
-                  <X size={17} />
-                </button>
-              </div>
-            </GameControlGroup>
-            <GameControlGroup
-              label={
-                <>
-                  Mise totale{" "}
-                  <b className="game-bet-amount">{credits(total)} cr.</b>
-                </>
-              }
-            >
-              <span className="roulette-bet-summary">
-                {myBets.length
-                  ? `${myBets.length} mise${myBets.length > 1 ? "s" : ""} sur le tapis`
-                  : "Aucun jeton posé"}
-              </span>
-            </GameControlGroup>
-            <GameActionButton
-              variant="start"
-              busy={game.pending}
-              disabled={
-                !betting ||
-                !me ||
-                !game.connected ||
-                (!ready && (total < ROULETTE_MIN_CHIP || total > balance))
-              }
-              icon={ready ? <Check size={18} /> : <CircleDot size={18} />}
-              label={actionLabel}
-              subline={actionSubline}
-              onClick={() =>
-                void game.rouletteCommand({ type: "ready", ready: !ready })
-              }
+      <section
+        className="table-panel roulette-panel"
+        aria-label="Table de roulette"
+      >
+        <div className="table-toolbar">
+          <div className="table-identity">
+            <span
+              className={`connection-dot ${game.connected ? "online" : ""}`}
             />
+            <b>TABLE PUBLIQUE</b>
+            <span className="table-separator">/</span>
+            <span>
+              {credits(ROULETTE_MIN_CHIP)} – {credits(ROULETTE_MAX_PER_SPOT)}{" "}
+              crédits par case
+            </span>
+          </div>
+          <div className="table-toolbar-actions">
+            <ol
+              className="roulette-history"
+              aria-label="Derniers numéros sortis"
+            >
+              {(table?.history ?? []).slice(0, 10).map((number, index) => (
+                <li
+                  key={`${table?.round}-${index}`}
+                  className={numberTone(number)}
+                >
+                  {number}
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+
+        <div className="roulette-stage" ref={stageRef}>
+          <div className="roulette-felt">
+            <div className="felt-texture" />
+            <div className="table-inner-line" />
+          </div>
+          <div className="roulette-wheel-zone">
+            <RouletteWheel
+              result={table?.number ?? null}
+              spinKey={round}
+              spinning={phase === "spinning"}
+              showResult={phase === "settled"}
+            />
+            <div
+              className={`roulette-outcome ${
+                phase === "spinning"
+                  ? "is-spinning"
+                  : phase === "settled" && myResult
+                    ? myResult.net > 0
+                      ? "positive"
+                      : myResult.net < 0
+                        ? "negative"
+                        : "neutral"
+                    : ""
+              }`}
+              role="status"
+              aria-live="polite"
+            >
+              {phase === "spinning" ? (
+                <>
+                  <small>RIEN NE VA PLUS</small>
+                  <strong>La bille tourne…</strong>
+                </>
+              ) : phase === "settled" && table?.number != null ? (
+                <>
+                  <small>
+                    LE {table.number} {colorName(table.number)} EST SORTI
+                  </small>
+                  <strong>
+                    {!myResult
+                      ? "Vous n’avez pas misé"
+                      : myResult.net > 0
+                        ? "Gains versés"
+                        : myResult.net < 0
+                          ? "La banque ramasse"
+                          : "Mise remboursée"}
+                  </strong>
+                </>
+              ) : table?.deadline ? (
+                <>
+                  <small>DERNIÈRES MISES</small>
+                  <strong>
+                    Lancement dans <CountdownText deadline={table.deadline} />
+                  </strong>
+                </>
+              ) : (
+                <>
+                  <small>FAITES VOS JEUX</small>
+                  <strong>Posez vos jetons</strong>
+                </>
+              )}
+            </div>
+            <ul className="roulette-players" aria-label="Joueurs à table">
+              {(table?.players ?? []).map((player) => {
+                const playerResult = table?.results.find(
+                  (entry) => entry.playerId === player.id,
+                );
+                const staked = rouletteTotal(player.bets);
+                return (
+                  <li
+                    key={player.id}
+                    className={`${player.id === me?.id ? "is-me" : "is-other"} ${player.ready ? "is-ready" : ""} ${player.connected ? "" : "is-away"}`}
+                  >
+                    <span className="roulette-player-avatar">
+                      {player.name.slice(0, 1).toUpperCase()}
+                    </span>
+                    <span className="roulette-player-name">
+                      {player.id === me?.id ? "Vous" : player.name}
+                    </span>
+                    {phase === "settled" && playerResult ? (
+                      <b
+                        className={
+                          playerResult.net > 0
+                            ? "positive"
+                            : playerResult.net < 0
+                              ? "negative"
+                              : ""
+                        }
+                      >
+                        {playerResult.net > 0 ? "+" : ""}
+                        {credits(playerResult.net)}
+                      </b>
+                    ) : (
+                      <b>{staked ? `${credits(staked)} cr.` : "—"}</b>
+                    )}
+                    {player.ready && betting && (
+                      <Check
+                        size={12}
+                        className="roulette-player-ready"
+                        aria-label="Prêt"
+                      />
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          <div className="roulette-board-zone">
+            <div className="roulette-pot-zone">
+              <span className="roulette-pot-anchor" aria-hidden="true" />
+              {phase === "settled" && myResult && (
+                <div
+                  className={`table-round-result roulette-round-result ${myResult.net > 0 ? "positive" : myResult.net < 0 ? "negative" : "neutral"}`}
+                  role="status"
+                  aria-label={`Résultat de la manche : ${myResult.net < 0 ? "perte de " : "retour de "}${credits(myResult.net < 0 ? -myResult.net : myResult.payout)} crédits`}
+                >
+                  <span className="table-round-result-kicker">
+                    {myResult.net > 0
+                      ? "RETOUR TOTAL"
+                      : myResult.net === 0
+                        ? "MISE REMBOURSÉE"
+                        : "MANCHE PERDUE"}
+                  </span>
+                  <strong>
+                    {myResult.net < 0 ? "−" : "+"}
+                    {credits(
+                      myResult.net < 0 ? -myResult.net : myResult.payout,
+                    )}
+                    <small>cr.</small>
+                  </strong>
+                  <span className="table-round-result-countdown">
+                    <small>PROCHAINE MANCHE</small>
+                    <CountdownText deadline={table?.deadline} />
+                  </span>
+                </div>
+              )}
+            </div>
+            <RouletteBoard
+              mine={mine}
+              mineChips={mineChips}
+              others={othersMap}
+              othersChips={othersChips}
+              chip={chip}
+              canBet={canBet}
+              result={result}
+              phase={phase}
+              onPlace={place}
+              onRemove={remove}
+            />
+          </div>
+          <RouletteFx table={table} stageRef={stageRef} />
+        </div>
+      </section>
+
+      <GameControlsBar ariaLabel="Mises de la roulette">
+        <GameControlGroup label="Jeton">
+          <div className="chip-picker">
+            {CASINO_CHIP_DENOMINATIONS.map((amount) => (
+              <Chip
+                key={amount}
+                amount={amount}
+                selected={chip === amount}
+                disabled={!betting || ready || amount > balance - total}
+                onClick={setChip}
+              />
+            ))}
+            <span className="rack-divider" />
             <button
               type="button"
-              className="icon-button repeat-bet mobile-repeat-bet"
+              className="icon-button repeat-bet"
               disabled={
                 !canBet ||
                 !me?.previousTotal ||
@@ -526,14 +438,84 @@ export function RouletteCasino({
               <Repeat2 size={16} />
               <span>Répéter</span>
             </button>
-          </GameControlsBar>
-          {game.error && (
-            <p className="mines-global-error" role="alert">
-              {game.error}
-            </p>
-          )}
-        </main>
-      </div>
-    </div>
+            <button
+              type="button"
+              className="icon-button"
+              disabled={!canBet || !undo.length}
+              onClick={undoLast}
+              title="Annuler le dernier jeton"
+              aria-label="Annuler le dernier jeton"
+            >
+              <RotateCcw size={17} />
+            </button>
+            <button
+              type="button"
+              className="icon-button"
+              disabled={!canBet || !myBets.length}
+              onClick={() => void send([])}
+              title="Retirer toutes vos mises"
+              aria-label="Retirer toutes vos mises"
+            >
+              <X size={17} />
+            </button>
+          </div>
+        </GameControlGroup>
+        <GameControlGroup
+          label={
+            <>
+              Mise totale{" "}
+              <b className="game-bet-amount">{credits(total)} cr.</b>
+            </>
+          }
+        >
+          <span className="roulette-bet-summary">
+            {myBets.length
+              ? `${myBets.length} mise${myBets.length > 1 ? "s" : ""} sur le tapis`
+              : "Aucun jeton posé"}
+          </span>
+        </GameControlGroup>
+        <GameActionButton
+          variant="start"
+          busy={game.pending}
+          disabled={
+            !betting ||
+            !me ||
+            !game.connected ||
+            (!ready && (total < ROULETTE_MIN_CHIP || total > balance))
+          }
+          icon={ready ? <Check size={18} /> : <CircleDot size={18} />}
+          label={actionLabel}
+          subline={actionSubline}
+          onClick={() =>
+            void game.rouletteCommand({ type: "ready", ready: !ready })
+          }
+        />
+        <button
+          type="button"
+          className="icon-button repeat-bet mobile-repeat-bet"
+          disabled={
+            !canBet ||
+            !me?.previousTotal ||
+            total > 0 ||
+            me.previousTotal > balance
+          }
+          onClick={repeat}
+          title={
+            me?.previousTotal
+              ? `Répéter la mise précédente (${credits(me.previousTotal)} crédits)`
+              : "Aucune mise précédente"
+          }
+          aria-label="Répéter la mise précédente"
+        >
+          <Repeat2 size={16} />
+          <span>Répéter</span>
+        </button>
+      </GameControlsBar>
+      {game.error && (
+        <p className="mines-global-error" role="alert">
+          {game.error}
+        </p>
+      )}
+    </main>
   );
 }

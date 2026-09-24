@@ -44,7 +44,6 @@ import {
 import { useGameAudio } from "@/lib/audio-context";
 import type { PokerAction, PokerSeat } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
-import { CasinoRail, ClubHeader, getClubBalance } from "../../ui";
 import type { CasinoView } from "@/lib/navigation";
 import { BlackjackIcon } from "../../ui/blackjack-icon";
 import { useCountdownSeconds, useServerClockNow } from "../../ui/countdown";
@@ -85,209 +84,195 @@ export function CasinoHome({
 }) {
   const [towerHot, setTowerHot] = useState(false);
   return (
-    <div className="casino-shell hub-shell">
-      <CasinoRail
-        active="home"
-        onNavigate={onNavigate}
-        blackjackLabel="Table de cartes"
-      />
-      <div className="ml-[76px] max-[700px]:ml-[55px] max-[450px]:ml-0">
-        <ClubHeader
-          balance={getClubBalance(game)}
-          name={game.profile?.name ?? ""}
-          onSignOut={game.signOut}
+    <main className="club-lobby">
+      <section className="club-hero">
+        <div className="club-hero-copy">
+          <span className="eyebrow">LE CLUB / OUVERT TOUTE LA NUIT</span>
+          <h1>
+            Choisissez
+            <br />
+            <em>votre table.</em>
+          </h1>
+          <p>
+            Sept jeux, un seul portefeuille. Entrez sans attendre — les cartes
+            et la grille sont déjà prêtes.
+          </p>
+          <div className="club-trust">
+            <ShieldCheck size={15} /> Crédits fictifs · Parties en direct
+          </div>
+        </div>
+        <div className="club-emblem" aria-hidden="true">
+          <span className="club-moon" />
+          <Spade size={86} fill="currentColor" />
+          <i>MINUIT</i>
+        </div>
+      </section>
+      <section className="game-selection" aria-label="Jeux disponibles">
+        <GamePoster
+          className="blackjack-poster"
+          buttonTitle="Blackjack"
+          index="01"
+          art={
+            <>
+              <span>21</span>
+              <PlayingCard
+                card={{ id: "home-a", rank: 1, suit: "spades" }}
+                decorative
+              />
+              <PlayingCard
+                card={{ id: "home-k", rank: 13, suit: "hearts" }}
+                decorative
+              />
+            </>
+          }
+          eyebrow="JEU DE TABLE"
+          title={
+            <>
+              Blackjack
+              <br />
+              Européen
+            </>
+          }
+          description="Le classique de la maison, enrichi de paris annexes."
+          action="Rejoindre la table"
+          onClick={() => onNavigate("blackjack")}
         />
-        <main className="club-lobby">
-          <section className="club-hero">
-            <div className="club-hero-copy">
-              <span className="eyebrow">LE CLUB / OUVERT TOUTE LA NUIT</span>
-              <h1>
-                Choisissez
-                <br />
-                <em>votre table.</em>
-              </h1>
-              <p>
-                Sept jeux, un seul portefeuille. Entrez sans attendre — les
-                cartes et la grille sont déjà prêtes.
-              </p>
-              <div className="club-trust">
-                <ShieldCheck size={15} /> Crédits fictifs · Parties en direct
+        <GamePoster
+          className="poker-poster"
+          index="02"
+          artClassName="poker-art"
+          art={<RoomArt theme="salon" poster />}
+          eyebrow="NOUVEAU · MULTIJOUEUR"
+          title={
+            <>
+              Texas
+              <br />
+              Hold’em
+            </>
+          }
+          description="Cash Game à cinq ou Spin & Play en format éclair."
+          action="Entrer dans le lobby"
+          onClick={() => onNavigate("poker")}
+        />
+        <GamePoster
+          className="roulette-poster"
+          index="03"
+          artClassName="roulette-art"
+          art={<RoulettePosterArt />}
+          eyebrow="JEU DE TABLE · MULTIJOUEUR"
+          title={
+            <>
+              Roulette
+              <br />
+              Européenne
+            </>
+          }
+          description="Le tapis vert, les mises classiques et la bille en direct."
+          action="Jouer à la roulette"
+          onClick={() => onNavigate("roulette")}
+        />
+        <GamePoster
+          className="tower-poster"
+          index="04"
+          artClassName="tower-art"
+          art={<TowerPosterArt hot={towerHot} />}
+          eyebrow="NOUVEAU · SOLO & LIVE"
+          title={
+            <>
+              La
+              <br />
+              Tower
+            </>
+          }
+          description="Dix étages, un piège par rangée. Encaissez avant la chute."
+          action="Grimper la tour"
+          onClick={() => onNavigate("tower")}
+          onMouseEnter={() => setTowerHot(true)}
+          onMouseLeave={() => setTowerHot(false)}
+          onFocus={() => setTowerHot(true)}
+          onBlur={() => setTowerHot(false)}
+        />
+        <GamePoster
+          className="mines-poster"
+          index="05"
+          artClassName="mines-art"
+          art={
+            <>
+              <div className="mines-poster-grid" aria-hidden="true">
+                {Array.from({ length: 9 }, (_, index) => (
+                  <span key={index} className={index === 4 ? "is-gem" : ""}>
+                    {index === 4 && <MineDiamond />}
+                  </span>
+                ))}
               </div>
-            </div>
-            <div className="club-emblem" aria-hidden="true">
-              <span className="club-moon" />
-              <Spade size={86} fill="currentColor" />
-              <i>MINUIT</i>
-            </div>
-          </section>
-          <section className="game-selection" aria-label="Jeux disponibles">
-            <GamePoster
-              className="blackjack-poster"
-              buttonTitle="Blackjack"
-              index="01"
-              art={
-                <>
-                  <span>21</span>
-                  <PlayingCard
-                    card={{ id: "home-a", rank: 1, suit: "spades" }}
-                    decorative
-                  />
-                  <PlayingCard
-                    card={{ id: "home-k", rank: 13, suit: "hearts" }}
-                    decorative
-                  />
-                </>
-              }
-              eyebrow="JEU DE TABLE"
-              title={
-                <>
-                  Blackjack
-                  <br />
-                  Européen
-                </>
-              }
-              description="Le classique de la maison, enrichi de paris annexes."
-              action="Rejoindre la table"
-              onClick={() => onNavigate("blackjack")}
-            />
-            <GamePoster
-              className="poker-poster"
-              index="02"
-              artClassName="poker-art"
-              art={<RoomArt theme="salon" poster />}
-              eyebrow="NOUVEAU · MULTIJOUEUR"
-              title={
-                <>
-                  Texas
-                  <br />
-                  Hold’em
-                </>
-              }
-              description="Cash Game à cinq ou Spin & Play en format éclair."
-              action="Entrer dans le lobby"
-              onClick={() => onNavigate("poker")}
-            />
-            <GamePoster
-              className="roulette-poster"
-              index="03"
-              artClassName="roulette-art"
-              art={<RoulettePosterArt />}
-              eyebrow="JEU DE TABLE · MULTIJOUEUR"
-              title={
-                <>
-                  Roulette
-                  <br />
-                  Européenne
-                </>
-              }
-              description="Le tapis vert, les mises classiques et la bille en direct."
-              action="Jouer à la roulette"
-              onClick={() => onNavigate("roulette")}
-            />
-            <GamePoster
-              className="tower-poster"
-              index="04"
-              artClassName="tower-art"
-              art={<TowerPosterArt hot={towerHot} />}
-              eyebrow="NOUVEAU · SOLO & LIVE"
-              title={
-                <>
-                  La
-                  <br />
-                  Tower
-                </>
-              }
-              description="Dix étages, un piège par rangée. Encaissez avant la chute."
-              action="Grimper la tour"
-              onClick={() => onNavigate("tower")}
-              onMouseEnter={() => setTowerHot(true)}
-              onMouseLeave={() => setTowerHot(false)}
-              onFocus={() => setTowerHot(true)}
-              onBlur={() => setTowerHot(false)}
-            />
-            <GamePoster
-              className="mines-poster"
-              index="05"
-              artClassName="mines-art"
-              art={
-                <>
-                  <div className="mines-poster-grid" aria-hidden="true">
-                    {Array.from({ length: 9 }, (_, index) => (
-                      <span key={index} className={index === 4 ? "is-gem" : ""}>
-                        {index === 4 && <MineDiamond />}
-                      </span>
-                    ))}
-                  </div>
-                  <MineBomb />
-                </>
-              }
-              eyebrow="NOUVEAU · EXTRACTION"
-              title={
-                <>
-                  Jeu de la
-                  <br />
-                  Mine
-                </>
-              }
-              description="Choisissez votre objectif, trouvez les diamants, encaissez."
-              action="Commencer l’extraction"
-              onClick={() => onNavigate("mines")}
-            />
-            <GamePoster
-              className="chicken-poster"
-              index="06"
-              artClassName="chicken-poster-art"
-              art={
-                <>
-                  <span className="chicken-poster-road" />
-                  <ChickenArt />
-                </>
-              }
-              eyebrow="NOUVEAU · SOLO & LIVE"
-              title="Chicken"
-              description="Sautez, encaissez et croisez les autres poulets sur la route."
-              action="Traverser la route"
-              onClick={() => onNavigate("chicken")}
-            />
-            <GamePoster
-              className="plinko-poster"
-              index="07"
-              artClassName="plinko-art"
-              art={
-                <>
-                  <span className="plinko-poster-ball" aria-hidden="true" />
-                  <div className="plinko-poster-pins" aria-hidden="true">
-                    {[3, 4, 5, 6, 7].map((count) => (
-                      <span key={count}>
-                        {Array.from({ length: count }, (_, index) => (
-                          <i key={index} />
-                        ))}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="plinko-poster-slots" aria-hidden="true">
-                    {Array.from({ length: 7 }, (_, index) => (
+              <MineBomb />
+            </>
+          }
+          eyebrow="NOUVEAU · EXTRACTION"
+          title={
+            <>
+              Jeu de la
+              <br />
+              Mine
+            </>
+          }
+          description="Choisissez votre objectif, trouvez les diamants, encaissez."
+          action="Commencer l’extraction"
+          onClick={() => onNavigate("mines")}
+        />
+        <GamePoster
+          className="chicken-poster"
+          index="06"
+          artClassName="chicken-poster-art"
+          art={
+            <>
+              <span className="chicken-poster-road" />
+              <ChickenArt />
+            </>
+          }
+          eyebrow="NOUVEAU · SOLO & LIVE"
+          title="Chicken"
+          description="Sautez, encaissez et croisez les autres poulets sur la route."
+          action="Traverser la route"
+          onClick={() => onNavigate("chicken")}
+        />
+        <GamePoster
+          className="plinko-poster"
+          index="07"
+          artClassName="plinko-art"
+          art={
+            <>
+              <span className="plinko-poster-ball" aria-hidden="true" />
+              <div className="plinko-poster-pins" aria-hidden="true">
+                {[3, 4, 5, 6, 7].map((count) => (
+                  <span key={count}>
+                    {Array.from({ length: count }, (_, index) => (
                       <i key={index} />
                     ))}
-                  </div>
-                </>
-              }
-              eyebrow="NOUVEAU · JEU SOLO"
-              title={
-                <>
-                  Le
-                  <br />
-                  Plinko
-                </>
-              }
-              description="Une bille, seize rangées, des multiplicateurs jusqu’aux bords."
-              action="Lâcher une bille"
-              onClick={() => onNavigate("plinko")}
-            />
-          </section>
-        </main>
-      </div>
-    </div>
+                  </span>
+                ))}
+              </div>
+              <div className="plinko-poster-slots" aria-hidden="true">
+                {Array.from({ length: 7 }, (_, index) => (
+                  <i key={index} />
+                ))}
+              </div>
+            </>
+          }
+          eyebrow="NOUVEAU · JEU SOLO"
+          title={
+            <>
+              Le
+              <br />
+              Plinko
+            </>
+          }
+          description="Une bille, seize rangées, des multiplicateurs jusqu’aux bords."
+          action="Lâcher une bille"
+          onClick={() => onNavigate("plinko")}
+        />
+      </section>
+    </main>
   );
 }
 
@@ -300,22 +285,14 @@ export function PokerCasino({
 }) {
   const poker = game.pokerState;
   return (
-    <div className="casino-shell poker-shell">
-      <CasinoRail active="poker" onNavigate={onNavigate} />
-      <div className="ml-[76px] max-[700px]:ml-[55px] max-[450px]:ml-0">
-        <ClubHeader
-          balance={getClubBalance(game)}
-          name={game.profile?.name ?? ""}
-          onSignOut={game.signOut}
-        />
-        {poker?.status === "table" && poker.table ? (
-          <PokerTable game={game} />
-        ) : poker?.status === "queue" ? (
-          <PokerQueue game={game} />
-        ) : (
-          <PokerLobby game={game} onNavigate={onNavigate} />
-        )}
-      </div>
+    <>
+      {poker?.status === "table" && poker.table ? (
+        <PokerTable game={game} />
+      ) : poker?.status === "queue" ? (
+        <PokerQueue game={game} />
+      ) : (
+        <PokerLobby game={game} onNavigate={onNavigate} />
+      )}
       {game.error && (
         <div className="toast error-toast is-visible" role="alert">
           <X size={16} />
@@ -325,7 +302,7 @@ export function PokerCasino({
           </button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

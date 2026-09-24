@@ -53,8 +53,6 @@ import type {
   TowerRun,
 } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
-import type { CasinoView } from "@/lib/navigation";
-import { CasinoRail, ClubHeader, getClubBalance } from "../../ui";
 import { TowerFx, type TowerFxHandle } from "./tower-fx";
 import {
   BetChipPicker,
@@ -66,7 +64,6 @@ import {
 import styles from "./tower.module.css";
 
 type Game = ReturnType<typeof useGame>;
-type Navigate = (view: CasinoView) => void;
 type Phase =
   | "idle"
   | "shaking"
@@ -90,13 +87,7 @@ function jitter(index: number, salt: number) {
   return value - Math.floor(value);
 }
 
-export function TowerCasino({
-  game,
-  onNavigate,
-}: {
-  game: Game;
-  onNavigate: Navigate;
-}) {
+export function TowerCasino({ game }: { game: Game }) {
   const tower = game.towerState;
   const run = tower?.run ?? null;
   const playing = run?.status === "playing";
@@ -390,173 +381,165 @@ export function TowerCasino({
   );
 
   return (
-    <div className="casino-shell tower-shell">
-      <CasinoRail active="tower" onNavigate={onNavigate} />
-      <div className="ml-[76px] max-[700px]:ml-[55px] max-[450px]:ml-0">
-        <ClubHeader
-          balance={getClubBalance(game)}
-          name={game.profile?.name ?? ""}
-          onSignOut={game.signOut}
-        />
-        <main className={styles.page}>
-          <header className={styles.strip}>
-            <div className={styles.titleBlock}>
-              <span className="eyebrow">LE CLUB / JEU SOLO & LIVE</span>
-              <h1>
-                La <em>Tower</em>
-              </h1>
-            </div>
-            <LuckyBadge
-              hot={Boolean(shownRun?.lucky)}
-              pot={tower?.luckyPot ?? 0}
-            />
-            <div className={styles.stripTools}>
-              <span
-                className={styles.liveCount}
-                title="Joueurs en train de grimper"
-              >
-                <Users size={15} />
-                {ghosts.filter((ghost) => ghost.status === "playing").length}
-              </span>
-              <button
-                type="button"
-                className="poker-sound"
-                aria-label="Règles de la Tower"
-                aria-expanded={rulesOpen}
-                onClick={() => setRulesOpen(!rulesOpen)}
-              >
-                <CircleHelp size={15} />
-              </button>
-            </div>
-          </header>
+    <>
+      <main className={styles.page}>
+        <header className={styles.strip}>
+          <div className={styles.titleBlock}>
+            <span className="eyebrow">LE CLUB / JEU SOLO & LIVE</span>
+            <h1>
+              La <em>Tower</em>
+            </h1>
+          </div>
+          <LuckyBadge
+            hot={Boolean(shownRun?.lucky)}
+            pot={tower?.luckyPot ?? 0}
+          />
+          <div className={styles.stripTools}>
+            <span
+              className={styles.liveCount}
+              title="Joueurs en train de grimper"
+            >
+              <Users size={15} />
+              {ghosts.filter((ghost) => ghost.status === "playing").length}
+            </span>
+            <button
+              type="button"
+              className="poker-sound"
+              aria-label="Règles de la Tower"
+              aria-expanded={rulesOpen}
+              onClick={() => setRulesOpen(!rulesOpen)}
+            >
+              <CircleHelp size={15} />
+            </button>
+          </div>
+        </header>
 
-          {rulesOpen && <TowerRules onClose={() => setRulesOpen(false)} />}
+        {rulesOpen && <TowerRules onClose={() => setRulesOpen(false)} />}
 
-          <section
-            className={styles.stage}
-            data-phase={phase}
-            data-status={status}
-            data-golden={golden || undefined}
-            data-lucky={shownRun?.lucky || undefined}
-            style={{ "--heat": heat, "--ascent": ascent } as CSSProperties}
-            aria-label="La tour"
-          >
-            <div className={styles.skyGlow} aria-hidden="true" />
-            <div className={styles.ascentLight} aria-hidden="true" />
-            <TowerFx
-              ref={fxRef}
-              targetRef={floorsRef}
-              heat={collapsed ? 0 : heat}
-              golden={golden}
-              className={styles.fx}
-            />
-            <div className={styles.viewport} ref={viewportRef}>
-              <div
-                className={styles.camera}
-                style={{ transform: `translateY(${shift}px)` }}
-              >
-                <div
-                  className={styles.grow}
-                  style={{ transform: `scale(${growth})` }}
-                >
-                  <TowerView
-                    key={shownRun?.id ?? `preview-${difficulty}`}
-                    run={riding ? { ...shownRun!, floor } : shownRun}
-                    cols={shownRun?.cols ?? TOWER_DIFFICULTIES[difficulty].cols}
-                    difficulty={shownRun?.difficulty ?? difficulty}
-                    phase={phase}
-                    pendingPick={pendingPick}
-                    canPick={Boolean(playing) && !busy && !animating}
-                    onPick={pick}
-                    ghosts={ghosts}
-                    me={game.profile?.name ?? ""}
-                    towerRef={towerRef}
-                    floorsRef={floorsRef}
-                  />
-                </div>
-              </div>
-              {shownRun?.status === "lost" && phase !== "shaking" && (
-                <Rubble cols={shownRun.cols} />
-              )}
-            </div>
-            <div className={styles.vignette} aria-hidden="true" />
+        <section
+          className={styles.stage}
+          data-phase={phase}
+          data-status={status}
+          data-golden={golden || undefined}
+          data-lucky={shownRun?.lucky || undefined}
+          style={{ "--heat": heat, "--ascent": ascent } as CSSProperties}
+          aria-label="La tour"
+        >
+          <div className={styles.skyGlow} aria-hidden="true" />
+          <div className={styles.ascentLight} aria-hidden="true" />
+          <TowerFx
+            ref={fxRef}
+            targetRef={floorsRef}
+            heat={collapsed ? 0 : heat}
+            golden={golden}
+            className={styles.fx}
+          />
+          <div className={styles.viewport} ref={viewportRef}>
             <div
-              className={styles.ascentFlash}
-              ref={flashRef}
-              aria-hidden="true"
-            />
-            <div className={styles.shock} ref={shockRef} aria-hidden="true" />
-            {luckyIntro && shownRun && (
-              <LuckyBanner difficulty={shownRun.difficulty} />
-            )}
-            {shownRun &&
-              shownRun.status !== "playing" &&
-              phase !== "idle" &&
-              phase !== "shaking" &&
-              phase !== "climbing" && (
-                <ResultBanner
-                  run={shownRun}
-                  celebrating={phase === "celebrating"}
+              className={styles.camera}
+              style={{ transform: `translateY(${shift}px)` }}
+            >
+              <div
+                className={styles.grow}
+                style={{ transform: `scale(${growth})` }}
+              >
+                <TowerView
+                  key={shownRun?.id ?? `preview-${difficulty}`}
+                  run={riding ? { ...shownRun!, floor } : shownRun}
+                  cols={shownRun?.cols ?? TOWER_DIFFICULTIES[difficulty].cols}
+                  difficulty={shownRun?.difficulty ?? difficulty}
+                  phase={phase}
+                  pendingPick={pendingPick}
+                  canPick={Boolean(playing) && !busy && !animating}
+                  onPick={pick}
+                  ghosts={ghosts}
+                  me={game.profile?.name ?? ""}
+                  towerRef={towerRef}
+                  floorsRef={floorsRef}
                 />
-              )}
-            {!shownRun && (
-              <div className={styles.idleHint}>
-                <Castle size={16} />
-                Choisissez une difficulté, misez, puis grimpez.
               </div>
+            </div>
+            {shownRun?.status === "lost" && phase !== "shaking" && (
+              <Rubble cols={shownRun.cols} />
             )}
-          </section>
-
-          <GameControlsBar ariaLabel="Réglages de la partie">
-            <GameControlGroup label="Difficulté">
-              <div className="game-options" role="radiogroup">
-                {TOWER_DIFFICULTY_ORDER.map((key) => {
-                  const cols = TOWER_DIFFICULTIES[key].cols;
-                  return (
-                    <GameOption
-                      key={key}
-                      tone={key}
-                      selected={activeDifficulty === key}
-                      disabled={playing}
-                      onClick={() => {
-                        setDifficulty(key);
-                        setPreviewing(true);
-                      }}
-                    >
-                      <b>{TOWER_DIFFICULTIES[key].label}</b>
-                      <small>
-                        {cols} cartes ·{" "}
-                        {formatMultiplier(towerMultiplier(key, TOWER_FLOORS))}
-                      </small>
-                    </GameOption>
-                  );
-                })}
-              </div>
-            </GameControlGroup>
-
-            <GameControlGroup label="Jetons">
-              <BetChipPicker
-                bet={playing && run ? run.bet : bet}
-                maxBet={maxBet}
-                balance={balance}
-                disabled={playing}
-                onSelect={selectChip}
+          </div>
+          <div className={styles.vignette} aria-hidden="true" />
+          <div
+            className={styles.ascentFlash}
+            ref={flashRef}
+            aria-hidden="true"
+          />
+          <div className={styles.shock} ref={shockRef} aria-hidden="true" />
+          {luckyIntro && shownRun && (
+            <LuckyBanner difficulty={shownRun.difficulty} />
+          )}
+          {shownRun &&
+            shownRun.status !== "playing" &&
+            phase !== "idle" &&
+            phase !== "shaking" &&
+            phase !== "climbing" && (
+              <ResultBanner
+                run={shownRun}
+                celebrating={phase === "celebrating"}
               />
-            </GameControlGroup>
+            )}
+          {!shownRun && (
+            <div className={styles.idleHint}>
+              <Castle size={16} />
+              Choisissez une difficulté, misez, puis grimpez.
+            </div>
+          )}
+        </section>
 
-            <ActionButton
-              run={run}
-              playing={Boolean(playing)}
-              busy={busy}
-              bet={bet}
+        <GameControlsBar ariaLabel="Réglages de la partie">
+          <GameControlGroup label="Difficulté">
+            <div className="game-options" role="radiogroup">
+              {TOWER_DIFFICULTY_ORDER.map((key) => {
+                const cols = TOWER_DIFFICULTIES[key].cols;
+                return (
+                  <GameOption
+                    key={key}
+                    tone={key}
+                    selected={activeDifficulty === key}
+                    disabled={playing}
+                    onClick={() => {
+                      setDifficulty(key);
+                      setPreviewing(true);
+                    }}
+                  >
+                    <b>{TOWER_DIFFICULTIES[key].label}</b>
+                    <small>
+                      {cols} cartes ·{" "}
+                      {formatMultiplier(towerMultiplier(key, TOWER_FLOORS))}
+                    </small>
+                  </GameOption>
+                );
+              })}
+            </div>
+          </GameControlGroup>
+
+          <GameControlGroup label="Jetons">
+            <BetChipPicker
+              bet={playing && run ? run.bet : bet}
+              maxBet={maxBet}
               balance={balance}
-              difficulty={difficulty}
-              onStart={start}
-              onCashout={cashout}
+              disabled={playing}
+              onSelect={selectChip}
             />
-          </GameControlsBar>
-        </main>
-      </div>
+          </GameControlGroup>
+
+          <ActionButton
+            run={run}
+            playing={Boolean(playing)}
+            busy={busy}
+            bet={bet}
+            balance={balance}
+            difficulty={difficulty}
+            onStart={start}
+            onCashout={cashout}
+          />
+        </GameControlsBar>
+      </main>
       {game.error && (
         <div className="toast error-toast is-visible" role="alert">
           <X size={16} />
@@ -566,7 +549,7 @@ export function TowerCasino({
           </button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

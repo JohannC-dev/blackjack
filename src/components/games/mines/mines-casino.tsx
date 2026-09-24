@@ -40,8 +40,7 @@ import {
 } from "@/lib/tower-audio";
 import type { MinesCell, MinesState } from "@/lib/types";
 import { useGame } from "@/lib/use-game";
-import { CasinoRail, ClubHeader, getClubBalance } from "../../ui";
-import type { CasinoView } from "@/lib/navigation";
+import { getClubBalance } from "../../ui";
 import {
   BetChipPicker,
   GameActionButton,
@@ -599,13 +598,7 @@ function MinesControls({
   );
 }
 
-export function MinesCasino({
-  game,
-  onNavigate,
-}: {
-  game: Game;
-  onNavigate: (view: CasinoView) => void;
-}) {
+export function MinesCasino({ game }: { game: Game }) {
   const state = game.minesState;
   const mySkins = useMySkins();
   const [bet, setBet] = useState<number>(MINES_MIN_BET);
@@ -897,123 +890,113 @@ export function MinesCasino({
     patternEditable || (!active && !showResultCells) ? EMPTY_CELLS : cells;
 
   return (
-    <div className="casino-shell mines-shell">
-      <CasinoRail active="mines" onNavigate={onNavigate} />
-      <div className="ml-[76px] max-[700px]:ml-[55px] max-[450px]:ml-0">
-        <ClubHeader
-          balance={balance}
-          name={game.profile?.name ?? ""}
-          onSignOut={game.signOut}
-        />
-        <main className="mines-page">
-          <header className="mines-page-heading">
-            <div className="mines-title-block">
-              <span className="eyebrow">
-                LE CLUB <span>/</span> JEU SOLO &amp; LIVE
-              </span>
-              <h1>
-                La <em>Mine</em>
-              </h1>
-            </div>
-          </header>
+    <main className="mines-page">
+      <header className="mines-page-heading">
+        <div className="mines-title-block">
+          <span className="eyebrow">
+            LE CLUB <span>/</span> JEU SOLO &amp; LIVE
+          </span>
+          <h1>
+            La <em>Mine</em>
+          </h1>
+        </div>
+      </header>
 
-          <div className="mines-game-layout">
-            <section
-              className="mines-board-stage"
-              aria-label="Grille du jeu de la mine"
+      <div className="mines-game-layout">
+        <section
+          className="mines-board-stage"
+          aria-label="Grille du jeu de la mine"
+        >
+          <div className="mines-board-wrap">
+            <div className="mines-board-ornament mines-board-ornament-left" />
+            <div
+              className="mines-grid"
+              role="grid"
+              aria-label="25 cases cachées"
             >
-              <div className="mines-board-wrap">
-                <div className="mines-board-ornament mines-board-ornament-left" />
-                <div
-                  className="mines-grid"
-                  role="grid"
-                  aria-label="25 cases cachées"
-                >
-                  {boardCells.map((cell) => (
-                    <MinesCellButton
-                      key={cell.index}
-                      cell={cell}
-                      active={!!active || patternEditable}
-                      disabled={patternEditable ? false : !active || looping}
-                      patternEditable={patternEditable}
-                      patternPosition={
-                        patternMode ? pattern.indexOf(cell.index) : -1
-                      }
-                      onReveal={patternEditable ? selectPatternCell : reveal}
-                    />
-                  ))}
-                </div>
-                <div className="mines-board-ornament mines-board-ornament-right" />
-              </div>
-
-              <div className="mines-board-footer">
-                <div className="mines-message" aria-live="polite">
-                  <span className="mines-message-icon">
-                    {state?.phase === "lost" ? (
-                      <MineBomb />
-                    ) : (
-                      <MineDiamond skin={mySkins?.["mine-gem"]} />
-                    )}
-                  </span>
-                  <p>
-                    <strong>
-                      {loopMessage && !looping
-                        ? "Pattern terminé"
-                        : patternEditable
-                          ? pattern.length
-                            ? "Pattern prêt"
-                            : "Construisez votre pattern"
-                          : looping
-                            ? "Pattern en boucle"
-                            : phaseDescription(state)}
-                    </strong>
-                    <small>
-                      {loopMessage && !looping
-                        ? loopMessage
-                        : patternEditable
-                          ? pattern.length
-                            ? `${pattern.length} case${pattern.length === 1 ? "" : "s"} · ordre numéroté · ${loopCount} manche${loopCount === 1 ? "" : "s"}`
-                            : "1. Cliquez dans l’ordre · 2. choisissez le nombre de manches · 3. lancez"
-                          : looping
-                            ? `${pattern.length} case${pattern.length === 1 ? "" : "s"} révélée${pattern.length === 1 ? "" : "s"} d’un coup · ${loopRounds}/${loopCount} manche${loopCount === 1 ? "" : "s"}`
-                            : active
-                              ? `${state?.revealedCount ?? 0} diamant${state?.revealedCount === 1 ? "" : "s"} trouvé${state?.revealedCount === 1 ? "" : "s"} · ${hiddenCount} cases restantes`
-                              : "Les cases sont tirées et vérifiées par le serveur."}
-                    </small>
-                  </p>
-                </div>
-              </div>
-            </section>
-            <MinesControls
-              game={game}
-              state={state}
-              bet={bet}
-              maxBet={maxBet}
-              target={target}
-              setTarget={setTarget}
-              onSelect={selectChip}
-              onCashout={cashout}
-              currentPayout={currentPayout}
-              targetReached={targetReached}
-              onStart={startRound}
-              patternLength={pattern.length}
-              patternMode={patternMode}
-              looping={looping}
-              loopRounds={loopRounds}
-              loopMessage={loopMessage}
-              loopCount={loopCount}
-              onLoopCountChange={setLoopCount}
-              onStopLoop={stopLoop}
-              onTogglePatternMode={togglePatternMode}
-            />
+              {boardCells.map((cell) => (
+                <MinesCellButton
+                  key={cell.index}
+                  cell={cell}
+                  active={!!active || patternEditable}
+                  disabled={patternEditable ? false : !active || looping}
+                  patternEditable={patternEditable}
+                  patternPosition={
+                    patternMode ? pattern.indexOf(cell.index) : -1
+                  }
+                  onReveal={patternEditable ? selectPatternCell : reveal}
+                />
+              ))}
+            </div>
+            <div className="mines-board-ornament mines-board-ornament-right" />
           </div>
-          {game.error && (
-            <p className="mines-global-error" role="alert">
-              {game.error}
-            </p>
-          )}
-        </main>
+
+          <div className="mines-board-footer">
+            <div className="mines-message" aria-live="polite">
+              <span className="mines-message-icon">
+                {state?.phase === "lost" ? (
+                  <MineBomb />
+                ) : (
+                  <MineDiamond skin={mySkins?.["mine-gem"]} />
+                )}
+              </span>
+              <p>
+                <strong>
+                  {loopMessage && !looping
+                    ? "Pattern terminé"
+                    : patternEditable
+                      ? pattern.length
+                        ? "Pattern prêt"
+                        : "Construisez votre pattern"
+                      : looping
+                        ? "Pattern en boucle"
+                        : phaseDescription(state)}
+                </strong>
+                <small>
+                  {loopMessage && !looping
+                    ? loopMessage
+                    : patternEditable
+                      ? pattern.length
+                        ? `${pattern.length} case${pattern.length === 1 ? "" : "s"} · ordre numéroté · ${loopCount} manche${loopCount === 1 ? "" : "s"}`
+                        : "1. Cliquez dans l’ordre · 2. choisissez le nombre de manches · 3. lancez"
+                      : looping
+                        ? `${pattern.length} case${pattern.length === 1 ? "" : "s"} révélée${pattern.length === 1 ? "" : "s"} d’un coup · ${loopRounds}/${loopCount} manche${loopCount === 1 ? "" : "s"}`
+                        : active
+                          ? `${state?.revealedCount ?? 0} diamant${state?.revealedCount === 1 ? "" : "s"} trouvé${state?.revealedCount === 1 ? "" : "s"} · ${hiddenCount} cases restantes`
+                          : "Les cases sont tirées et vérifiées par le serveur."}
+                </small>
+              </p>
+            </div>
+          </div>
+        </section>
+        <MinesControls
+          game={game}
+          state={state}
+          bet={bet}
+          maxBet={maxBet}
+          target={target}
+          setTarget={setTarget}
+          onSelect={selectChip}
+          onCashout={cashout}
+          currentPayout={currentPayout}
+          targetReached={targetReached}
+          onStart={startRound}
+          patternLength={pattern.length}
+          patternMode={patternMode}
+          looping={looping}
+          loopRounds={loopRounds}
+          loopMessage={loopMessage}
+          loopCount={loopCount}
+          onLoopCountChange={setLoopCount}
+          onStopLoop={stopLoop}
+          onTogglePatternMode={togglePatternMode}
+        />
       </div>
-    </div>
+      {game.error && (
+        <p className="mines-global-error" role="alert">
+          {game.error}
+        </p>
+      )}
+    </main>
   );
 }
