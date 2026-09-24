@@ -231,6 +231,7 @@ onTiersGranted((event) => {
 
 /** Filleuls whose tiers were checked recently, with the time of that check. */
 const tiersCheckedAt = new Map<string, number>();
+const tierCheckTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const TIER_CHECK_INTERVAL = 60_000;
 /**
  * Highest tier each parrain was already told about, per filleul. Cleared when
@@ -249,25 +250,44 @@ function announceClaimableTiers(userIds: Iterable<string>) {
     if (now - at >= TIER_CHECK_INTERVAL) tiersCheckedAt.delete(userId);
   for (const userId of new Set(userIds)) {
     const checked = tiersCheckedAt.get(userId) ?? 0;
-    if (now - checked < TIER_CHECK_INTERVAL) continue;
+    if (now - checked < TIER_CHECK_INTERVAL) {
+      if (!tierCheckTimers.has(userId)) {
+        const timer = setTimeout(() => {
+          tierCheckTimers.delete(userId);
+          tiersCheckedAt.set(userId, Date.now());
+          checkClaimableTiers(userId);
+        }, TIER_CHECK_INTERVAL - (now - checked));
+        tierCheckTimers.set(userId, timer);
+      }
+      continue;
+    }
+    const timer = tierCheckTimers.get(userId);
+    if (timer) {
+      clearTimeout(timer);
+      tierCheckTimers.delete(userId);
+    }
     tiersCheckedAt.set(userId, now);
-    runDatabase(claimableTiersOf(userId)).then(
-      (progress) => {
-        // Told only to a parrain who is there to hear it: an absent one finds
-        // the credits waiting in their panel anyway.
-        if (!progress || !playerSockets.get(progress.parrainId)?.size) return;
-        const highest = Math.max(...progress.tiers.map((tier) => tier.tier));
-        const key = `${progress.parrainId}\0${userId}`;
-        if ((tiersAnnounced.get(key) ?? 0) >= highest) return;
-        tiersAnnounced.set(key, highest);
-        emitToPlayer(progress.parrainId, "referral:claimable", {
-          filleulId: userId,
-          tiers: progress.tiers,
-        });
-      },
-      (error: unknown) => console.error("Parrainage · paliers", error),
-    );
+    checkClaimableTiers(userId);
   }
+}
+
+function checkClaimableTiers(userId: string) {
+  runDatabase(claimableTiersOf(userId)).then(
+    (progress) => {
+      // Told only to a parrain who is there to hear it: an absent one finds
+      // the credits waiting in their panel anyway.
+      if (!progress || !playerSockets.get(progress.parrainId)?.size) return;
+      const highest = Math.max(...progress.tiers.map((tier) => tier.tier));
+      const key = `${progress.parrainId}\0${userId}`;
+      if ((tiersAnnounced.get(key) ?? 0) >= highest) return;
+      tiersAnnounced.set(key, highest);
+      emitToPlayer(progress.parrainId, "referral:claimable", {
+        filleulId: userId,
+        tiers: progress.tiers,
+      });
+    },
+    (error: unknown) => console.error("Parrainage · paliers", error),
+  );
 }
 
 /** A player came online or left: their friends refresh their list. */

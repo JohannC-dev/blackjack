@@ -74,6 +74,35 @@ function grant(
 }
 
 /**
+ * Older automatic tier grants stored the filleul's total wagered amount in
+ * their wallet metadata. Preserve it when retrying a grant interrupted before
+ * its referral reward row was recorded.
+ */
+function legacyTierMetadata(
+  value: unknown,
+  filleulId: string,
+  threshold: number,
+): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
+  const metadata = value as Record<string, unknown>;
+  const keys = Object.keys(metadata);
+  if (
+    keys.length !== 3 ||
+    !keys.every((key) =>
+      ["filleulId", "wagered", "threshold"].includes(key),
+    ) ||
+    metadata.filleulId !== filleulId ||
+    metadata.threshold !== threshold ||
+    typeof metadata.wagered !== "number" ||
+    !Number.isFinite(metadata.wagered) ||
+    metadata.wagered < threshold
+  )
+    return undefined;
+  return metadata;
+}
+
+/**
  * Pays a list of tiers the parrain just claimed for one filleul, and answers
  * with the ones this call actually collected. The wallet operation ids are
  * stable and carry nothing that moves — a tier retried after the filleul kept
@@ -90,17 +119,37 @@ const payTiers = (
   Effect.gen(function* () {
     const db = yield* PgDrizzle;
     if (!tiers.length) return [] as ReferralTier[];
+    const operationIds = tiers.map(
+      (tier) => `parrainage:tier:${parrainId}:${filleulId}:${tier.tier}`,
+    );
+    const previousEntries = yield* db
+      .select({
+        operationId: walletEntry.operationId,
+        metadata: walletEntry.metadata,
+      })
+      .from(walletEntry)
+      .where(inArray(walletEntry.operationId, operationIds));
+    const previousMetadata = new Map(
+      previousEntries.map((entry) => [entry.operationId, entry.metadata]),
+    );
     yield* applyWalletOperations(
-      tiers.map((tier) =>
-        grant(
+      tiers.map((tier) => {
+        const operationId = `parrainage:tier:${parrainId}:${filleulId}:${tier.tier}`;
+        const metadata =
+          legacyTierMetadata(
+            previousMetadata.get(operationId),
+            filleulId,
+            tier.wagered,
+          ) ?? { filleulId, threshold: tier.wagered };
+        return grant(
           parrainId,
-          `parrainage:tier:${parrainId}:${filleulId}:${tier.tier}`,
+          operationId,
           `tier-${tier.tier}`,
           filleulId,
           tier.reward,
-          { filleulId, threshold: tier.wagered },
-        ),
-      ),
+          metadata,
+        );
+      }),
     );
     // Recorded once the credits landed: a failure here only costs a retry.
     const recorded = yield* db

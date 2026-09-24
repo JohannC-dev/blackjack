@@ -60,6 +60,7 @@ export function ReferralPanel({
     <ReferralBody
       overview={overview}
       onClaimed={setOverview}
+      onReload={reload}
       onOpenCollection={onOpenCollection}
     />
   );
@@ -87,10 +88,12 @@ function Section({ children }: { children: React.ReactNode }) {
 function ReferralBody({
   overview,
   onClaimed,
+  onReload,
   onOpenCollection,
 }: {
   overview: ReferralOverview;
   onClaimed: (overview: ReferralOverview) => void;
+  onReload: () => void;
   onOpenCollection?: () => void;
 }) {
   const social = useSocial();
@@ -128,7 +131,11 @@ function ReferralBody({
       </div>
 
       {overview.claimable > 0 && (
-        <ClaimButton claimable={overview.claimable} onClaimed={onClaimed} />
+        <ClaimButton
+          claimable={overview.claimable}
+          onClaimed={onClaimed}
+          onReload={onReload}
+        />
       )}
 
       {overview.parrain && (
@@ -231,9 +238,11 @@ function ReferralBody({
 function ClaimButton({
   claimable,
   onClaimed,
+  onReload,
 }: {
   claimable: number;
   onClaimed: (overview: ReferralOverview) => void;
+  onReload: () => void;
 }) {
   const [claiming, setClaiming] = useState(false);
   const claim = async () => {
@@ -241,6 +250,7 @@ function ClaimButton({
     try {
       const result = await claimReferralRewards();
       if (result.overview) onClaimed(result.overview);
+      else onReload();
       toast.success(`${credits(result.credited)} crédits récupérés`, {
         description: `${result.tiers.length} palier${
           result.tiers.length > 1 ? "s" : ""

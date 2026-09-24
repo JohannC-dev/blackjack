@@ -5,7 +5,7 @@ import { fromNodeHeaders } from "better-auth/node";
 import { Effect, Either } from "effect";
 import { auth } from "../auth";
 import { runDatabase } from "../db/client";
-import { HttpError, send } from "../http";
+import { HttpError, assertSameOrigin, send } from "../http";
 import {
   ReferralError,
   claimReferralRewards,
@@ -36,6 +36,7 @@ export async function handleReferralRequest(
     });
     if (!session) throw new HttpError(401, "Non authentifié.");
     if (claiming) {
+      assertSameOrigin(req);
       const claim = await run(claimReferralRewards(session.user.id));
       // The credits are in: a panel that fails to reload must not read as a
       // failed claim. The client refetches on its own when it comes back null.
