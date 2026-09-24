@@ -513,10 +513,16 @@ export function PlinkoBoard({
     return () => observer.disconnect();
   }, [rows]);
 
-  /** Changing the board mid-flight would send balls to the wrong slots. */
+  /**
+   * Changing the board mid-flight would send balls to the wrong slots, so they
+   * settle at once instead: they are paid, and their winnings must still reach
+   * the balance on screen rather than vanish with the animation.
+   */
   useEffect(() => {
-    ballsRef.current = [];
+    const pending = [...pendingRef.current.values()];
     pendingRef.current.clear();
+    for (const settled of pending) onLandRef.current(settled);
+    ballsRef.current = [];
     stop();
   }, [rows, stop]);
 

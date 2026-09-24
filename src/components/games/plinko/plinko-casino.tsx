@@ -92,6 +92,11 @@ export function PlinkoCasino({
    * falling on top of it.
    */
   const releaseAt = useRef(0);
+  /** Sounds waiting for their salvo to leave, cancelled if the view closes. */
+  const releaseSounds = useRef(new Set<number>());
+  /** The balance the server checks a salvo against, for the auto mode. */
+  const walletRef = useRef(0);
+  walletRef.current = getClubBalance(game);
 
   // The wager leaves the wallet at once, the winnings only when the ball lands.
   const settledBalance = Math.max(0, getClubBalance(game) - inFlight);
@@ -126,6 +131,9 @@ export function PlinkoCasino({
 
   /** Every drop the server settles is replayed once, then forgotten. */
   useEffect(() => {
+    // Nothing is known before the server's first answer: seeding on that empty
+    // start would replay, as new, the drops the first snapshot brings back.
+    if (state === undefined) return;
     // The first snapshot is the board as it already stands, null included:
     // seeding on it is what keeps a reconnection from replaying old drops.
     if (!seeded.current) {
@@ -151,11 +159,26 @@ export function PlinkoCasino({
       first +
       fresh.length * BALL_STAGGER_MS +
       (fresh.length > 1 ? WAVE_GAP_MS : 0);
-    window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
+      releaseSounds.current.delete(timer);
       if (soundRef.current && audioRef.current)
         playPlinkoRelease(audioRef.current);
     }, first - now);
+    releaseSounds.current.add(timer);
   }, [state]);
+
+  useEffect(() => {
+    const timers = releaseSounds.current;
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+
+  // Balls queued for the old board settled with it: the new one starts free.
+  useEffect(() => {
+    releaseAt.current = 0;
+  }, [rows]);
 
   const stopAuto = useCallback(() => {
     autoRun.current.id += 1;
@@ -188,9 +211,17 @@ export function PlinkoCasino({
     setAuto(true);
     setMessage("");
     let left = autoCount;
+    let broke = false;
     setAutoLeft(left);
     while (left > 0 && autoRun.current.id === runId) {
-      const balls = Math.min(PLINKO_MAX_BALLS, left);
+      // A salvo the balance cannot cover whole would be refused: the series
+      // shrinks it to what is left, and ends only when not one ball fits.
+      const affordable = Math.floor(walletRef.current / bet);
+      if (affordable < 1) {
+        broke = true;
+        break;
+      }
+      const balls = Math.min(PLINKO_MAX_BALLS, left, affordable);
       const sentAt = performance.now();
       const ok = await dropBalls(balls);
       if (!ok || autoRun.current.id !== runId) break;
@@ -210,12 +241,15 @@ export function PlinkoCasino({
     setAuto(false);
     setAutoLeft(0);
     const dropped = autoCount - left;
+    const tally = `${dropped} bille${dropped === 1 ? "" : "s"} sur ${autoCount}`;
     setMessage(
-      left > 0
-        ? `Série interrompue · ${dropped} bille${dropped === 1 ? "" : "s"} sur ${autoCount}.`
-        : `Série terminée · ${autoCount} billes lâchées.`,
+      broke
+        ? `Solde insuffisant · série arrêtée à ${tally}.`
+        : left > 0
+          ? `Série interrompue · ${tally}.`
+          : `Série terminée · ${autoCount} billes lâchées.`,
     );
-  }, [autoCount, dropBalls, stopAuto]);
+  }, [autoCount, bet, dropBalls, stopAuto]);
 
   useEffect(() => () => void (autoRun.current.id += 1), []);
 

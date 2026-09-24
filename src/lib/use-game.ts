@@ -45,7 +45,8 @@ export function useGame() {
   /** Difference to add to the browser clock to compare it with server deadlines. */
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
   const [minesState, setMinesState] = useState<MinesState | null>(null);
-  const [plinkoState, setPlinkoState] = useState<PlinkoState | null>(null);
+  /** `undefined` until the server has answered, `null` when it has no board. */
+  const [plinkoState, setPlinkoState] = useState<PlinkoState | null>();
   const [rouletteState, setRouletteState] = useState<RouletteTableState | null>(
     null,
   );
