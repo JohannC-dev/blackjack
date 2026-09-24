@@ -1,7 +1,7 @@
 "use client";
 
 import { Gift, LoaderCircle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Socket } from "socket.io-client";
 import { toast } from "sonner";
 import {
@@ -119,9 +119,11 @@ export function DailyWheel({
           {WHEEL_SEGMENTS.map((segment, index) => (
             <span
               key={index}
-              style={{
-                transform: `rotate(${(index + 0.5) * SLICE}deg) translateY(-76px)`,
-              }}
+              style={
+                {
+                  "--angle": `${(index + 0.5) * SLICE}deg`,
+                } as CSSProperties
+              }
             >
               {shortCredits(Math.round(segment.amount * multiplier))}
             </span>

@@ -84,29 +84,48 @@
   font-size: 12px;
 }
 
+/* The spin cannot be skipped: the wheel gets most of the screen. */
+.modal.daily-wheel-modal {
+  --wheel: min(58dvh, 70vw);
+  width: 85vw;
+  height: 85dvh;
+  max-width: none;
+  max-height: none;
+  text-align: center;
+}
+.modal.daily-wheel-modal[open] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.daily-wheel-modal h2 {
+  font-size: clamp(27px, 4dvh, 40px);
+}
 .daily-wheel-stage {
   position: relative;
-  width: 230px;
-  height: 230px;
-  margin: 18px auto 6px;
+  flex: none;
+  width: var(--wheel);
+  height: var(--wheel);
+  margin: 3dvh auto 1dvh;
 }
 .daily-wheel-pointer {
   position: absolute;
-  top: -6px;
+  top: calc(var(--wheel) * -0.03);
   left: 50%;
   z-index: 1;
   width: 0;
   height: 0;
-  margin-left: -11px;
-  border: 11px solid transparent;
-  border-top: 20px solid #d8bc83;
+  margin-left: calc(var(--wheel) * -0.05);
+  border: calc(var(--wheel) * 0.05) solid transparent;
+  border-top: calc(var(--wheel) * 0.09) solid #d8bc83;
   filter: drop-shadow(0 2px 4px #0008);
 }
 .daily-wheel {
   position: relative;
   width: 100%;
   height: 100%;
-  border: 3px solid #8a6939;
+  border: calc(var(--wheel) * 0.015) solid #8a6939;
   border-radius: 50%;
   background: conic-gradient(
     #2b1f3d 0 45deg,
@@ -119,15 +138,15 @@
     #6b4d1c 315deg 360deg
   );
   box-shadow:
-    0 0 0 6px #17121f,
-    0 0 28px rgba(215, 177, 107, 0.25);
+    0 0 0 calc(var(--wheel) * 0.03) #17121f,
+    0 0 60px rgba(215, 177, 107, 0.3);
   transition-property: transform;
   transition-timing-function: cubic-bezier(0.12, 0.73, 0.12, 1);
 }
 .daily-wheel::before {
   content: "";
   position: absolute;
-  inset: 10px;
+  inset: 4%;
   border: 1px dashed #a9854e;
   border-radius: 50%;
 }
@@ -135,9 +154,9 @@
   content: "";
   position: absolute;
   inset: 50%;
-  width: 26px;
-  height: 26px;
-  margin: -13px;
+  width: 12%;
+  height: 12%;
+  margin: -6%;
   border: 2px solid #8a6939;
   border-radius: 50%;
   background: #17121f;
@@ -146,16 +165,20 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 60px;
-  margin: -8px 0 0 -30px;
+  width: 30%;
+  margin: -0.6em 0 0 -15%;
   color: #eadbb8;
-  font-size: 12px;
+  font-size: calc(var(--wheel) * 0.058);
   font-weight: 700;
-  line-height: 16px;
+  line-height: 1.2em;
   text-align: center;
   font-variant-numeric: tabular-nums;
+  transform: rotate(var(--angle)) translateY(calc(var(--wheel) * -0.34));
 }
 .daily-wheel-result {
-  min-height: 22px;
-  font-weight: 600;
+  min-height: 1.6em;
+  margin: 2dvh 0;
+  color: #eadbb8;
+  font-size: clamp(16px, 3dvh, 28px);
+  font-weight: 700;
 }
