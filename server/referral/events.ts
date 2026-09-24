@@ -28,9 +28,9 @@ export function announceReferral(event: ReferralCompleted) {
 }
 
 /**
- * Tiers just granted to a parrain because one of their filleuls kept playing.
- * The credits are already in the database; the club refreshes the parrain's
- * wallet so the balance moves without waiting for a reconnection.
+ * Tiers a parrain just claimed. The credits are already in the database; the
+ * club refreshes the parrain's wallet so the balance moves without waiting
+ * for a reconnection.
  */
 export type TiersGranted = {
   readonly parrainId: string;

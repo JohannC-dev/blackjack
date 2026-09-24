@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy, Gift, Sparkles, Users } from "lucide-react";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,7 +12,7 @@ import {
   type ReferralOverview,
   type ReferralTierState,
 } from "@/lib/referral";
-import { useReferralOverview } from "@/lib/referral-api";
+import { claimReferralRewards, useReferralOverview } from "@/lib/referral-api";
 import { formatFriendCode } from "@/lib/social";
 import { cn } from "@/lib/utils";
 import { PlayerAvatar } from "./player-avatar";
@@ -35,7 +35,7 @@ export function ReferralPanel({
   onOpenCollection?: () => void;
 }) {
   const social = useSocial();
-  const { overview, error, reload } = useReferralOverview(
+  const { overview, error, reload, setOverview } = useReferralOverview(
     true,
     social.referralVersion,
   );
@@ -57,7 +57,11 @@ export function ReferralPanel({
       </Section>
     );
   return (
-    <ReferralBody overview={overview} onOpenCollection={onOpenCollection} />
+    <ReferralBody
+      overview={overview}
+      onClaimed={setOverview}
+      onOpenCollection={onOpenCollection}
+    />
   );
 }
 
@@ -82,9 +86,11 @@ function Section({ children }: { children: React.ReactNode }) {
 
 function ReferralBody({
   overview,
+  onClaimed,
   onOpenCollection,
 }: {
   overview: ReferralOverview;
+  onClaimed: (overview: ReferralOverview) => void;
   onOpenCollection?: () => void;
 }) {
   const social = useSocial();
@@ -121,6 +127,10 @@ function ReferralBody({
         </button>
       </div>
 
+      {overview.claimable > 0 && (
+        <ClaimButton claimable={overview.claimable} onClaimed={onClaimed} />
+      )}
+
       {overview.parrain && (
         <button
           type="button"
@@ -149,9 +159,11 @@ function ReferralBody({
           Progression des filleuls
         </span>
         <span>
-          {overview.earned > 0
-            ? `${credits(overview.earned)} gagnés`
-            : "Aucune récompense"}
+          {overview.claimable > 0
+            ? `${credits(overview.claimable)} à récupérer`
+            : overview.earned > 0
+              ? `${credits(overview.earned)} gagnés`
+              : "Aucune récompense"}
         </span>
       </div>
 
@@ -213,6 +225,53 @@ function ReferralBody({
   );
 }
 
+/**
+ * The credits are never handed out on their own: the parrain takes them here.
+ */
+function ClaimButton({
+  claimable,
+  onClaimed,
+}: {
+  claimable: number;
+  onClaimed: (overview: ReferralOverview) => void;
+}) {
+  const [claiming, setClaiming] = useState(false);
+  const claim = async () => {
+    setClaiming(true);
+    try {
+      const result = await claimReferralRewards();
+      onClaimed(result.overview);
+      toast.success(`${credits(result.credited)} crédits récupérés`, {
+        description: `${result.tiers.length} palier${
+          result.tiers.length > 1 ? "s" : ""
+        } encaissé${result.tiers.length > 1 ? "s" : ""}.`,
+      });
+    } catch (failure) {
+      toast.error(
+        failure instanceof Error ? failure.message : "Récupération impossible.",
+      );
+    } finally {
+      setClaiming(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 flex items-center gap-3 rounded-lg border border-minuit-mint/30 bg-minuit-mint/[0.07] px-3.5 py-3">
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-foreground">
+          {credits(claimable)} crédits vous attendent
+        </span>
+        <span className="block text-xs text-muted-foreground">
+          Vos filleuls ont atteint des paliers.
+        </span>
+      </span>
+      <Button size="sm" onClick={claim} disabled={claiming}>
+        {claiming ? "..." : "Récupérer"}
+      </Button>
+    </div>
+  );
+}
+
 function TierLadder({ filleul }: { filleul: Filleul }) {
   const next = filleul.nextTier;
   const previous = [...filleul.tiers]
@@ -265,39 +324,45 @@ function TierLadder({ filleul }: { filleul: Filleul }) {
 }
 
 function TierRow({ tier }: { tier: ReferralTierState }) {
+  const waiting = tier.reached && !tier.claimed;
   return (
     <li
       className={cn(
         "flex items-center gap-2.5 rounded-md px-2 py-1.5",
         tier.reached ? "bg-white/[0.03]" : "opacity-60",
+        waiting && "ring-1 ring-minuit-mint/25",
       )}
     >
       <span
         className={cn(
           "grid size-5 shrink-0 place-items-center rounded-full text-[10px] font-bold",
-          tier.reached
+          tier.claimed
             ? "bg-minuit-purple/20 text-minuit-purple"
-            : "bg-white/[0.06] text-muted-foreground",
+            : waiting
+              ? "bg-minuit-mint/20 text-minuit-mint"
+              : "bg-white/[0.06] text-muted-foreground",
         )}
         aria-hidden="true"
       >
-        {tier.reached ? <Check className="size-3" /> : tier.tier}
+        {tier.claimed ? <Check className="size-3" /> : tier.tier}
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold">
           {tier.label}
         </span>
         <span className="block text-xs text-muted-foreground">
-          {credits(tier.wagered)} misés
+          {waiting ? "À récupérer" : `${credits(tier.wagered)} misés`}
         </span>
       </span>
       <span
         className={cn(
           "shrink-0 text-sm font-semibold tabular-nums",
-          tier.grantedAt ? "text-minuit-mint" : "text-muted-foreground",
+          tier.claimed || waiting
+            ? "text-minuit-mint"
+            : "text-muted-foreground",
         )}
       >
-        {tier.grantedAt ? "+" : ""}
+        {tier.claimed ? "+" : ""}
         {credits(tier.reward)}
       </span>
     </li>

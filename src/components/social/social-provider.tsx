@@ -194,26 +194,28 @@ export function SocialProvider({
         },
       });
     };
-    const onFilleul = (event: {
-      filleul?: { name?: string };
-      tiers?: ReferralTier[];
-    }) => {
+    const onFilleul = (event: { filleul?: { name?: string } }) => {
       const name = event?.filleul?.name?.trim() || "Un joueur";
-      const tier = event?.tiers?.[event.tiers.length - 1];
       toast.success(`${name} a rejoint le club avec votre code`, {
-        description: tier
-          ? `Palier « ${tier.label} » atteint · ${credits(tier.reward)} crédits`
-          : "Votre parrainage avance.",
+        description: "Vous êtes désormais amis. Votre parrainage avance.",
       });
       setReferralVersion((version) => version + 1);
     };
-    const onTier = (event: { tiers?: ReferralTier[] }) => {
-      for (const tier of event?.tiers ?? [])
-        toast.success(`Palier « ${tier.label} » atteint`, {
-          description: `${credits(tier.reward)} crédits de parrainage.`,
-        });
+    const onClaimable = (event: { tiers?: ReferralTier[] }) => {
+      const tiers = event?.tiers ?? [];
+      if (!tiers.length) return;
+      const total = tiers.reduce((sum, tier) => sum + tier.reward, 0);
+      toast.success(
+        tiers.length > 1
+          ? `${tiers.length} paliers de parrainage atteints`
+          : `Palier « ${tiers[0]!.label} » atteint`,
+        {
+          description: `${credits(total)} crédits à récupérer dans votre profil.`,
+        },
+      );
       setReferralVersion((version) => version + 1);
     };
+    const onClaimed = () => setReferralVersion((version) => version + 1);
     const onReply = (reply: GameInviteReply) => {
       if (!reply?.by) return;
       if (reply.accepted) toast.success(`${reply.by.name} vous rejoint.`);
@@ -221,7 +223,8 @@ export function SocialProvider({
     };
     socket.on("friends:changed", onChanged);
     socket.on("referral:filleul", onFilleul);
-    socket.on("referral:tier", onTier);
+    socket.on("referral:claimable", onClaimable);
+    socket.on("referral:claimed", onClaimed);
     socket.on("friends:invite", onInvite);
     socket.on("friends:invite:reply", onReply);
     // Presence may have changed while disconnected.
@@ -229,7 +232,8 @@ export function SocialProvider({
     return () => {
       socket.off("friends:changed", onChanged);
       socket.off("referral:filleul", onFilleul);
-      socket.off("referral:tier", onTier);
+      socket.off("referral:claimable", onClaimable);
+      socket.off("referral:claimed", onClaimed);
       socket.off("friends:invite", onInvite);
       socket.off("friends:invite:reply", onReply);
       socket.off("connect", onChanged);

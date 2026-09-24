@@ -30,7 +30,7 @@ import { areFriends, friendIdsOf } from "./social/repository";
 import { handleReferralRequest } from "./referral/http";
 import { handleCosmeticRequest } from "./cosmetics/http";
 import { onReferralCompleted, onTiersGranted } from "./referral/events";
-import { settleFilleulTiers } from "./referral/repository";
+import { claimableTiersOf } from "./referral/repository";
 import {
   GameError,
   ServerClock,
@@ -222,8 +222,8 @@ onReferralCompleted((event) => {
 });
 
 /**
- * A filleul crossed a threshold: the credits are already in the database, so
- * the parrain only needs their wallet pushed again and their panel reloaded.
+ * The parrain just claimed their tiers: the credits are already in the
+ * database, so their wallet only needs pushing again and their panel reloaded.
  */
 onTiersGranted((event) => {
   const parrain = playersById.get(event.parrainId);
@@ -231,7 +231,7 @@ onTiersGranted((event) => {
     Effect.runPromise(refreshWalletEffect(parrain)).catch((error: unknown) =>
       console.error("Parrainage · portefeuille", error),
     );
-  emitToPlayer(event.parrainId, "referral:tier", {
+  emitToPlayer(event.parrainId, "referral:claimed", {
     filleulId: event.filleulId,
     tiers: event.tiers,
   });
@@ -240,12 +240,15 @@ onTiersGranted((event) => {
 /** Filleuls whose tiers were checked recently, with the time of that check. */
 const tiersCheckedAt = new Map<string, number>();
 const TIER_CHECK_INTERVAL = 60_000;
+/** Highest tier each parrain was already told about, per filleul. */
+const tiersAnnounced = new Map<string, number>();
 
 /**
- * Settles the parrainage tiers of the players who just wagered. The check is
- * throttled: a tier is worth a few queries a minute, not a few per round.
+ * Tells the parrains of the players who just wagered that a tier is waiting
+ * to be collected — nothing is credited here, only an explicit claim pays.
+ * The check is throttled, and a parrain hears about a tier only once.
  */
-function settleReferralTiers(userIds: Iterable<string>) {
+function announceClaimableTiers(userIds: Iterable<string>) {
   const now = Date.now();
   for (const [userId, at] of tiersCheckedAt)
     if (now - at >= TIER_CHECK_INTERVAL) tiersCheckedAt.delete(userId);
@@ -253,8 +256,19 @@ function settleReferralTiers(userIds: Iterable<string>) {
     const checked = tiersCheckedAt.get(userId) ?? 0;
     if (now - checked < TIER_CHECK_INTERVAL) continue;
     tiersCheckedAt.set(userId, now);
-    runDatabase(settleFilleulTiers(userId)).catch((error: unknown) =>
-      console.error("Parrainage · paliers", error),
+    runDatabase(claimableTiersOf(userId)).then(
+      (progress) => {
+        if (!progress) return;
+        const highest = Math.max(...progress.tiers.map((tier) => tier.tier));
+        const key = `${progress.parrainId}\0${userId}`;
+        if ((tiersAnnounced.get(key) ?? 0) >= highest) return;
+        tiersAnnounced.set(key, highest);
+        emitToPlayer(progress.parrainId, "referral:claimable", {
+          filleulId: userId,
+          tiers: progress.tiers,
+        });
+      },
+      (error: unknown) => console.error("Parrainage · paliers", error),
     );
   }
 }
@@ -470,7 +484,7 @@ function commitWalletOperationsEffect() {
         }
         gameWallet.complete();
         for (const result of results) publishWallet(result.userId);
-        settleReferralTiers(
+        announceClaimableTiers(
           operations
             .filter((operation) =>
               ["wager", "additional-wager", "buy-in"].includes(operation.kind),

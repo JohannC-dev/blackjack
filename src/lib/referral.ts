@@ -48,9 +48,21 @@ export function nextTierAfter(wagered: number) {
   return REFERRAL_TIERS.find((tier) => wagered < tier.wagered) ?? null;
 }
 
+/** Tiers a filleul has reached and whose credits are still on the table. */
+export function claimableTiers(wagered: number, claimed: ReadonlySet<number>) {
+  return tiersReachedBy(wagered).filter((tier) => !claimed.has(tier.tier));
+}
+
+export function totalReward(tiers: readonly ReferralTier[]) {
+  return tiers.reduce((total, tier) => total + tier.reward, 0);
+}
+
 export type ReferralTierState = ReferralTier & {
+  /** The filleul has wagered enough: the credits are waiting to be claimed. */
   reached: boolean;
-  /** ISO date the credits were granted, null while unreached. */
+  /** The parrain has collected the credits. */
+  claimed: boolean;
+  /** ISO date the credits were granted, null while unclaimed. */
   grantedAt: string | null;
 };
 
@@ -64,6 +76,8 @@ export type Filleul = SocialPlayer & {
   wagered: number;
   tiers: ReferralTierState[];
   nextTier: ReferralTier | null;
+  /** Credits this filleul has unlocked and the parrain has not taken yet. */
+  claimable: number;
 };
 
 export type ReferralOverview = {
@@ -72,6 +86,8 @@ export type ReferralOverview = {
   /** Who parrained the player, when someone did. */
   parrain: (SocialPlayer & { since: string }) | null;
   filleuls: Filleul[];
-  /** Credits already granted across all filleuls. */
+  /** Credits already collected across all filleuls. */
   earned: number;
+  /** Credits waiting to be collected, across all filleuls. */
+  claimable: number;
 };
