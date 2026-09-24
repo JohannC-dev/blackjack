@@ -276,7 +276,7 @@ function publishPlinko(playerId: string) {
 function getPlinko(playerId: string) {
   let game = plinko.get(playerId);
   if (!game) {
-    game = new PlinkoGame(() => publishPlinko(playerId), gameWallet);
+    game = new PlinkoGame(gameWallet);
     plinko.set(playerId, game);
   }
   return game;
@@ -491,10 +491,13 @@ async function executeReply<A, E, R>(
   ack: unknown,
   effect: Effect.Effect<A, E, never>,
   onSuccess: (value: A) => R,
+  onFailure?: () => void,
 ) {
   const result = await Effect.runPromise(Effect.either(effect));
-  if (isFailure(result)) replyError(ack, result.left);
-  else if (typeof ack === "function") ack(onSuccess(result.right));
+  if (isFailure(result)) {
+    onFailure?.();
+    replyError(ack, result.left);
+  } else if (typeof ack === "function") ack(onSuccess(result.right));
 }
 
 function replyEffect<A, E, R = Ack>(
@@ -505,13 +508,18 @@ function replyEffect<A, E, R = Ack>(
   void executeReply(ack, effect, onSuccess);
 }
 
+/**
+ * `onSuccess` runs once the wallet transaction has committed, `onFailure`
+ * once it has been rolled back: the place to publish or undo game state.
+ */
 function replyWalletEffect<A, E, R = Ack>(
   ack: unknown,
   effect: Effect.Effect<A, E, never>,
   onSuccess: (value: A) => R = () => ({ ok: true }) as R,
+  onFailure?: () => void,
 ) {
   void serializeFinancial(() =>
-    executeReply(ack, walletTransactionEffect(effect), onSuccess),
+    executeReply(ack, walletTransactionEffect(effect), onSuccess, onFailure),
   );
 }
 
@@ -812,6 +820,8 @@ io.on("connection", (socket) => {
     );
   });
   socket.on("plinko:command", (command: unknown, ack: (value: Ack) => void) => {
+    // The balls reach the board only once their wallet entries are committed.
+    let restore: (() => void) | undefined;
     replyWalletEffect(
       ack,
       inputEffect(
@@ -827,12 +837,19 @@ io.on("connection", (socket) => {
             });
             yield* refreshWalletEffect(currentPlayer);
             const plinkoGame = yield* getPlinkoEffect(currentPlayer.id);
+            restore = plinkoGame.checkpoint();
             yield* plinkoGame.commandEffect(
               currentPlayer,
               parsed as PlinkoCommand,
             );
+            return currentPlayer.id;
           }),
       ),
+      (playerId) => {
+        publishPlinko(playerId);
+        return { ok: true };
+      },
+      () => restore?.(),
     );
   });
   socket.on(

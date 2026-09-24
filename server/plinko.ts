@@ -36,6 +36,9 @@ function validBet(value: number, limits: PlinkoBetLimits) {
  * The board is solo and settles instantly: every ball is a fresh draw of one
  * bounce per row, and the wallet moves once per ball. The client only replays
  * the path the server already decided, so no animation can change a payout.
+ *
+ * Nothing is published from here: the caller shows the board once the wallet
+ * transaction has committed, and puts back a `checkpoint` if it failed.
  */
 export class PlinkoGame {
   private risk: PlinkoRisk = "medium";
@@ -47,7 +50,6 @@ export class PlinkoGame {
   private message = "Choisissez un risque et lâchez une bille.";
 
   constructor(
-    private readonly publish: () => void = () => {},
     private readonly wallet: GameWallet = inMemoryGameWallet,
     private readonly betLimits: PlinkoBetLimits = {
       min: PLINKO_MIN_BET,
@@ -65,6 +67,24 @@ export class PlinkoGame {
       round: this.round,
       sessionNet: this.sessionNet,
       message: this.message,
+    };
+  }
+
+  /**
+   * The board as it stands, to restore if the wallet transaction around a
+   * command fails: its balls were never paid, so they never fell.
+   */
+  checkpoint() {
+    const { risk, rows, bet, round, sessionNet, message } = this;
+    const drops = [...this.drops];
+    return () => {
+      this.risk = risk;
+      this.rows = rows;
+      this.bet = bet;
+      this.drops = drops;
+      this.round = round;
+      this.sessionNet = sessionNet;
+      this.message = message;
     };
   }
 
@@ -132,7 +152,6 @@ export class PlinkoGame {
       count === 1
         ? "La bille est tombée. Le serveur a tiré son chemin."
         : `${count} billes lâchées.`;
-    this.publish();
   }
 
   private settle(

@@ -11,7 +11,7 @@ import {
 } from "../src/lib/plinko";
 
 const plinkoGame = () =>
-  new PlinkoGame(() => {}, undefined, { min: 5, max: 500, step: 5 });
+  new PlinkoGame(undefined, { min: 5, max: 500, step: 5 });
 
 describe("Plinko", () => {
   test("les cases suivent la loi binomiale", () => {
