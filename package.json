@@ -8,7 +8,7 @@
     "build": "next build --webpack",
     "start": "NODE_ENV=production node --import tsx server/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test --timeout 15000 tests/game-wallet.test.ts tests/economy.test.ts tests/engine.test.ts tests/poker.test.ts tests/tower.test.ts tests/chicken.test.ts tests/mines.test.ts tests/roulette.test.ts",
+    "test": "bun test --timeout 15000 tests/game-wallet.test.ts tests/economy.test.ts tests/engine.test.ts tests/poker.test.ts tests/tower.test.ts tests/chicken.test.ts tests/mines.test.ts tests/plinko.test.ts tests/roulette.test.ts",
     "test:multiplayer": "bun tests/multiplayer.ts",
     "test:roulette-multiplayer": "bun tests/roulette-multiplayer.ts",
     "test:poker-multiplayer": "bun tests/poker-multiplayer.ts",

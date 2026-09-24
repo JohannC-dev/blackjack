@@ -96,6 +96,7 @@ export const STAT_GAMES = [
   "tower",
   "mines",
   "chicken",
+  "plinko",
 ] as const;
 
 export type StatGame = (typeof STAT_GAMES)[number];
@@ -107,6 +108,7 @@ export const STAT_GAME_LABELS: Record<StatGame, string> = {
   tower: "La Tower",
   mines: "Jeu de la mine",
   chicken: "Chicken",
+  plinko: "Plinko",
 };
 
 export function isStatGame(value: string): value is StatGame {
@@ -164,7 +166,7 @@ export type PlayerProfile = SocialPlayer & {
 
 /** Games a friend can be invited to. */
 export type InviteGame =
-  "blackjack" | "roulette" | "poker" | "tower" | "mines" | "chicken";
+  "blackjack" | "roulette" | "poker" | "tower" | "mines" | "chicken" | "plinko";
 
 export const INVITE_GAME_LABELS: Record<InviteGame, string> = {
   blackjack: "Blackjack",
@@ -173,6 +175,7 @@ export const INVITE_GAME_LABELS: Record<InviteGame, string> = {
   tower: "La Tower",
   mines: "Jeu de la mine",
   chicken: "Chicken",
+  plinko: "Plinko",
 };
 
 /**

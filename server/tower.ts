@@ -24,6 +24,7 @@ import {
   TOWER_LUCKY_SHARE,
   TOWER_MAX_BET,
   TOWER_MIN_BET,
+  towerLuckyBase,
   towerLuckyPayout,
   towerPayout,
 } from "../src/lib/tower";
@@ -334,7 +335,7 @@ export class TowerManager {
     }
     run.floor++;
     if (run.gold?.floor === run.floor - 1 && run.gold.column === column) {
-      // The golden card cashes the floor reached and pays the player's pot.
+      // The golden card pays a flat multiple of the wager plus the player's pot.
       // The tower above turns gold for the show; nothing more is paid.
       const pot = this.pots.get(player.id) ?? 0;
       const bonus = towerLuckyPayout(pot);
@@ -344,7 +345,7 @@ export class TowerManager {
         run,
         "cashed",
         now,
-        towerPayout(run.bet, run.difficulty, run.floor) + bonus,
+        towerLuckyBase(run.bet, run.difficulty) + bonus,
       );
       return;
     }

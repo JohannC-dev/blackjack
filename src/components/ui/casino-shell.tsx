@@ -28,9 +28,14 @@ const railGameArt = {
   poker: "/art/rail-poker.svg?v=2",
   tower: "/art/rail-tower.svg",
   roulette: "/art/rail-roulette.svg",
+  plinko: "/art/rail-plinko.svg",
 } as const;
 
-function RailGameIcon({ game }: { game: "poker" | "tower" | "roulette" }) {
+function RailGameIcon({
+  game,
+}: {
+  game: "poker" | "tower" | "roulette" | "plinko";
+}) {
   return (
     <img
       src={railGameArt[game]}
@@ -100,6 +105,7 @@ export const CasinoRail = memo(function CasinoRail({
           <ChickenArt className="h-[30px] w-[30px]" />,
         )}
         {item("roulette", "Roulette", <RailGameIcon game="roulette" />)}
+        {item("plinko", "Plinko", <RailGameIcon game="plinko" />)}
       </div>
       <div className="mt-auto mb-[25px] flex flex-col items-center gap-[22px] max-[700px]:mb-5 max-[700px]:gap-3">
         {onRules ? (

@@ -21,6 +21,7 @@ import { makeRoomRuntime, roomChannel } from "./rooms";
 import { TowerManager } from "./tower";
 import { ChickenManager } from "./chicken";
 import { MinesGame } from "./mines";
+import { PlinkoGame } from "./plinko";
 import { makeRouletteRuntime } from "./roulette";
 import { RecordingGameWallet } from "./game-wallet";
 import { refillWallet } from "./refill";
@@ -46,6 +47,7 @@ import {
   FriendInviteSchema,
   JoinSchema,
   MinesCommandSchema,
+  PlinkoCommandSchema,
   PokerCommandSchema,
   RouletteJoinSchema,
   TowerCommandSchema,
@@ -56,6 +58,7 @@ import type {
   Ack,
   Command,
   MinesCommand,
+  PlinkoCommand,
   PokerCommand,
   TowerCommand,
   ChickenCommand,
@@ -264,6 +267,24 @@ function getMines(playerId: string) {
 function getMinesEffect(playerId: string) {
   return gameEffect(() => getMines(playerId));
 }
+const plinko = new Map<string, PlinkoGame>();
+function publishPlinko(playerId: string) {
+  const snapshot = plinko.get(playerId)?.snapshot() ?? null;
+  for (const socketId of playerSockets.get(playerId) ?? [])
+    io.to(socketId).emit("plinko:state", snapshot);
+}
+function getPlinko(playerId: string) {
+  let game = plinko.get(playerId);
+  if (!game) {
+    game = new PlinkoGame(gameWallet);
+    plinko.set(playerId, game);
+  }
+  return game;
+}
+
+function getPlinkoEffect(playerId: string) {
+  return gameEffect(() => getPlinko(playerId));
+}
 const rouletteRoom = (tableId: string) => roomChannel("roulette", tableId);
 const blackjackRoom = (tableId: string) => blackjackRooms.channel(tableId);
 /** Roulette owns its table pool and borrows only club players and sockets. */
@@ -470,10 +491,13 @@ async function executeReply<A, E, R>(
   ack: unknown,
   effect: Effect.Effect<A, E, never>,
   onSuccess: (value: A) => R,
+  onFailure?: () => void,
 ) {
   const result = await Effect.runPromise(Effect.either(effect));
-  if (isFailure(result)) replyError(ack, result.left);
-  else if (typeof ack === "function") ack(onSuccess(result.right));
+  if (isFailure(result)) {
+    onFailure?.();
+    replyError(ack, result.left);
+  } else if (typeof ack === "function") ack(onSuccess(result.right));
 }
 
 function replyEffect<A, E, R = Ack>(
@@ -484,13 +508,18 @@ function replyEffect<A, E, R = Ack>(
   void executeReply(ack, effect, onSuccess);
 }
 
+/**
+ * `onSuccess` runs once the wallet transaction has committed, `onFailure`
+ * once it has been rolled back: the place to publish or undo game state.
+ */
 function replyWalletEffect<A, E, R = Ack>(
   ack: unknown,
   effect: Effect.Effect<A, E, never>,
   onSuccess: (value: A) => R = () => ({ ok: true }) as R,
+  onFailure?: () => void,
 ) {
   void serializeFinancial(() =>
-    executeReply(ack, walletTransactionEffect(effect), onSuccess),
+    executeReply(ack, walletTransactionEffect(effect), onSuccess, onFailure),
   );
 }
 
@@ -622,6 +651,7 @@ io.on("connection", (socket) => {
         runOrThrow(poker.connectEffect(player));
         publishWallet(player.id, socket.id);
         publishMines(player.id);
+        publishPlinko(player.id);
         return {
           ok: true,
           playerId: player.id,
@@ -787,6 +817,39 @@ io.on("connection", (socket) => {
             );
           }),
       ),
+    );
+  });
+  socket.on("plinko:command", (command: unknown, ack: (value: Ack) => void) => {
+    // The balls reach the board only once their wallet entries are committed.
+    let restore: (() => void) | undefined;
+    replyWalletEffect(
+      ack,
+      inputEffect(
+        PlinkoCommandSchema,
+        command,
+        "Action Plinko invalide.",
+        (parsed) =>
+          Effect.gen(function* () {
+            const currentPlayer = yield* gameEffect((clock) => {
+              throttle(clock.now());
+              if (!player) throw new Error("Vous n’êtes pas connecté au club.");
+              return player;
+            });
+            yield* refreshWalletEffect(currentPlayer);
+            const plinkoGame = yield* getPlinkoEffect(currentPlayer.id);
+            restore = plinkoGame.checkpoint();
+            yield* plinkoGame.commandEffect(
+              currentPlayer,
+              parsed as PlinkoCommand,
+            );
+            return currentPlayer.id;
+          }),
+      ),
+      (playerId) => {
+        publishPlinko(playerId);
+        return { ok: true };
+      },
+      () => restore?.(),
     );
   });
   socket.on(
@@ -1194,6 +1257,7 @@ const maintenanceEffect = Effect.provide(
             wallets.delete(profile.id);
             playersById.delete(profile.id);
             mines.delete(profile.id);
+            plinko.delete(profile.id);
           }),
         );
       }

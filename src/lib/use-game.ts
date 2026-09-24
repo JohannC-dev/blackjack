@@ -7,6 +7,8 @@ import type {
   Command,
   MinesCommand,
   MinesState,
+  PlinkoCommand,
+  PlinkoState,
   PokerClientState,
   PokerCommand,
   RouletteCommand,
@@ -23,6 +25,13 @@ import type {
 import { useProfile, type Credentials } from "./profile-context";
 import type { EmoteEvent, EmoteRequest, ReceivedEmote } from "./emotes";
 
+/**
+ * A Plinko salvo settles up to ten balls in one wallet transaction, a few
+ * hundred milliseconds of SQL per ball: it can outlast the usual six seconds.
+ * Giving up early would stop the auto mode while the server still drops them.
+ */
+const PLINKO_COMMAND_TIMEOUT_MS = 20_000;
+
 export function useGame() {
   const { profile, loaded, balance, setBalance, authenticate, signOut } =
     useProfile();
@@ -36,6 +45,15 @@ export function useGame() {
   /** Difference to add to the browser clock to compare it with server deadlines. */
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
   const [minesState, setMinesState] = useState<MinesState | null>(null);
+  /** `undefined` until the server has answered, `null` when it has no board. */
+  const [plinkoState, setPlinkoState] = useState<PlinkoState | null>();
+  // A new token is a new player: none of the last board belongs to them. Reset
+  // while rendering, so a fresh Plinko view never sees the previous snapshot.
+  const [plinkoToken, setPlinkoToken] = useState(profile?.token);
+  if (plinkoToken !== profile?.token) {
+    setPlinkoToken(profile?.token);
+    setPlinkoState(undefined);
+  }
   const [rouletteState, setRouletteState] = useState<RouletteTableState | null>(
     null,
   );
@@ -173,6 +191,9 @@ export function useGame() {
     });
     socket.on("mines:state", (snapshot: MinesState | null) => {
       setMinesState(snapshot);
+    });
+    socket.on("plinko:state", (snapshot: PlinkoState | null) => {
+      setPlinkoState(snapshot);
     });
     socket.on("roulette:state", (snapshot: RouletteTableState | null) => {
       if (!snapshot || !rouletteOpen.current) return;
@@ -340,6 +361,27 @@ export function useGame() {
         });
     });
   }, []);
+  const plinkoCommand = useCallback(
+    (action: PlinkoCommand): Promise<boolean> => {
+      const socket = socketRef.current;
+      if (!socket?.connected) {
+        setError("La connexion au Plinko est interrompue.");
+        return Promise.resolve(false);
+      }
+      setPending(true);
+      return new Promise((resolve) => {
+        socket
+          .timeout(PLINKO_COMMAND_TIMEOUT_MS)
+          .emit("plinko:command", action, (timeout: Error | null, ack: Ack) => {
+            setPending(false);
+            if (timeout) setError("Le serveur du Plinko ne répond pas.");
+            else if (!ack.ok) setError(ack.error);
+            resolve(!timeout && ack?.ok);
+          });
+      });
+    },
+    [],
+  );
   const rouletteCommand = useCallback(
     (action: RouletteCommand): Promise<boolean> => {
       const socket = socketRef.current;
@@ -551,6 +593,7 @@ export function useGame() {
     chickenState,
     balance,
     minesState,
+    plinkoState,
     rouletteState,
     playerId,
     error,
@@ -579,6 +622,7 @@ export function useGame() {
     leaveRoulette,
     joinRouletteTable,
     minesCommand,
+    plinkoCommand,
     changeTable,
     createPrivateTable,
     socket,

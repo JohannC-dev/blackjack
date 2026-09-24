@@ -1,6 +1,11 @@
 import { Schema } from "effect";
 import { CHICKEN_MAX_BET, CHICKEN_MIN_BET } from "../src/lib/chicken";
 import { MINES_TARGETS } from "../src/lib/mines";
+import {
+  PLINKO_MAX_BALLS,
+  PLINKO_RISKS,
+  PLINKO_ROW_OPTIONS,
+} from "../src/lib/plinko";
 
 const TableId = Schema.String.pipe(Schema.pattern(/^[A-Z0-9]{4,12}$/));
 const Name = Schema.String.pipe(Schema.minLength(1));
@@ -33,6 +38,7 @@ export const FriendInviteSchema = Schema.Struct({
     "tower",
     "mines",
     "chicken",
+    "plinko",
   ),
   tableId: Schema.optional(Schema.Union(TableId, Schema.Null)),
 });
@@ -188,6 +194,18 @@ export const MinesCommandSchema = Schema.Union(
     indexes: Schema.Array(Index),
   }),
   Schema.Struct({ type: Schema.Literal("cashout") }),
+);
+
+export const PlinkoCommandSchema = Schema.Union(
+  Schema.Struct({
+    type: Schema.Literal("drop"),
+    bet: NonNegativeNumber,
+    risk: Schema.Literal(...PLINKO_RISKS),
+    rows: Schema.Literal(...PLINKO_ROW_OPTIONS),
+    balls: Schema.optional(
+      Schema.Int.pipe(Schema.between(1, PLINKO_MAX_BALLS)),
+    ),
+  }),
 );
 
 export const EmoteRequestSchema = Schema.Struct({

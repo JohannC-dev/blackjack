@@ -1,0 +1,342 @@
+/* Plinko: one canvas scene and the same control dock as the other solo games. */
+.plinko-shell {
+  --plinko-accent: #c7a9ff;
+  /* The shared slider and popover read the Mine's palette tokens. */
+  --mines-accent: #c7a9ff;
+  --mines-accent-deep: #8d6ae0;
+  --mines-accent-soft: #c7a9ff14;
+  --mines-gold: #d9b878;
+  --mines-panel: #171725;
+  --mines-panel-raised: #1d1d2e;
+}
+.plinko-shell .topbar {
+  height: 100px;
+  padding: 0 32px;
+}
+.plinko-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  min-height: calc(100vh - 100px);
+  /* Heading, board and dock share one column so they line up. */
+  max-width: 1280px;
+  margin-inline: auto;
+  padding: 18px 2.2vw 18px;
+}
+.plinko-page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 26px;
+  margin-bottom: 12px;
+}
+.plinko-title-block {
+  min-width: 0;
+}
+.plinko-page-heading h1 {
+  font-size: clamp(26px, 2.2vw, 38px);
+  letter-spacing: -2px;
+}
+.plinko-page-heading h1 em {
+  color: var(--plinko-accent);
+  font-style: normal;
+}
+
+.plinko-game-layout {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  gap: 17px;
+}
+/* The panel hugs the triangle: a board kept square would drown in full width. */
+.plinko-board-stage {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  /* Short screens keep the dock in view rather than a full-size board. */
+  min-height: min(600px, 64vh);
+  padding: 14px 20px 10px;
+  border: 1px solid #4a3c5d85;
+  border-radius: 18px;
+  background:
+    radial-gradient(ellipse at 50% 42%, #322648 0, #1d1a2a 46%, #15131e 84%),
+    #171520;
+  box-shadow: 0 17px 50px #00000025;
+  overflow: hidden;
+}
+.plinko-board {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  gap: 8px;
+}
+/* The canvases stack: static pegs below, moving balls above. */
+.plinko-pins {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: min(540px, 56vh);
+}
+.plinko-layer {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+/* Same width as the last peg row, centred under it. */
+.plinko-slots {
+  display: grid;
+  gap: 3px;
+  margin-inline: auto;
+  max-width: 100%;
+}
+.plinko-slot {
+  display: grid;
+  place-items: center;
+  padding: 7px 3px;
+  border-radius: 6px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--slot-color) 88%, white),
+    var(--slot-color)
+  );
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--slot-color) 55%, black),
+    0 5px 10px #0000003d;
+  color: #1b1526;
+  /* Size comes from the label itself, set inline by the board. */
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.plinko-slot.is-hit {
+  animation: plinko-slot-hit 420ms ease-out;
+}
+@keyframes plinko-slot-hit {
+  0% {
+    transform: translateY(0);
+    filter: brightness(1.9);
+  }
+  35% {
+    transform: translateY(5px);
+    filter: brightness(1.5);
+  }
+  100% {
+    transform: translateY(0);
+    filter: brightness(1);
+  }
+}
+
+/* Recent landings stack along the right edge, clear of the triangle. */
+.plinko-history {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plinko-history li {
+  min-width: 52px;
+  padding: 6px 9px;
+  border: 1px solid #ffffff0f;
+  border-radius: 8px;
+  background: #1d1929;
+  color: #8c879e;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.plinko-history li.is-up {
+  border-color: #83e9bc35;
+  color: #83e9bc;
+}
+.plinko-history li.is-down {
+  border-color: #e2564f2b;
+  color: #c98d89;
+}
+
+/* One row of settings, ending with the drop button and the series panel. */
+.plinko-shell .game-controls-bar {
+  display: grid;
+  grid-template-columns:
+    minmax(152px, 184px) minmax(196px, 256px) minmax(304px, 1fr)
+    minmax(186px, 220px) minmax(160px, 180px);
+  gap: 14px 34px;
+  align-items: start;
+  justify-content: space-between;
+  padding: 14px 18px;
+}
+.plinko-shell .game-controls-bar > * {
+  min-width: 0;
+}
+.plinko-risk-control .game-option {
+  min-width: 0;
+  flex: 1 1 0;
+  align-items: center;
+  padding-inline: 6px;
+  text-align: center;
+}
+/* Every group: its label, then its control on the same line as the others. */
+.plinko-shell .game-control-group {
+  gap: 10px;
+}
+.plinko-shell .game-control-group > *:not(.game-control-label) {
+  align-self: center;
+  width: 100%;
+}
+.plinko-rows-control .mines-difficulty-summary,
+.plinko-shell .mines-difficulty-hint {
+  display: none;
+}
+.plinko-rows-control .mines-difficulty-slider {
+  margin-top: 0;
+}
+.plinko-shell .game-controls-bar .chip-picker {
+  padding-block: 0;
+}
+.plinko-shell .game-controls-bar .game-action {
+  min-width: 196px;
+  padding-inline: 16px;
+}
+.plinko-shell .game-action b,
+.plinko-shell .game-action small {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+.plinko-global-error {
+  margin-top: 12px;
+  color: #e2564f;
+  font-size: 12px;
+}
+
+/* Club home poster: the board in miniature — a ball above a pin pyramid that
+   fans out onto the payout slots, in the same palette as the other posters. */
+.plinko-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.plinko-art::after {
+  position: absolute;
+  right: 0;
+  bottom: -46px;
+  left: 0;
+  width: 210px;
+  height: 210px;
+  margin-inline: auto;
+  border-radius: 50%;
+  background: radial-gradient(circle, #b79afa26, transparent 68%);
+  content: "";
+}
+.plinko-poster-pins {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  margin-top: 6px;
+}
+.plinko-poster-pins span {
+  display: flex;
+  gap: 16px;
+}
+.plinko-poster-pins i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #efe9ff;
+  box-shadow: 0 0 9px #b79afa7a;
+}
+.plinko-poster-slots {
+  position: absolute;
+  right: 0;
+  bottom: 26px;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+}
+.plinko-poster-slots i {
+  width: 16px;
+  height: 8px;
+  border-radius: 4px;
+  background: #b79afa33;
+}
+.plinko-poster-slots i:nth-child(2),
+.plinko-poster-slots i:nth-child(6) {
+  background: #b79afa7a;
+}
+.plinko-poster-slots i:first-child,
+.plinko-poster-slots i:last-child {
+  background: #f3c969;
+  box-shadow: 0 0 12px #f3c96966;
+}
+.plinko-poster-ball {
+  position: absolute;
+  top: 30px;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  width: 15px;
+  height: 15px;
+  margin-inline: auto;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, #cbb0ff 45%, #8d6ae0);
+  box-shadow: 0 0 18px #b79afa80;
+  transition: transform 350ms var(--ease);
+}
+.plinko-poster:hover .plinko-poster-ball {
+  transform: translateY(6px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .plinko-poster-ball {
+    transition: none;
+  }
+}
+
+@media (max-width: 1240px) {
+  .plinko-shell .game-controls-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .plinko-shell .game-controls-bar .game-action {
+    grid-column: 1 / -1;
+  }
+  .plinko-shell .mines-loop-control {
+    grid-column: 1 / -1;
+    padding-left: 0;
+    padding-top: 12px;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+@media (max-width: 760px) {
+  .plinko-page-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .plinko-board-stage {
+    padding: 14px 12px 12px;
+  }
+  .plinko-history {
+    flex-wrap: wrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .plinko-slot.is-hit {
+    animation: none;
+    filter: brightness(1.4);
+  }
+}

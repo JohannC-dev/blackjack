@@ -9,6 +9,7 @@ import "@fontsource/dm-sans/500.css";
 import "./globals.css";
 import "../styles/legacy.css";
 import "../styles/roulette.css";
+import "../styles/plinko.css";
 import "../styles/table-center.css";
 import { VersionNotice } from "@/components/version-notice";
 

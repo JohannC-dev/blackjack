@@ -1,3 +1,4 @@
+import type { PlinkoRisk } from "./plinko";
 import type { RouletteBet } from "./roulette";
 
 export type Suit = "hearts" | "diamonds" | "clubs" | "spades";
@@ -244,6 +245,30 @@ export type MinesCommand =
   | { type: "reveal"; index: number }
   | { type: "playPattern"; bet: number; target: number; indexes: number[] }
   | { type: "cashout" };
+
+export type PlinkoDrop = {
+  id: string;
+  risk: PlinkoRisk;
+  rows: number;
+  bet: number;
+  /** One bounce per row, 0 to the left and 1 to the right. */
+  path: number[];
+  slot: number;
+  multiplier: number;
+  payout: number;
+  net: number;
+};
+export type PlinkoState = {
+  /** Last drops settled by the server, newest last. */
+  drops: PlinkoDrop[];
+};
+export type PlinkoCommand = {
+  type: "drop";
+  bet: number;
+  risk: PlinkoRisk;
+  rows: number;
+  balls?: number;
+};
 
 export type RouletteResult = {
   playerId: string;

@@ -1,7 +1,20 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  LoaderCircle,
+} from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import { CASINO_CHIP_DENOMINATIONS } from "@/lib/chips";
 import { Chip } from "./chip";
 
@@ -239,5 +252,233 @@ export function GameActionButton({
         {subline && <small>{subline}</small>}
       </span>
     </button>
+  );
+}
+
+/**
+ * Step slider of the club: a value picked among a handful of steps, with the
+ * ticks and the scale under it. The styles were first written for the Mine,
+ * which still carries its own copy of this markup.
+ */
+export function GameStepSlider({
+  values,
+  value,
+  disabled = false,
+  ariaLabel,
+  summary,
+  format = (step: number) => String(step),
+  hints,
+  onChange,
+}: {
+  values: readonly number[];
+  value: number;
+  disabled?: boolean;
+  ariaLabel: string;
+  /** Large read-out above the track. */
+  summary: ReactNode;
+  format?: (step: number) => string;
+  /** Captions under the ends of the track. */
+  hints?: readonly [ReactNode, ReactNode];
+  onChange: (value: number) => void;
+}) {
+  const last = Math.max(1, values.length - 1);
+  const index = Math.max(0, values.indexOf(value));
+  const progress = (index / last) * 100;
+
+  const selectAt = (position: number) => {
+    const next = values[Math.round(position * last)];
+    if (next !== undefined && next !== value) onChange(next);
+  };
+  const fromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    selectAt(
+      bounds.width
+        ? Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width))
+        : 0,
+    );
+  };
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    let next = index;
+    if (event.key === "ArrowRight" || event.key === "ArrowUp")
+      next = Math.min(last, index + 1);
+    else if (event.key === "ArrowLeft" || event.key === "ArrowDown")
+      next = Math.max(0, index - 1);
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = last;
+    else return;
+    event.preventDefault();
+    if (values[next] !== undefined) onChange(values[next]);
+  };
+
+  return (
+    <>
+      <div className="mines-difficulty-summary" aria-live="polite">
+        <b>{summary}</b>
+      </div>
+      <div
+        className={`mines-difficulty-slider ${disabled ? "is-disabled" : ""}`.trim()}
+        role="slider"
+        tabIndex={disabled ? -1 : 0}
+        aria-label={ariaLabel}
+        aria-valuemin={values[0]}
+        aria-valuemax={values[values.length - 1]}
+        aria-valuenow={value}
+        aria-valuetext={format(value)}
+        aria-disabled={disabled}
+        onKeyDown={onKeyDown}
+        onPointerDown={(event) => {
+          if (disabled) return;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          fromPointer(event);
+        }}
+        onPointerMove={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId))
+            fromPointer(event);
+        }}
+        onPointerUp={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId))
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+        onPointerCancel={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId))
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+      >
+        <span className="mines-difficulty-track" />
+        <span
+          className="mines-difficulty-fill"
+          style={{ width: `${progress}%` }}
+        />
+        <span className="mines-difficulty-ticks" aria-hidden="true">
+          {values.map((step, position) => (
+            <i
+              key={step}
+              className={position <= index ? "is-passed" : ""}
+              style={{ left: `${(position / last) * 100}%` }}
+            />
+          ))}
+        </span>
+        <span
+          className="mines-difficulty-thumb"
+          style={{ left: `${progress}%` }}
+          aria-hidden="true"
+        />
+      </div>
+      <div className="mines-difficulty-scale" aria-hidden="true">
+        {values.map((step, position) => (
+          <span
+            key={step}
+            className={`${position === index ? "is-selected" : ""} ${
+              position === 0 ? "is-first" : ""
+            } ${position === last ? "is-last" : ""}`.trim()}
+            style={{ left: `${(position / last) * 100}%` }}
+          >
+            {format(step)}
+          </span>
+        ))}
+      </div>
+      {hints && (
+        <div className="mines-difficulty-hint" aria-hidden="true">
+          <span>{hints[0]}</span>
+          <span>{hints[1]}</span>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Dock control that opens a panel above the bar, as the Mine does for its
+ * pattern: a trigger showing the current setting, and the panel itself.
+ */
+export function GamePopoverControl({
+  id,
+  icon,
+  title,
+  status,
+  badge,
+  running = false,
+  disabled = false,
+  panelLabel,
+  children,
+}: {
+  id: string;
+  icon: ReactNode;
+  title: ReactNode;
+  status: ReactNode;
+  badge?: ReactNode;
+  running?: boolean;
+  disabled?: boolean;
+  panelLabel: string;
+  children: (close: () => void) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (
+        container.current &&
+        !container.current.contains(event.target as Node)
+      )
+        setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={container}
+      className={`mines-loop-control ${running ? "is-running" : ""} ${
+        open ? "is-open" : ""
+      }`.trim()}
+    >
+      <button
+        type="button"
+        className="mines-pattern-trigger"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={id}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="mines-pattern-trigger-icon" aria-hidden="true">
+          {icon}
+        </span>
+        <span className="mines-pattern-trigger-copy">
+          <b>{title}</b>
+          <small>{status}</small>
+        </span>
+        {badge !== undefined && (
+          <span className="mines-pattern-trigger-count">{badge}</span>
+        )}
+        <ChevronDown
+          size={14}
+          className="mines-pattern-trigger-chevron"
+          aria-hidden="true"
+        />
+      </button>
+      {open && (
+        <div
+          id={id}
+          className="mines-pattern-popover"
+          role="dialog"
+          aria-label={panelLabel}
+        >
+          {children(() => setOpen(false))}
+        </div>
+      )}
+    </div>
   );
 }
