@@ -43,9 +43,11 @@ type Game = ReturnType<typeof useGame>;
 
 /** Delay between two balls of a same batch, so they read as a stream. */
 const BALL_STAGGER_MS = 115;
+/** Pause between two salvos of the auto mode, so they read as waves. */
+const WAVE_GAP_MS = 220;
 /** Landings kept in the strip beside the board. */
 const HISTORY_SIZE = 6;
-const AUTO_PRESETS = [10, 25, 50, 100] as const;
+const AUTO_DEFAULT = 10;
 const AUTO_MAX = 100;
 
 function wait(ms: number) {
@@ -66,7 +68,7 @@ export function PlinkoCasino({
   const [risk, setRisk] = useState<PlinkoRisk>("medium");
   const [rows, setRows] = useState<PlinkoRows>(16);
   const [bet, setBet] = useState<number>(PLINKO_MIN_BET);
-  const [autoCount, setAutoCount] = useState<number>(AUTO_PRESETS[0]);
+  const [autoCount, setAutoCount] = useState<number>(AUTO_DEFAULT);
   const [auto, setAuto] = useState(false);
   const [autoLeft, setAutoLeft] = useState(0);
   const [inFlight, setInFlight] = useState<InFlight>({ payout: 0, net: 0 });
@@ -89,6 +91,12 @@ export function PlinkoCasino({
   const soundRef = useRef(sound);
   soundRef.current = sound;
   const flashKey = useRef(0);
+  /**
+   * When the next ball may leave the top of the board. Balls queue behind it,
+   * so a salvo that arrives early waits for the previous one instead of
+   * falling on top of it.
+   */
+  const releaseAt = useRef(0);
 
   // The wager leaves the wallet at once, the winnings only when the ball lands.
   const settledBalance = Math.max(0, getClubBalance(game) - inFlight.payout);
@@ -144,11 +152,19 @@ export function PlinkoCasino({
         current,
       ),
     );
+    const now = performance.now();
+    const first = Math.max(now, releaseAt.current);
     fresh.forEach((drop, index) =>
-      board.current?.drop(drop, index * BALL_STAGGER_MS),
+      board.current?.drop(drop, first - now + index * BALL_STAGGER_MS),
     );
-    if (soundRef.current && audioRef.current)
-      playCasinoSound(audioRef.current, "chips");
+    releaseAt.current =
+      first +
+      fresh.length * BALL_STAGGER_MS +
+      (fresh.length > 1 ? WAVE_GAP_MS : 0);
+    window.setTimeout(() => {
+      if (soundRef.current && audioRef.current)
+        playCasinoSound(audioRef.current, "chips");
+    }, first - now);
   }, [state]);
 
   const stopAuto = useCallback(() => {
@@ -185,17 +201,30 @@ export function PlinkoCasino({
     setAutoLeft(left);
     while (left > 0 && autoRun.current.id === runId) {
       const balls = Math.min(PLINKO_MAX_BALLS, left);
+      const sentAt = performance.now();
       const ok = await dropBalls(balls);
       if (!ok || autoRun.current.id !== runId) break;
       left -= balls;
       setAutoLeft(left);
-      await wait(balls * BALL_STAGGER_MS + 140);
+      // The next salvo is ordered ahead of time: the server takes about as
+      // long to answer as the last one did, and its balls should reach the
+      // board just as the queue runs dry, not after an empty pause.
+      const latency = performance.now() - sentAt;
+      if (left > 0)
+        await wait(
+          Math.max(0, releaseAt.current - performance.now() - latency),
+        );
     }
     if (autoRun.current.id !== runId) return;
     autoRun.current.running = false;
     setAuto(false);
     setAutoLeft(0);
-    setMessage(`Série terminée · ${autoCount} billes lâchées.`);
+    const dropped = autoCount - left;
+    setMessage(
+      left > 0
+        ? `Série interrompue · ${dropped} bille${dropped === 1 ? "" : "s"} sur ${autoCount}.`
+        : `Série terminée · ${autoCount} billes lâchées.`,
+    );
   }, [autoCount, dropBalls, stopAuto]);
 
   useEffect(() => () => void (autoRun.current.id += 1), []);
@@ -409,27 +438,6 @@ export function PlinkoCasino({
                           </button>
                         </div>
                       </div>
-                      <div className="mines-pattern-setting">
-                        <span>Mise engagée</span>
-                        <b>{credits(bet * autoCount)} cr.</b>
-                      </div>
-                    </div>
-                    <div
-                      className="game-options is-compact plinko-auto-presets"
-                      role="radiogroup"
-                      aria-label="Séries prêtes à lancer"
-                    >
-                      {AUTO_PRESETS.map((preset) => (
-                        <GameOption
-                          key={preset}
-                          compact
-                          selected={autoCount === preset}
-                          disabled={auto}
-                          onClick={() => setAutoCount(preset)}
-                        >
-                          ×{preset}
-                        </GameOption>
-                      ))}
                     </div>
                     <button
                       type="button"

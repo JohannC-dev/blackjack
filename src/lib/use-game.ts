@@ -25,6 +25,13 @@ import type {
 import { useProfile, type Credentials } from "./profile-context";
 import type { EmoteEvent, EmoteRequest, ReceivedEmote } from "./emotes";
 
+/**
+ * A Plinko salvo settles up to ten balls in one wallet transaction, a few
+ * hundred milliseconds of SQL per ball: it can outlast the usual six seconds.
+ * Giving up early would stop the auto mode while the server still drops them.
+ */
+const PLINKO_COMMAND_TIMEOUT_MS = 20_000;
+
 export function useGame() {
   const { profile, loaded, balance, setBalance, authenticate, signOut } =
     useProfile();
@@ -356,7 +363,7 @@ export function useGame() {
       setPending(true);
       return new Promise((resolve) => {
         socket
-          .timeout(6000)
+          .timeout(PLINKO_COMMAND_TIMEOUT_MS)
           .emit("plinko:command", action, (timeout: Error | null, ack: Ack) => {
             setPending(false);
             if (timeout) setError("Le serveur du Plinko ne répond pas.");

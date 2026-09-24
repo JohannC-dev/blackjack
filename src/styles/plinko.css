@@ -244,16 +244,6 @@
   text-overflow: clip;
   white-space: normal;
 }
-.plinko-auto-presets {
-  margin-top: 10px;
-  justify-content: space-between;
-}
-.plinko-auto-presets .game-option {
-  flex: 1 1 0;
-  min-width: 0;
-  align-items: center;
-  text-align: center;
-}
 .plinko-actions .game-action {
   flex: 1 1 0;
 }

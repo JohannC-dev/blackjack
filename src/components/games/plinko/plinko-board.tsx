@@ -26,10 +26,20 @@ export type PlinkoBoardHandle = {
  * between two pegs, which is what keeps the triangle from looking stretched.
  */
 const ROW_RATIO = 0.866;
-/** Fall time of a whole board, in milliseconds. */
-const fallDuration = (rows: number) => 860 + rows * 40;
 /** How far above the first peg a ball is released, in rows. */
 const DROP_IN_ROWS = 1.35;
+/** Fall from the release point onto the first peg. */
+const DROP_MS = 260;
+/**
+ * One bounce, from a peg to one of the two below it. Every row takes the same
+ * time: the ball loses its speed on each peg instead of gathering it all the
+ * way down, which is what makes a Plinko board read as a Plinko board.
+ */
+const HOP_MS = 95;
+/** How high a ball jumps off a peg, in rows. */
+const HOP_LIFT = 0.6;
+/** Fade of a ball resting in its slot. */
+const LAND_FADE_MS = 180;
 /** How long a struck peg keeps glowing. */
 const PEG_FLASH_MS = 260;
 /** Past this, a ball settles without falling: the board stays readable. */
@@ -46,6 +56,51 @@ type Ball = {
   struck: number;
   landed: boolean;
 };
+
+/** Where a ball stands `elapsed` ms after its release. */
+function ballPosition(layout: Layout, item: Ball, elapsed: number) {
+  const { path, rows } = item;
+  if (elapsed < DROP_MS) {
+    // Free fall from rest onto the first peg.
+    const from = layout.topY - layout.rowHeight * DROP_IN_ROWS;
+    const progress = elapsed / DROP_MS;
+    return {
+      x: layout.centreX,
+      y: from + (restY(layout, 0, rows) - from) * progress * progress,
+      pegs: 0,
+      alpha: 1,
+    };
+  }
+  const hopping = elapsed - DROP_MS;
+  const hop = Math.floor(hopping / HOP_MS);
+  if (hop >= rows) {
+    // In the slot: the ball rests there and fades out.
+    return {
+      x: bounceX(layout, rightsOf(path, rows), rows),
+      y: restY(layout, rows, rows),
+      pegs: rows,
+      alpha: Math.max(0, 1 - (hopping - rows * HOP_MS) / LAND_FADE_MS),
+    };
+  }
+  // A short jump off peg `hop`, then a fall onto the next one: steady speed
+  // sideways, a parabola downwards.
+  const progress = (hopping - hop * HOP_MS) / HOP_MS;
+  const rights = rightsOf(path, hop);
+  const fromX = bounceX(layout, rights, hop);
+  const toX = bounceX(layout, rights + path[hop], hop + 1);
+  const fromY = restY(layout, hop, rows);
+  const toY = restY(layout, hop + 1, rows);
+  const lift = layout.rowHeight * HOP_LIFT;
+  return {
+    x: fromX + (toX - fromX) * progress,
+    y:
+      fromY +
+      (toY - fromY) * progress * progress -
+      lift * progress * (1 - progress),
+    pegs: hop + 1,
+    alpha: 1,
+  };
+}
 
 type Flash = { x: number; y: number; at: number };
 
@@ -129,7 +184,7 @@ function layoutFor(width: number, height: number, rows: number): Layout {
     spacing,
     rowHeight,
     centreX: width / 2,
-    topY: dropIn + Math.max(0, (height - used - rowHeight * 0.6) / 2),
+    topY: dropIn + Math.max(0, height - used - rowHeight * 0.6),
     boardWidth,
     pegRadius: Math.max(1.6, Math.min(4, spacing * 0.085)),
     ballRadius: Math.max(4, Math.min(11, spacing * 0.3)),
@@ -147,6 +202,22 @@ function bounceX(layout: Layout, rights: number, bounces: number) {
 
 function pegY(layout: Layout, row: number) {
   return layout.topY + row * layout.rowHeight;
+}
+
+/**
+ * Height of a ball resting on a peg of `row`: on top of it, not through it.
+ * Past the last row, the ball rests at the bottom edge, just above its slot.
+ */
+function restY(layout: Layout, row: number, rows: number) {
+  if (row >= rows) return layout.height - layout.ballRadius;
+  return pegY(layout, row) - layout.pegRadius - layout.ballRadius;
+}
+
+/** Bounces to the right among the first `bounces` of a path. */
+function rightsOf(path: readonly number[], bounces: number) {
+  let rights = 0;
+  for (let index = 0; index < bounces; index++) rights += path[index];
+  return rights;
 }
 
 /** Pegs never move: they are painted once per layout, on their own canvas. */
@@ -298,7 +369,6 @@ export function PlinkoBoard({
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const dropIn = layout.rowHeight * DROP_IN_ROWS;
     const ballSize = ball.width / dpr;
     const flashSize = flash.width / dpr;
     const alive: Ball[] = [];
@@ -309,48 +379,18 @@ export function PlinkoBoard({
         alive.push(item);
         continue;
       }
-      // Free fall from rest: the ball speeds up as it goes, like a real one.
-      const total = fallDuration(item.rows);
-      const gravity = (dropIn + item.rows * layout.rowHeight) / (total * total);
-      const fallen = gravity * elapsed * elapsed;
-      const y = layout.topY - dropIn + fallen;
+      const { x, y, pegs, alpha } = ballPosition(layout, item, elapsed);
 
-      // Rows already cleared, from the distance fallen below the first peg.
-      const depth = (fallen - dropIn) / layout.rowHeight;
-      const bounces = Math.max(0, Math.min(item.rows, Math.floor(depth) + 1));
-      let x: number;
-      if (depth < 0) {
-        x = layout.centreX;
-      } else {
-        let rights = 0;
-        for (let index = 0; index < bounces - 1; index++)
-          rights += item.path[index];
-        const from = bounceX(layout, rights, bounces - 1);
-        const to = bounceX(layout, rights + item.path[bounces - 1], bounces);
-        // Constant horizontal speed between two pegs, as after a real bounce.
-        x = from + (to - from) * Math.min(1, depth - (bounces - 1));
-      }
-
-      while (item.struck < bounces && item.struck < item.rows) {
-        let rights = 0;
-        for (let index = 0; index < item.struck; index++)
-          rights += item.path[index];
+      while (item.struck < pegs) {
         flashesRef.current.push({
-          x: bounceX(layout, rights, item.struck),
+          x: bounceX(layout, rightsOf(item.path, item.struck), item.struck),
           y: pegY(layout, item.struck),
           at: now,
         });
         item.struck += 1;
       }
 
-      const fade =
-        y > layout.height - layout.ballRadius
-          ? Math.max(
-              0,
-              1 - (y - (layout.height - layout.ballRadius)) / layout.rowHeight,
-            )
-          : 1;
-      context.globalAlpha = fade;
+      context.globalAlpha = alpha;
       context.drawImage(
         ball,
         x - ballSize / 2,
@@ -360,7 +400,8 @@ export function PlinkoBoard({
       );
       context.globalAlpha = 1;
 
-      if (!item.landed && bounces >= item.rows) {
+      // The slot lights up when the ball reaches it, not a row earlier.
+      if (!item.landed && elapsed >= DROP_MS + item.rows * HOP_MS) {
         item.landed = true;
         const settled = pendingRef.current.get(item.id);
         if (settled) {
@@ -368,7 +409,7 @@ export function PlinkoBoard({
           onLandRef.current(settled);
         }
       }
-      if (y < layout.height + layout.rowHeight) alive.push(item);
+      if (alpha > 0) alive.push(item);
     }
 
     const flashes: Flash[] = [];
